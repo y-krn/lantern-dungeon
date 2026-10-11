@@ -8,20 +8,71 @@ function reachable(game,start=game.player){
   return seen;
 }
 
+function roomAt(game,p){return game.rooms.find(r=>p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h);}
+function arena(seed){
+  const game=new DungeonEngine(seed),r=roomAt(game,game.player);
+  game.player.x=r.cx;game.player.y=r.cy;game.enemies=[];game.items=[];game.traps=[];game.reveal();return game;
+}
+function passageTopology(game){
+  // Contract each room to one node so its open floor does not count as a loop.
+  const nodes=Array(W*H).fill(-1),neighbors=game.rooms.map(()=>new Set());
+  game.rooms.forEach((r,i)=>{for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)nodes[game.key(x,y)]=i;});
+  for(let k=0;k<W*H;k++)if(game.tiles[k]&&nodes[k]===-1){nodes[k]=neighbors.length;neighbors.push(new Set());}
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(game.tile(x,y))for(const[dx,dy]of [[1,0],[0,1]]){
+    if(!game.tile(x+dx,y+dy))continue;
+    const a=nodes[game.key(x,y)],b=nodes[game.key(x+dx,y+dy)];
+    if(a!==b){neighbors[a].add(b);neighbors[b].add(a);}
+  }
+  const edges=neighbors.reduce((n,s)=>n+s.size,0)/2;
+  return {loops:edges-neighbors.length+1,deadEnds:neighbors.slice(0,game.rooms.length).filter(s=>s.size===1).length,branches:neighbors.filter(s=>s.size>=3).length};
+}
+function stairDistance(game){
+  const distance=new Map([[game.key(game.player.x,game.player.y),0]]),queue=[[game.player.x,game.player.y]];
+  for(let i=0;i<queue.length;i++){
+    const[x,y]=queue[i],d=distance.get(game.key(x,y));if(x===game.stairs.x&&y===game.stairs.y)return d;
+    for(const[dx,dy]of DIRS)if(game.canStep(x,y,dx,dy)){
+      const k=game.key(x+dx,y+dy);if(!distance.has(k)){distance.set(k,d+1);queue.push([x+dx,y+dy]);}
+    }
+  }
+  return Infinity;
+}
+const roomCounts=new Set(),startCells=new Set(),exitCells=new Set(),savedFloors=new Map();
+let loopFloors=0,treeFloors=0,branchFloors=0,deadEndFloors=0,nearStairs=0,minWalk=Infinity,maxWalk=0,offCenterStarts=0;
 for(let seed=1;seed<=100;seed++){
   const game=new DungeonEngine(seed);
   for(let floor=1;floor<=10;floor++){
     game.floor=floor;game.generateFloor();
+    const startRoom=roomAt(game,game.player),exitRoom=roomAt(game,game.stairs);
+    assert(game.rooms.length>=4&&game.rooms.length<=8);assert(startRoom);assert(exitRoom);assert.notEqual(startRoom,exitRoom);
+    roomCounts.add(game.rooms.length);startCells.add(Math.floor(startRoom.x/14)+3*Math.floor(startRoom.y/9));exitCells.add(Math.floor(exitRoom.x/14)+3*Math.floor(exitRoom.y/9));
+    if(game.player.x!==startRoom.cx||game.player.y!==startRoom.cy)offCenterStarts++;
+    if(!savedFloors.has(game.rooms.length))savedFloors.set(game.rooms.length,game.serialize());
+    for(const r of game.rooms){assert(r.x>0&&r.y>0&&r.x+r.w<W&&r.y+r.h<H);for(const other of game.rooms)if(r!==other)assert(r.x+r.w<other.x||other.x+other.w<r.x||r.y+r.h<other.y||other.y+other.h<r.y);}
     const visited=reachable(game);
     assert(visited.has(game.key(game.stairs.x,game.stairs.y)),`Unreachable stairs: seed ${seed}, floor ${floor}`);
     for(let k=0;k<W*H;k++)if(game.tiles[k])assert(visited.has(k),`Disconnected floor: ${seed}/${floor}`);
     const positions=new Set();
     for(const e of [...game.enemies,...game.items,...game.traps]){assert(game.tile(e.x,e.y));const k=game.key(e.x,e.y);assert(!positions.has(k));positions.add(k);}
     assert(!positions.has(game.key(game.player.x,game.player.y)));
+    assert(!positions.has(game.key(game.stairs.x,game.stairs.y)));
+    for(const hazard of [...game.enemies,...game.traps]){assert.notEqual(roomAt(game,hazard),startRoom);assert(Math.max(Math.abs(hazard.x-game.player.x),Math.abs(hazard.y-game.player.y))>2);}
     assert(game.items.filter(i=>i.kind==='bread').length>=3);
-    if(floor===10)assert(game.enemies.some(e=>e.type==='guardian'));
+    if(floor===10){const guardian=game.enemies.find(e=>e.type==='guardian');assert(guardian);assert.equal(roomAt(game,guardian),exitRoom);}
+    const topology=passageTopology(game),walk=stairDistance(game);
+    if(topology.loops)loopFloors++;else treeFloors++;
+    if(topology.branches)branchFloors++;if(topology.deadEnds)deadEndFloors++;
+    if(walk<=15)nearStairs++;minWalk=Math.min(minWalk,walk);maxWalk=Math.max(maxWalk,walk);
   }
 }
+assert.deepEqual([...roomCounts].sort(),[4,5,6,7,8]);assert.equal(startCells.size,9);assert.equal(exitCells.size,9);
+assert(offCenterStarts>800);assert(loopFloors>100);assert(treeFloors>50);assert(branchFloors>100);assert(deadEndFloors>100);assert(nearStairs>50);
+assert(maxWalk<100,'A stair route must fit comfortably within the 400-turn full hunger budget');
+for(const raw of savedFloors.values()){
+  const game=DungeonEngine.restore(raw);assert(game);assert.equal(game.serialize(),raw);
+  const replay=DungeonEngine.restore(raw);game.generateFloor();replay.generateFloor();assert.equal(game.serialize(),replay.serialize());
+}
+assert.equal(new DungeonEngine(81234).serialize(),new DungeonEngine(81234).serialize());
+for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.state.rooms=Array(count).fill(saved.state.rooms[0]);assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);}
 {
   const game=new DungeonEngine(42),p=game.player;
   game.enemies=[];p.x=game.rooms[0].x;p.y=game.rooms[0].y;
@@ -36,17 +87,17 @@ for(let seed=1;seed<=100;seed++){
   game.player.x=game.stairs.x;game.player.y=game.stairs.y;assert(game.descend());assert.equal(game.floor,2);
 }
 {
-  const game=new DungeonEngine(11),p=game.player;game.enemies=[];game.items=[];game.traps=[];
+  const game=arena(11),p=game.player,startX=p.x;
   const e={x:p.x+1,y:p.y,id:1,type:'slime',name:'苔スライム',hp:1,maxHp:1,attack:3,exp:8};game.enemies.push(e);
-  const turn=game.turn;game.move(1,0);assert.equal(game.turn,turn+1);assert.equal(p.level,2);assert.equal(p.x,game.rooms[0].cx);assert.equal(game.enemies.length,0);
+  const turn=game.turn;game.move(1,0);assert.equal(game.turn,turn+1);assert.equal(p.level,2);assert.equal(p.x,startX);assert.equal(game.enemies.length,0);
   p.hp=1;p.hunger=0;game.wait();assert.equal(game.status,'dead');assert.equal(p.hp,0);assert.equal(game.wait(),false);
 }
 {
-  const game=new DungeonEngine(33);game.enemies=[];game.items=[];game.traps=[{x:game.player.x+1,y:game.player.y,found:false,spent:false}];game.turn=6;game.player.hp=1;
+  const game=arena(33);game.traps=[{x:game.player.x+1,y:game.player.y,found:false,spent:false}];game.turn=6;game.player.hp=1;
   game.move(1,0);assert.equal(game.status,'dead','Fatal trap cannot be reversed by passive regeneration');
 }
 {
-  const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.items=[];game.traps=[];
+  const game=arena(22),p=game.player;
   // A diagonal destination alone is insufficient: both orthogonal sides must be open.
   game.tiles[game.key(p.x+1,p.y)]=0;assert.equal(game.move(1,1),false);assert.equal(game.turn,0);
   game.tiles[game.key(p.x+1,p.y)]=1;
@@ -54,7 +105,7 @@ for(let seed=1;seed<=100;seed++){
   p.bag=['scroll'];game.use(0);assert.equal(game.enemies.length,0);
 }
 {
-  const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.items=[];game.traps=[];
+  const game=arena(22),p=game.player;
   p.bag=['potion','arrow','bread','arrow','potion','arrow'];
   assert.deepEqual(game.inventoryEntries(),[{kind:'bread',index:2,count:1},{kind:'potion',index:0,count:1},{kind:'potion',index:4,count:1},{kind:'arrow',index:1,count:3}]);
   assert.equal(game.shoot(),false);assert.equal(game.turn,0);
@@ -115,3 +166,4 @@ for(let seed=1;seed<=100;seed++){
   const game=new DungeonEngine(9);game.floor=10;game.generateFloor();const guardian=game.enemies.find(e=>e.type==='guardian');game.enemies=[guardian];guardian.x=game.rooms[3].cx;guardian.y=game.rooms[3].cy;game.player.x=game.stairs.x;game.player.y=game.stairs.y;game.wait();assert.equal(game.status,'playing');
 }
 console.log('PASS: 1,000 generated floors connected; collision, entities, food, hunger, inventory, arrow stacking/equipment, level-up, save/load, death and victory checked.');
+console.log(`PASS: 4–8 rooms; all 9 start/exit regions; ${loopFloors} loop, ${treeFloors} tree, ${branchFloors} branching, ${deadEndFloors} dead-end floors; stairs ${minWalk}–${maxWalk} steps (${nearStairs} nearby); safe spawns and deterministic save/load checked.`);
