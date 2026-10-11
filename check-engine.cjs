@@ -24,7 +24,7 @@ function passageTopology(game){
     if(a!==b){neighbors[a].add(b);neighbors[b].add(a);}
   }
   const edges=neighbors.reduce((n,s)=>n+s.size,0)/2;
-  return {loops:edges-neighbors.length+1,deadEnds:neighbors.slice(0,game.rooms.length).filter(s=>s.size===1).length,branches:neighbors.filter(s=>s.size>=3).length};
+  return {loops:edges-neighbors.length+1,deadEnds:neighbors.slice(0,game.rooms.length).filter(s=>s.size===1).length,branches:neighbors.filter(s=>s.size>=3).length,roomDegrees:neighbors.slice(0,game.rooms.length).map(s=>s.size)};
 }
 function stairDistance(game){
   const distance=new Map([[game.key(game.player.x,game.player.y),0]]),queue=[[game.player.x,game.player.y]];
@@ -37,11 +37,18 @@ function stairDistance(game){
   return Infinity;
 }
 const roomCounts=new Set(),startCells=new Set(),exitCells=new Set(),savedFloors=new Map();
+const layouts={branch:0,ring:0,hall:0};
+let shallowHalls=0,deepHalls=0,lootHits=0,uniformLootHits=0,emptyDeadEnds=0,houseFloors=0,houseSave;
 let loopFloors=0,treeFloors=0,branchFloors=0,deadEndFloors=0,nearStairs=0,minWalk=Infinity,maxWalk=0,offCenterStarts=0;
 for(let seed=1;seed<=100;seed++){
   const game=new DungeonEngine(seed);
   for(let floor=1;floor<=10;floor++){
-    game.floor=floor;game.generateFloor();
+    const previousLayout=game.layout;game.floor=floor;game.generateFloor();assert.notEqual(game.layout,previousLayout);
+    layouts[game.layout]++;assert(game.layoutName());
+    if(game.layout==='hall'){
+      assert.equal(game.rooms.filter(r=>r.w>=16&&r.h>=10).length,1);
+      if(floor<=3)shallowHalls++;if(floor>=7)deepHalls++;
+    }else if(game.layout==='branch'){assert(game.rooms.length>=6);assert(game.rooms.every(r=>r.w<=8&&r.h<=6));}
     const startRoom=roomAt(game,game.player),exitRoom=roomAt(game,game.stairs);
     assert(game.rooms.length>=4&&game.rooms.length<=8);assert(startRoom);assert(exitRoom);assert.notEqual(startRoom,exitRoom);
     roomCounts.add(game.rooms.length);startCells.add(Math.floor(startRoom.x/14)+3*Math.floor(startRoom.y/9));exitCells.add(Math.floor(exitRoom.x/14)+3*Math.floor(exitRoom.y/9));
@@ -59,6 +66,24 @@ for(let seed=1;seed<=100;seed++){
     assert(game.items.filter(i=>i.kind==='bread').length>=3);
     if(floor===10){const guardian=game.enemies.find(e=>e.type==='guardian');assert(guardian);assert.equal(roomAt(game,guardian),exitRoom);}
     const topology=passageTopology(game),walk=stairDistance(game);
+    if(game.layout==='ring')assert(topology.loops>0,'Ring layouts must have an actual alternate route');
+    const houseRoom=game.monsterHouse?game.rooms[game.monsterHouse.room]:null;
+    const leaves=game.rooms.filter((r,i)=>topology.roomDegrees[i]===1&&r!==startRoom&&r!==exitRoom&&r!==houseRoom);
+    if(leaves.length){
+      const items=game.items.filter(i=>roomAt(game,i)!==houseRoom);
+      lootHits+=items.filter(i=>leaves.includes(roomAt(game,i))).length;uniformLootHits+=items.length*leaves.length/game.rooms.length;
+      emptyDeadEnds+=leaves.filter(r=>!game.items.some(i=>roomAt(game,i)===r)).length;
+    }
+    assert.equal(game.enemies.length,4+Math.floor(floor*.75)+(floor===10?1:0),'House enemies use the existing enemy budget');
+    if(houseRoom){
+      houseFloors++;houseSave||=game.serialize();assert(floor>=4&&floor<10);
+      assert.notEqual(houseRoom,startRoom);assert.notEqual(houseRoom,exitRoom);assert.equal(game.monsterHouse.triggered,false);
+      const pack=game.enemies.filter(e=>e.house);assert.equal(pack.length,5);assert(pack.every(e=>!e.awake&&roomAt(game,e)===houseRoom));
+      const blocked=Object.assign(Object.create(DungeonEngine.prototype),game,{tiles:[...game.tiles]});
+      for(let y=houseRoom.y;y<houseRoom.y+houseRoom.h;y++)for(let x=houseRoom.x;x<houseRoom.x+houseRoom.w;x++)blocked.tiles[blocked.key(x,y)]=0;
+      assert(reachable(blocked).has(game.key(game.stairs.x,game.stairs.y)),'A house must be an optional detour');
+      assert(game.items.some(i=>roomAt(game,i)===houseRoom&&i.kind==='scroll'));
+    }
     if(topology.loops)loopFloors++;else treeFloors++;
     if(topology.branches)branchFloors++;if(topology.deadEnds)deadEndFloors++;
     if(walk<=15)nearStairs++;minWalk=Math.min(minWalk,walk);maxWalk=Math.max(maxWalk,walk);
@@ -67,12 +92,52 @@ for(let seed=1;seed<=100;seed++){
 assert.deepEqual([...roomCounts].sort(),[4,5,6,7,8]);assert.equal(startCells.size,9);assert.equal(exitCells.size,9);
 assert(offCenterStarts>800);assert(loopFloors>100);assert(treeFloors>50);assert(branchFloors>100);assert(deadEndFloors>100);assert(nearStairs>50);
 assert(maxWalk<100,'A stair route must fit comfortably within the 400-turn full hunger budget');
+assert(Object.values(layouts).every(n=>n>100));assert(deepHalls*3>shallowHalls*4,'Wide halls become more common in deep floors');
+assert(lootHits>uniformLootHits*1.5,'Optional dead ends attract more loot than uniform placement');assert(emptyDeadEnds>10,'Dead ends must not guarantee loot');assert(houseFloors>10);
 for(const raw of savedFloors.values()){
   const game=DungeonEngine.restore(raw);assert(game);assert.equal(game.serialize(),raw);
   const replay=DungeonEngine.restore(raw);game.generateFloor();replay.generateFloor();assert.equal(game.serialize(),replay.serialize());
 }
 assert.equal(new DungeonEngine(81234).serialize(),new DungeonEngine(81234).serialize());
 for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.state.rooms=Array(count).fill(saved.state.rooms[0]);assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);}
+{
+  const saved=JSON.parse(savedFloors.get(6));delete saved.state.layout;delete saved.state.monsterHouse;
+  for(const e of saved.state.enemies)delete e.house;
+  const game=DungeonEngine.restore(JSON.stringify(saved));assert(game);assert.equal(game.layoutName(),'');assert.equal(game.monsterHouse,null);
+  assert.deepEqual(game.tiles,saved.state.tiles);assert.deepEqual(game.player,saved.state.player);
+  game.player.x=game.stairs.x;game.player.y=game.stairs.y;assert(game.descend());assert(game.layoutName());
+  saved.state.layout='__proto__';assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);
+}
+{
+  const saved=JSON.parse(houseSave);
+  for(const house of [{room:-1,triggered:false},{room:saved.state.rooms.length,triggered:false},{room:0,triggered:'false'}]){saved.state.monsterHouse=house;assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);}
+}
+{
+  const game=DungeonEngine.restore(houseSave),house=game.monsterHouse,r=game.rooms[house.room],pack=game.enemies.filter(e=>e.house);
+  let entry;
+  for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)for(const[dx,dy]of [[0,-1],[1,0],[0,1],[-1,0]]){
+    if(game.tile(x+dx,y+dy)&&roomAt(game,{x:x+dx,y:y+dy})!==r)entry={x,y,dx:-dx,dy:-dy,outside:{x:x+dx,y:y+dy}};
+  }
+  assert(entry);
+  const cells=[];for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)if(x!==entry.x||y!==entry.y)cells.push({x,y});
+  pack.forEach((e,i)=>Object.assign(e,cells[cells.length-1-i]));game.enemies=pack;game.items=[];game.traps=[];
+  Object.assign(game.player,entry.outside,{hp:1000,maxHp:1000,bag:['map','scroll']});game.reveal();
+  const positions=pack.map(e=>[e.x,e.y]);game.use(0);game.wait();
+  assert.equal(house.triggered,false);assert(pack.every(e=>!e.awake));assert.deepEqual(pack.map(e=>[e.x,e.y]),positions);
+  const dormant=DungeonEngine.restore(game.serialize());assert(dormant);assert.equal(dormant.monsterHouse.triggered,false);assert(dormant.enemies.every(e=>!e.awake));
+  assert(game.move(entry.dx,entry.dy));assert.equal(house.triggered,true);assert(pack.every(e=>e.awake));
+  const notice=()=>game.log.filter(e=>e.text.startsWith('モンスターハウス！')).length;
+  assert.equal(notice(),1);game.wait();assert.equal(notice(),1);
+  const active=DungeonEngine.restore(game.serialize());assert(active);assert.equal(active.monsterHouse.triggered,true);assert(active.enemies.every(e=>e.awake));active.wait();
+  assert.equal(active.log.filter(e=>e.text.startsWith('モンスターハウス！')).length,1);
+  const hp=pack.map(e=>e.hp);assert(game.use(0));assert(pack.every((e,i)=>e.hp===hp[i]-18));
+}
+{
+  const game=DungeonEngine.restore(houseSave),r=game.rooms[game.monsterHouse.room],pack=game.enemies.filter(e=>e.house);
+  game.hit(pack[0],1);assert(pack[0].awake);assert(pack.slice(1).every(e=>!e.awake));assert.equal(game.monsterHouse.triggered,false);
+  game.enemies=[];game.items=[];game.traps=[];game.player.x=r.cx;game.player.y=r.cy;game.wait();
+  assert.equal(game.monsterHouse.triggered,true);assert(!game.log.some(e=>e.text.startsWith('モンスターハウス！')),'An empty house must not announce sleeping monsters');
+}
 {
   const game=new DungeonEngine(42),p=game.player;
   game.enemies=[];p.x=game.rooms[0].x;p.y=game.rooms[0].y;
@@ -167,3 +232,4 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 }
 console.log('PASS: 1,000 generated floors connected; collision, entities, food, hunger, inventory, arrow stacking/equipment, level-up, save/load, death and victory checked.');
 console.log(`PASS: 4–8 rooms; all 9 start/exit regions; ${loopFloors} loop, ${treeFloors} tree, ${branchFloors} branching, ${deadEndFloors} dead-end floors; stairs ${minWalk}–${maxWalk} steps (${nearStairs} nearby); safe spawns and deterministic save/load checked.`);
+console.log(`PASS: layouts ${JSON.stringify(layouts)}, no consecutive repeats; deep/shallow halls ${deepHalls}/${shallowHalls}; dead-end loot ${lootHits} vs uniform ${uniformLootHits.toFixed(1)}, ${emptyDeadEnds} empty dead ends; ${houseFloors} optional houses, dormant/entry activation, scroll and save/load checked.`);

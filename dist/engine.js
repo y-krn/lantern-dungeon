@@ -11,6 +11,7 @@
   };
   const ITEM_ORDER = Object.keys(ITEMS);
   const FLOOR_NAMES=['苔むした入口','静かな回廊','忘れられた倉庫','ひかり草の庭','古井戸の底','眠れる鉱山','月影の遺跡','深淵の回廊','星を待つ間','ランタンの聖域'];
+  const LAYOUT_NAMES={branch:'枝分かれの迷宮',ring:'巡る回廊',hall:'大広間の迷宮'};
   class DungeonEngine {
     constructor(seed = Date.now()) {
       this.seed=seed>>>0; this.rng=this.seed||1; this.floor=1; this.turn=0; this.status='playing'; this.log=[]; this.effects=[];
@@ -45,13 +46,39 @@
     say(text,type='normal'){this.log.unshift({text,type,turn:this.turn});this.log=this.log.slice(0,40);}
     effect(type,x,y,value,text){this.effects.push({type,x,y,value,text});}
     canStep(x,y,dx,dy){return !!this.tile(x+dx,y+dy)&&(!(dx&&dy)||(!!this.tile(x+dx,y)&&!!this.tile(x,y+dy)));}
+    roomAt(x,y){return this.rooms.find(r=>x>=r.x&&y>=r.y&&x<r.x+r.w&&y<r.y+r.h);}
+    layoutName(){return LAYOUT_NAMES[this.layout]||'';}
+    roomDoorCount(room){
+      const doors=new Set();
+      for(let x=room.x;x<room.x+room.w;x++)for(const y of [room.y-1,room.y+room.h])if(this.tile(x,y))doors.add(this.key(x,y));
+      for(let y=room.y;y<room.y+room.h;y++)for(const x of [room.x-1,room.x+room.w])if(this.tile(x,y))doors.add(this.key(x,y));
+      let count=0;
+      while(doors.size){
+        count++;const first=doors.values().next().value,queue=[first];doors.delete(first);
+        for(let i=0;i<queue.length;i++)for(const[dx,dy]of [[0,-1],[1,0],[0,1],[-1,0]]){
+          const k=queue[i],x=k%W+dx,y=Math.floor(k/W)+dy,next=this.key(x,y);
+          if(this.inside(x,y)&&doors.delete(next))queue.push(next);
+        }
+      }
+      return count;
+    }
     generateFloor(){
-      this.tiles=Array(W*H).fill(0);this.seen=Array(W*H).fill(false);this.visible=Array(W*H).fill(false);this.rooms=[];this.enemies=[];this.items=[];this.traps=[];
+      this.tiles=Array(W*H).fill(0);this.seen=Array(W*H).fill(false);this.visible=Array(W*H).fill(false);this.rooms=[];this.enemies=[];this.items=[];this.traps=[];this.monsterHouse=null;
       const cells=Array.from({length:9},(_,i)=>i);
       for(let i=cells.length-1;i>0;i--){const j=this.int(0,i);[cells[i],cells[j]]=[cells[j],cells[i]];}
-      const roomCount=this.int(4,8);
-      for(const cell of cells.slice(0,roomCount).sort((a,b)=>a-b)){
-        const col=cell%3,row=Math.floor(cell/3),w=this.int(5,11),h=this.int(4,7),x=1+col*14+this.int(1,13-w),y=1+row*9+this.int(1,8-h);
+      const weights=this.floor<=3?[6,3,1]:this.floor<=6?[4,4,2]:[2,4,4];
+      const layouts=Object.keys(LAYOUT_NAMES).flatMap((name,i)=>name===this.layout?[]:Array(weights[i]).fill(name));
+      this.layout=layouts[this.int(0,layouts.length-1)];
+      const roomCount=this.int(this.layout==='branch'?6:4,8),perimeter=cells.filter(c=>c!==4);
+      const selected=this.layout==='hall'?[4,...perimeter.slice(0,roomCount-1)]:this.layout==='ring'?perimeter.slice(0,roomCount):cells.slice(0,roomCount);
+      for(const cell of selected.sort((a,b)=>a-b)){
+        const col=cell%3,row=Math.floor(cell/3);
+        let w=this.int(5,this.layout==='branch'?8:10),h=this.int(4,this.layout==='branch'?6:7),x=1+col*14+this.int(1,13-w),y=1+row*9+this.int(1,8-h);
+        if(this.layout==='hall'){
+          if(cell===4){w=this.int(16,19);h=this.int(10,11);x=this.int(12,14);y=this.int(9,10);}
+          else if(row===1){w=this.int(5,7);h=this.int(4,6);x=col===0?2:35;y=this.int(12,15);}
+          else{h=this.int(4,6);y=(row===0?2:22)+this.int(0,6-h);}
+        }
         const room={x,y,w,h,cx:x+Math.floor(w/2),cy:y+Math.floor(h/2)};this.rooms.push(room);
         for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)this.tiles[this.key(xx,yy)]=1;
       }
@@ -61,23 +88,27 @@
         const vertical=()=>{while(y!==b.cy){this.tiles[this.key(x,y)]=1;y+=Math.sign(b.cy-y);}};
         if(horizontalFirst){horizontal();vertical();}else{vertical();horizontal();}this.tiles[this.key(x,y)]=1;
       };
-      // A nearby-room spanning tree guarantees access without a fixed traversal order.
-      const links=[];
-      for(let a=0;a<roomCount;a++)for(let b=a+1;b<roomCount;b++){
-        const distance=Math.abs(this.rooms[a].cx-this.rooms[b].cx)+Math.abs(this.rooms[a].cy-this.rooms[b].cy);
-        links.push({a,b,weight:distance+this.int(0,10),used:false});
-      }
-      links.sort((a,b)=>a.weight-b.weight);
-      const connected=new Set([this.int(0,roomCount-1)]);
-      while(connected.size<roomCount){
-        const link=links.find(l=>connected.has(l.a)!==connected.has(l.b));
-        join(this.rooms[link.a],this.rooms[link.b]);link.used=true;connected.add(link.a);connected.add(link.b);
-      }
-      // Some floors retain dead ends; others gain short alternate routes.
-      const extraLinks=this.int(0,2),unused=links.filter(l=>!l.used);
-      for(let i=0;i<extraLinks;i++){
-        const index=this.int(0,Math.min(3,unused.length-1)),link=unused.splice(index,1)[0];
-        join(this.rooms[link.a],this.rooms[link.b]);
+      // Each layout changes the actual floor geometry, not just its label.
+      if(this.layout==='ring'){
+        const left=Math.min(...this.rooms.map(r=>r.cx)),right=Math.max(...this.rooms.map(r=>r.cx)),top=Math.min(...this.rooms.map(r=>r.cy)),bottom=Math.max(...this.rooms.map(r=>r.cy));
+        const corners=[{cx:left,cy:top},{cx:right,cy:top},{cx:right,cy:bottom},{cx:left,cy:bottom}];
+        for(let i=0;i<4;i++)join(corners[i],corners[(i+1)%4]);
+        for(const r of this.rooms){const row=Math.floor(r.y/9),col=Math.floor(r.x/14);join(r,{cx:row===1?(col===0?left:right):r.cx,cy:row===0?top:row===2?bottom:r.cy});}
+      }else if(this.layout==='hall'){
+        const hall=this.rooms.find(r=>r.w>=16);
+        for(const r of this.rooms)if(r!==hall)join(hall,r);
+      }else{
+        const links=[];
+        for(let a=0;a<roomCount;a++)for(let b=a+1;b<roomCount;b++){
+          const distance=Math.abs(this.rooms[a].cx-this.rooms[b].cx)+Math.abs(this.rooms[a].cy-this.rooms[b].cy);
+          links.push({a,b,weight:distance+this.int(0,10)});
+        }
+        links.sort((a,b)=>a.weight-b.weight);
+        const connected=new Set([this.int(0,roomCount-1)]);
+        while(connected.size<roomCount){
+          const link=links.find(l=>connected.has(l.a)!==connected.has(l.b));
+          join(this.rooms[link.a],this.rooms[link.b]);connected.add(link.a);connected.add(link.b);
+        }
       }
       const startRoom=this.rooms[this.int(0,roomCount-1)],otherRooms=this.rooms.filter(r=>r!==startRoom);
       this.player.x=this.int(startRoom.x+1,startRoom.x+startRoom.w-2);this.player.y=this.int(startRoom.y+1,startRoom.y+startRoom.h-2);this.player.facing=[0,1];
@@ -86,19 +117,28 @@
       const used=new Set([this.key(this.player.x,this.player.y),this.key(this.stairs.x,this.stairs.y)]);
       const emptySpot=(rooms=this.rooms)=>{for(let i=0;i<500;i++){const r=rooms[this.int(0,rooms.length-1)],x=this.int(r.x,r.x+r.w-1),y=this.int(r.y,r.y+r.h-1),k=this.key(x,y);if(!used.has(k)){used.add(k);return{x,y};}}return null;};
       const guardianSpot=this.floor===10?emptySpot([exitRoom]):null;
-      const addItem=(kind,rooms=this.rooms)=>{const pos=emptySpot(rooms);if(pos)this.items.push({...pos,kind,amount:kind==='gold'?this.int(20,65)*this.floor:1});};
+      const deadEnds=otherRooms.filter(r=>r!==exitRoom&&this.roomDoorCount(r)===1);
+      const houseRoom=this.floor>=4&&this.floor<10&&deadEnds.length&&this.random()<.15?deadEnds[this.int(0,deadEnds.length-1)]:null;
+      if(houseRoom)this.monsterHouse={room:this.rooms.indexOf(houseRoom),triggered:false};
+      const houseSpots=houseRoom?Array.from({length:5},()=>emptySpot([houseRoom])):[];
+      const rewardRooms=deadEnds.filter(r=>r!==houseRoom),ordinaryRooms=otherRooms.filter(r=>r!==houseRoom);
+      const addItem=(kind,rooms=this.rooms,bias=true)=>{
+        const preferred=bias?rewardRooms.filter(r=>rooms.includes(r)):[],pool=preferred.length&&this.random()<.65?preferred:rooms;
+        const pos=emptySpot(pool);if(pos)this.items.push({...pos,kind,amount:kind==='gold'?this.int(20,65)*this.floor:1});
+      };
       // Each floor guarantees food and healing as well as randomly placed supplies.
       ['bread','bread','bread','potion','potion','gold','gold','gold','arrow',this.random()<.5?'map':'scroll'].forEach(kind=>addItem(kind));
       if(this.floor===2||this.floor===5||this.floor===8)addItem('weapon',otherRooms);
       if(this.floor===3||this.floor===6||this.floor===9)addItem('shield',otherRooms);
+      if(houseRoom){addItem('gold',[houseRoom],false);addItem('gold',[houseRoom],false);addItem('scroll',[houseRoom],false);}
       const count=4+Math.floor(this.floor*.75);
       for(let i=0;i<count;i++){
-        const pos=emptySpot(otherRooms);if(!pos)continue;
+        const pos=i<houseSpots.length?houseSpots[i]:emptySpot(ordinaryRooms);if(!pos)continue;
         const type=this.floor<3?'slime':this.floor<6?(this.random()<.45?'bat':'slime'):(this.random()<.5?'ghost':'bat');
         const bonus=type==='ghost'?4:type==='bat'?2:0;
-        this.enemies.push({...pos,id:i,type,name:type==='slime'?'苔スライム':type==='bat'?'洞窟コウモリ':'灯りの亡霊',hp:7+this.floor*2+bonus,maxHp:7+this.floor*2+bonus,attack:2+Math.ceil(this.floor*.8)+bonus/2,exp:3+Math.floor(this.floor/2)+bonus,awake:false});
+        this.enemies.push({...pos,id:i,type,name:type==='slime'?'苔スライム':type==='bat'?'洞窟コウモリ':'灯りの亡霊',hp:7+this.floor*2+bonus,maxHp:7+this.floor*2+bonus,attack:2+Math.ceil(this.floor*.8)+bonus/2,exp:3+Math.floor(this.floor/2)+bonus,awake:false,house:i<houseSpots.length});
       }
-      for(let i=0;i<Math.min(this.floor,5);i++){const pos=emptySpot(otherRooms);if(pos)this.traps.push({...pos,found:false,spent:false});}
+      for(let i=0;i<Math.min(this.floor,5);i++){const pos=emptySpot(ordinaryRooms);if(pos)this.traps.push({...pos,found:false,spent:false});}
       if(guardianSpot)this.enemies.push({...guardianSpot,id:99,type:'guardian',name:'星の番人',hp:65,maxHp:65,attack:14,exp:30,awake:true});
       this.reveal();
     }
@@ -108,7 +148,7 @@
     }
     reveal(){
       this.visible.fill(false);const p=this.player;
-      const room=this.rooms.find(r=>p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h);
+      const room=this.roomAt(p.x,p.y);
       if(room){for(let y=room.y-1;y<=room.y+room.h;y++)for(let x=room.x-1;x<=room.x+room.w;x++)if(this.inside(x,y))this.visible[this.key(x,y)]=true;}
       for(let y=p.y-3;y<=p.y+3;y++)for(let x=p.x-3;x<=p.x+3;x++)if(this.inside(x,y)&&Math.hypot(x-p.x,y-p.y)<=3.5&&this.lineOfSight(p.x,p.y,x,y))this.visible[this.key(x,y)]=true;
       for(let i=0;i<this.seen.length;i++)if(this.visible[i])this.seen[i]=true;
@@ -136,6 +176,11 @@
     }
     finishTurn(){
       this.turn++;this.reveal();
+      const house=this.monsterHouse;
+      if(house&&!house.triggered&&this.roomAt(this.player.x,this.player.y)===this.rooms[house.room]){
+        house.triggered=true;const pack=this.enemies.filter(e=>e.house&&e.hp>0);
+        if(pack.length){for(const e of pack)e.awake=true;this.say('モンスターハウス！ 眠っていた魔物たちが一斉に目を覚ました！','danger');}
+      }
       if(this.turn%4===0&&this.player.hunger>0)this.player.hunger--;
       if(this.player.hunger===0){this.player.hp--;if(this.turn%4===0)this.say('お腹が空いて、体力が減っている。パンを食べよう！','danger');this.effect('damage',this.player.x,this.player.y,1);}else if(this.turn%7===0&&this.player.hp>0)this.player.hp=Math.min(this.player.maxHp,this.player.hp+1);
       if(this.player.hp>0)this.enemyTurn();
@@ -150,7 +195,7 @@
       // One breadth-first distance field per turn keeps chasing fair and avoids wall clipping.
       const distance=Array(W*H).fill(Infinity),queue=[[p.x,p.y]];distance[this.key(p.x,p.y)]=0;
       for(let head=0;head<queue.length;head++){const[x,y]=queue[head],d=distance[this.key(x,y)];if(d>=15)continue;for(const[dx,dy]of DIRS){if(!this.canStep(x,y,dx,dy))continue;const nx=x+dx,ny=y+dy,k=this.key(nx,ny);if(distance[k]!==Infinity)continue;distance[k]=d+1;queue.push([nx,ny]);}}
-      for(const e of this.enemies){if(e.hp<=0)continue;const dist=Math.max(Math.abs(e.x-p.x),Math.abs(e.y-p.y));if(dist<=7&&this.visible[this.key(e.x,e.y)])e.awake=true;
+      for(const e of this.enemies){if(e.hp<=0||(e.house&&!e.awake&&!this.monsterHouse?.triggered))continue;const dist=Math.max(Math.abs(e.x-p.x),Math.abs(e.y-p.y));if(dist<=7&&this.visible[this.key(e.x,e.y)])e.awake=true;
         if(dist===1&&this.canStep(e.x,e.y,p.x-e.x,p.y-e.y)){const d=Math.max(1,e.attack-this.defense()+this.int(-1,1));p.hp-=d;this.say(`${e.name}の攻撃。${d}ダメージ。`,'danger');this.effect('damage',p.x,p.y,d);if(p.hp<=0)break;continue;}
         if(!e.awake&&this.random()<.8)continue;
         let candidates=DIRS.filter(([dx,dy])=>this.canStep(e.x,e.y,dx,dy)&&!(e.x+dx===p.x&&e.y+dy===p.y)&&!this.enemyAt(e.x+dx,e.y+dy));
@@ -163,7 +208,7 @@
     weaponName(){return ['木の剣','銅の剣','鉄の剣','星鉄の剣'][Math.min(3,this.player.weapon)];}
     shieldName(){return ['旅人の盾','銅の盾','鉄の盾','星鉄の盾'][Math.min(3,this.player.shield)];}
     serialize(){const{effects,...state}=this;return JSON.stringify({version:1,state});}
-    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>10||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.effects=[];game.reveal();return game;}catch{return null;}}
+    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>10||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.effects=[];game.reveal();return game;}catch{return null;}}
   }
-  Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES}});
+  Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES,LAYOUT_NAMES}});
 })(typeof window!=='undefined'?window:globalThis);
