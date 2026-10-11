@@ -54,9 +54,34 @@ for(let seed=1;seed<=100;seed++){
   p.bag=['scroll'];game.use(0);assert.equal(game.enemies.length,0);
 }
 {
+  const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.items=[];game.traps=[];
+  p.bag=['potion','arrow','bread','arrow','potion','arrow'];
+  assert.deepEqual(game.inventoryEntries(),[{kind:'potion',index:0,count:1},{kind:'arrow',index:1,count:3},{kind:'bread',index:2,count:1},{kind:'potion',index:4,count:1}]);
+  assert.equal(game.shoot(),false);assert.equal(game.turn,0);
+  assert(game.equipArrow());assert.equal(p.ammo,'arrow');assert.equal(game.arrowCount(),3);assert.equal(game.turn,1);assert.equal(p.weapon,0);assert.equal(p.shield,0);
+  const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.deepEqual(restored.player,p);assert.equal(restored.arrowCount(),3);
+  assert(game.equipArrow());assert.equal(p.ammo,null);assert.equal(game.arrowCount(),3);assert.equal(game.shoot(),false);
+  assert(game.equipArrow());p.facing=[1,0];
+  const enemy={x:p.x+2,y:p.y,id:1,type:'slime',name:'苔スライム',hp:30,maxHp:30,attack:1,exp:1};game.enemies=[enemy];game.reveal();
+  const turn=game.turn;assert(game.shoot());assert.equal(enemy.hp,18);assert.equal(game.arrowCount(),2);assert.equal(p.ammo,'arrow');assert.equal(game.turn,turn+1);
+  game.enemies=[];assert(game.shoot());assert(game.shoot());assert.equal(p.ammo,null);assert.equal(game.arrowCount(),0);assert.equal(game.inventoryEntries().length,3);
+  const emptyTurn=game.turn;assert.equal(game.shoot(),false);assert.equal(game.equipArrow(),false);assert.equal(game.turn,emptyTurn);
+  const legacy=JSON.parse(game.serialize());delete legacy.state.player.ammo;legacy.state.player.bag=['arrow','bread','arrow'];
+  const migrated=DungeonEngine.restore(JSON.stringify(legacy));assert(migrated);assert.equal(migrated.player.ammo,null);assert.equal(migrated.inventoryEntries().length,2);assert.equal(migrated.arrowCount(),2);
+  legacy.state.player.ammo='potion';assert.equal(DungeonEngine.restore(JSON.stringify(legacy)),null);
+  game.status='dead';p.bag=['arrow'];assert.equal(game.equipArrow(),false);p.ammo='arrow';assert.equal(game.shoot(),false);assert.equal(game.arrowCount(),1);
+}
+{
+  const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.traps=[];
+  p.bag=Array(15).fill('bread');p.bag.push('arrow');
+  game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.arrowCount(),2);assert.equal(game.inventoryEntries().length,16);assert.equal(game.items.length,0);
+  game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(p.bag.includes('potion'),false);
+  p.bag=Array(16).fill('bread');game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(game.arrowCount(),0);
+}
+{
   const game=new DungeonEngine(9);game.floor=10;game.generateFloor();game.enemies=[];game.items=[];game.traps=[];game.player.x=game.stairs.x;game.player.y=game.stairs.y;game.wait();assert.equal(game.status,'won');
 }
 {
   const game=new DungeonEngine(9);game.floor=10;game.generateFloor();const guardian=game.enemies.find(e=>e.type==='guardian');game.enemies=[guardian];guardian.x=game.rooms[3].cx;guardian.y=game.rooms[3].cy;game.player.x=game.stairs.x;game.player.y=game.stairs.y;game.wait();assert.equal(game.status,'playing');
 }
-console.log('PASS: 1,000 generated floors connected; collision, entities, food, hunger, inventory, level-up, save/load, death and victory checked.');
+console.log('PASS: 1,000 generated floors connected; collision, entities, food, hunger, inventory, arrow stacking/equipment, level-up, save/load, death and victory checked.');

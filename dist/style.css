@@ -7,3 +7,5 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 
 .mobile-vitals{display:none}@media(max-width:800px){.mobile-vitals{display:flex;position:absolute;top:13px;left:12px;gap:13px;font-size:10px;padding:5px 8px;background:#142020dd;border:1px solid #65705445;border-radius:4px;pointer-events:none}.mobile-vitals .heart{color:#ed9ba2}.mobile-vitals .bread{color:#e3c28d}.play-area .touch-controls{margin:0;padding:15px 12px 17px;border-top:1px solid var(--border);background:#20212a}.direction-pad button{min-height:44px;height:44px}.touch-controls p{font-size:10px}}
+
+@media(max-width:480px){.action-bar{flex-wrap:wrap}.action-button{flex:1 1 30%}.item-card{gap:8px}.item-card>div{min-width:0}.item-card strong{line-height:1.6}}

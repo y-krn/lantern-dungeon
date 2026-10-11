@@ -7,13 +7,13 @@
     potion: {name:'回復草',icon:'✿',description:'体力を25回復。ピンチの前に使いましょう。'},
     scroll: {name:'雷の巻物',icon:'▤',description:'見えている敵すべてに18ダメージ。'},
     map: {name:'地図の巻物',icon:'▧',description:'この階の地形と階段の場所を明らかにします。'},
-    arrow: {name:'木の矢',icon:'➶',description:'向いている方向へ発射。最初の敵に12ダメージ。'}
+    arrow: {name:'木の矢',icon:'➶',description:'装備して「矢を放つ」で向いている方向へ発射。1本消費し、最初の敵に12ダメージ。'}
   };
   const FLOOR_NAMES=['苔むした入口','静かな回廊','忘れられた倉庫','ひかり草の庭','古井戸の底','眠れる鉱山','月影の遺跡','深淵の回廊','星を待つ間','ランタンの聖域'];
   class DungeonEngine {
     constructor(seed = Date.now()) {
       this.seed=seed>>>0; this.rng=this.seed||1; this.floor=1; this.turn=0; this.status='playing'; this.log=[]; this.effects=[];
-      this.player={x:0,y:0,hp:30,maxHp:30,hunger:100,level:1,exp:0,nextExp:8,gold:0,weapon:0,shield:0,facing:[0,1],bag:['bread','potion','scroll']};
+      this.player={x:0,y:0,hp:30,maxHp:30,hunger:100,level:1,exp:0,nextExp:8,gold:0,weapon:0,shield:0,ammo:null,facing:[0,1],bag:['bread','potion','scroll']};
       this.generateFloor();
       this.say('ランタンを灯した。小さな冒険のはじまり。','good');
       this.say('地下10階に眠る「星のランタン」を探そう。');
@@ -26,6 +26,21 @@
     enemyAt(x,y){return this.enemies.find(e=>e.x===x&&e.y===y&&e.hp>0);}
     attackPower(){return 5+(this.player.level-1)*2+this.player.weapon*3;}
     defense(){return 1+this.player.shield*2;}
+    arrowCount(){return this.player.bag.filter(kind=>kind==='arrow').length;}
+    inventoryEntries(){
+      const entries=[];let arrows;
+      this.player.bag.forEach((kind,index)=>{
+        if(kind==='arrow'&&arrows){arrows.count++;return;}
+        const entry={kind,index,count:1};entries.push(entry);if(kind==='arrow')arrows=entry;
+      });
+      return entries;
+    }
+    equipArrow(){
+      if(this.status!=='playing'||!this.arrowCount())return false;
+      this.player.ammo=this.player.ammo==='arrow'?null:'arrow';
+      this.say(this.player.ammo?'木の矢を装備した。':'木の矢の装備を外した。');this.finishTurn();return true;
+    }
+    shoot(){if(this.player.ammo!=='arrow')return false;return this.use(this.player.bag.indexOf('arrow'));}
     say(text,type='normal'){this.log.unshift({text,type,turn:this.turn});this.log=this.log.slice(0,40);}
     effect(type,x,y,value){this.effects.push({type,x,y,value});}
     canStep(x,y,dx,dy){return !!this.tile(x+dx,y+dy)&&(!(dx&&dy)||(!!this.tile(x+dx,y)&&!!this.tile(x,y+dy)));}
@@ -79,7 +94,7 @@
     attack(){if(this.status!=='playing')return false;const p=this.player,[dx,dy]=p.facing,e=this.canStep(p.x,p.y,dx,dy)?this.enemyAt(p.x+dx,p.y+dy):null;if(e)this.hit(e,this.attackPower()+this.int(-1,2));else{this.say('剣を振った。目の前に敵はいない。');this.effect('swing',p.x+dx,p.y+dy,0);}this.finishTurn();return true;}
     wait(){if(this.status!=='playing')return false;this.finishTurn();return true;}
     hit(enemy,damage){enemy.hp-=damage;enemy.awake=true;this.say(`${enemy.name}に${damage}ダメージ。`);this.effect('hit',enemy.x,enemy.y,damage);if(enemy.hp<=0){this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`,'good');this.player.exp+=enemy.exp;this.player.gold+=this.int(3,12)*this.floor;this.effect('kill',enemy.x,enemy.y,0);while(this.player.exp>=this.player.nextExp){this.player.exp-=this.player.nextExp;this.player.level++;this.player.nextExp=Math.floor(this.player.nextExp*1.35)+3;this.player.maxHp+=6;this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.say(`レベル${this.player.level}になった！ 体力と攻撃力が上がった。`,'good');this.effect('level',this.player.x,this.player.y,this.player.level);}}}
-    collect(){const p=this.player;const item=this.items.find(i=>i.x===p.x&&i.y===p.y);if(!item)return;if(item.kind==='gold'){p.gold+=item.amount;this.say(`${item.amount}Gを拾った。`,'good');}else if(item.kind==='weapon'){p.weapon++;this.say(`${this.weaponName()}を手に入れ、装備した。`,'good');}else if(item.kind==='shield'){p.shield++;this.say(`${this.shieldName()}を手に入れ、装備した。`,'good');}else{if(p.bag.length>=16){this.say('持ち物がいっぱい。アイテムを使って空きを作ろう。');return;}p.bag.push(item.kind);this.say(`${ITEMS[item.kind].name}を拾った。`,'good');}this.effect('pickup',p.x,p.y,item.kind);this.items.splice(this.items.indexOf(item),1);}
+    collect(){const p=this.player;const item=this.items.find(i=>i.x===p.x&&i.y===p.y);if(!item)return;if(item.kind==='gold'){p.gold+=item.amount;this.say(`${item.amount}Gを拾った。`,'good');}else if(item.kind==='weapon'){p.weapon++;this.say(`${this.weaponName()}を手に入れ、装備した。`,'good');}else if(item.kind==='shield'){p.shield++;this.say(`${this.shieldName()}を手に入れ、装備した。`,'good');}else{const stacks=item.kind==='arrow'&&this.arrowCount()>0;if(this.inventoryEntries().length>=16&&!stacks){this.say('持ち物がいっぱい。アイテムを使って空きを作ろう。');return;}p.bag.push(item.kind);this.say(`${ITEMS[item.kind].name}を拾った。`,'good');}this.effect('pickup',p.x,p.y,item.kind);this.items.splice(this.items.indexOf(item),1);}
     triggerTrap(){const p=this.player,t=this.traps.find(t=>t.x===p.x&&t.y===p.y&&!t.spent);if(!t)return;t.found=true;t.spent=true;const d=this.int(2,5);p.hp-=d;this.say(`足元にトゲの罠！ ${d}ダメージ。`,'danger');this.effect('damage',p.x,p.y,d);}
     use(index){
       if(this.status!=='playing')return false;const p=this.player,kind=p.bag[index];if(!ITEMS[kind])return false;
@@ -88,7 +103,7 @@
       if(kind==='scroll'){this.say('雷の巻物を読んだ！');for(const e of this.enemies)if(e.hp>0&&this.visible[this.key(e.x,e.y)])this.hit(e,18);this.effect('lightning',p.x,p.y,0);}
       if(kind==='map'){this.seen.fill(true);this.say('迷宮の地図が浮かび上がった。階段はミニマップの水色の印。','good');this.effect('map',p.x,p.y,0);}
       if(kind==='arrow'){const[dx,dy]=p.facing;let x=p.x,y=p.y,hit=false;for(let i=0;i<10;i++){if(!this.canStep(x,y,dx,dy))break;x+=dx;y+=dy;const e=this.enemyAt(x,y);if(e){this.hit(e,12);hit=true;break;}}if(!hit)this.say('木の矢を放った。敵には当たらなかった。');this.effect('arrow',x,y,0);}
-      p.bag.splice(index,1);this.finishTurn();return true;
+      p.bag.splice(index,1);if(kind==='arrow'&&!this.arrowCount())p.ammo=null;this.finishTurn();return true;
     }
     finishTurn(){
       this.turn++;this.reveal();
@@ -119,7 +134,7 @@
     weaponName(){return ['木の剣','銅の剣','鉄の剣','星鉄の剣'][Math.min(3,this.player.weapon)];}
     shieldName(){return ['旅人の盾','銅の盾','鉄の盾','星鉄の盾'][Math.min(3,this.player.shield)];}
     serialize(){const{effects,...state}=this;return JSON.stringify({version:1,state});}
-    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||s.rooms.length!==6||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||!Number.isInteger(s.floor)||s.floor<1||s.floor>10||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);if(!game.tile(s.player.x,s.player.y))return null;game.effects=[];game.reveal();return game;}catch{return null;}}
+    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||s.rooms.length!==6||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>10||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.effects=[];game.reveal();return game;}catch{return null;}}
   }
   Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES}});
 })(typeof window!=='undefined'?window:globalThis);
