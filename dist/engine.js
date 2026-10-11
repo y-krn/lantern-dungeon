@@ -153,6 +153,8 @@
       if(room){for(let y=room.y-1;y<=room.y+room.h;y++)for(let x=room.x-1;x<=room.x+room.w;x++)if(this.inside(x,y))this.visible[this.key(x,y)]=true;}
       for(let y=p.y-3;y<=p.y+3;y++)for(let x=p.x-3;x<=p.x+3;x++)if(this.inside(x,y)&&Math.hypot(x-p.x,y-p.y)<=3.5&&this.lineOfSight(p.x,p.y,x,y))this.visible[this.key(x,y)]=true;
       for(let i=0;i<this.seen.length;i++)if(this.visible[i])this.seen[i]=true;
+      for(const item of this.items)if(this.visible[this.key(item.x,item.y)])item.discovered=true;
+      for(const enemy of this.enemies)if(enemy.hp>0&&this.visible[this.key(enemy.x,enemy.y)])enemy.lastSeen={x:enemy.x,y:enemy.y};
     }
     move(dx,dy){
       if(this.status!=='playing'||!DIRS.some(d=>d[0]===dx&&d[1]===dy))return false;

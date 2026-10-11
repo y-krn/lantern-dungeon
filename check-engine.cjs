@@ -255,6 +255,65 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 {
   const game=new DungeonEngine(9);game.floor=10;game.generateFloor();const guardian=game.enemies.find(e=>e.type==='guardian');game.enemies=[guardian];guardian.x=game.rooms[3].cx;guardian.y=game.rooms[3].cy;game.player.x=game.stairs.x;game.player.y=game.stairs.y;game.wait();assert.equal(game.status,'playing');
 }
+{
+  const game=new DungeonEngine(22),p=game.player,home={x:p.x,y:p.y};
+  const far=game.rooms.find(r=>!game.visible[game.key(r.cx,r.cy)]);
+  const enemy={id:100,x:home.x,y:home.y,hp:5,maxHp:5,type:'slime'};
+  const hiddenEnemy={id:101,x:far.cx,y:far.cy,hp:5,maxHp:5,type:'slime'};
+  const item={x:home.x+1,y:home.y,kind:'potion',amount:1};
+  const hiddenItem={x:far.cx+1,y:far.cy,kind:'bread',amount:1};
+  game.enemies=[enemy,hiddenEnemy];game.items=[item,hiddenItem];game.reveal();
+  assert.equal(item.discovered,true);assert.deepEqual(enemy.lastSeen,home);
+  assert.equal(hiddenItem.discovered,undefined);assert.equal(hiddenEnemy.lastSeen,undefined);
+  // Revealing terrain does not reveal its occupants.
+  game.seen.fill(true);game.reveal();
+  assert.equal(hiddenItem.discovered,undefined);assert.equal(hiddenEnemy.lastSeen,undefined);
+  p.x=far.cx;p.y=far.cy;game.reveal();
+  assert.equal(hiddenItem.discovered,true);assert.deepEqual(hiddenEnemy.lastSeen,{x:far.cx,y:far.cy});
+  assert.equal(game.visible[game.key(item.x,item.y)],false);
+  const lastSeen={...hiddenEnemy.lastSeen};p.x=home.x;p.y=home.y;
+  hiddenEnemy.x=far.cx+2;game.reveal();assert.deepEqual(hiddenEnemy.lastSeen,lastSeen);
+  const restored=DungeonEngine.restore(game.serialize());assert(restored);
+  assert.deepEqual(restored.enemies[1].lastSeen,lastSeen);assert.equal(restored.items[1].discovered,true);
+  const legacy=JSON.parse(game.serialize());
+  legacy.state.items.forEach(i=>delete i.discovered);legacy.state.enemies.forEach(e=>delete e.lastSeen);
+  const migrated=DungeonEngine.restore(JSON.stringify(legacy));assert(migrated);
+  assert.equal(migrated.items[0].discovered,true);assert.equal(migrated.items[1].discovered,undefined);
+  assert.equal(migrated.enemies[1].lastSeen,undefined);
+  // Exercise the renderer itself: remembered positions, hidden occupants, removal and marker priority.
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
+  const draw=source.slice(source.indexOf('  function drawMinimap()'),source.indexOf('  function toggleMinimap()'));
+  const calls=[],mini={fillStyle:'',fillRect(...args){calls.push({color:this.fillStyle,args});}};
+  function markers(){calls.length=0;vm.runInNewContext(draw+'drawMinimap();',{mini,engine:game,W,H});return calls.filter(c=>['#d08288','#93bde9'].includes(c.color));}
+  assert.equal(markers().length,4);
+  assert(markers().some(c=>c.color==='#d08288'&&c.args[0]===lastSeen.x*144/W));
+  game.enemies.push({x:far.cx,y:far.cy,hp:5});game.items.push({x:far.cx,y:far.cy,kind:'gold'});
+  assert.equal(markers().length,4,'Undiscovered entities stay hidden even on revealed terrain');
+  p.x=item.x;p.y=item.y;game.collect();enemy.hp=0;
+  assert.equal(markers().length,2,'Collected items and dead enemies leave the minimap');
+  game.generateFloor();assert(game.enemies.every(e=>!e.lastSeen||game.visible[game.key(e.x,e.y)]));
+  assert(game.items.every(i=>!i.discovered||game.visible[game.key(i.x,i.y)]));
+}
+{
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
+  const notice={textContent:''},timers=new Map();let nextTimer=0,clock=0;
+  const context={pickupNotice:notice,setTimeout(fn,ms){const id=++nextTimer;timers.set(id,{fn,at:clock+ms});return id;},clearTimeout(id){timers.delete(id);}};
+  const start=source.indexOf('  let pickupTimer;'),end=source.indexOf('  const SAVE_KEY=',start);
+  vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+  function advance(ms){clock+=ms;for(const[id,timer]of timers)if(timer.at<=clock){timers.delete(id);timer.fn();}}
+  context.showPickupNotice('回復草を拾った。');assert.equal(notice.textContent,'直近の入手：回復草を拾った。');
+  advance(999);assert.equal(notice.textContent,'直近の入手：回復草を拾った。');
+  advance(1);assert.equal(notice.textContent,'');
+  context.showPickupNotice('焼きたてパンを拾った。');advance(500);
+  context.showPickupNotice('42Gを拾った。');advance(500);assert.equal(notice.textContent,'直近の入手：42Gを拾った。');
+  advance(500);assert.equal(notice.textContent,'');
+  context.showPickupNotice('木の矢を拾った。');context.clearPickupNotice();
+  assert.equal(notice.textContent,'');assert.equal(timers.size,0);
+}
+console.log('PASS: pickup toast expires after 1 second; subsequent pickups reset expiry; reset cancels pending timers.');
+console.log('PASS: minimap discovery, map-scroll privacy, remembered enemy positions, renderer markers, collection/death, floor reset and save migration.');
 console.log('PASS: 1,000 generated floors connected; collision, entities, food, hunger, inventory, arrow stacking/equipment, level-up, save/load, death and victory checked.');
 console.log('PASS: no entrance traps in 1,000 floors, including diagonal entry; trap budgets preserved; legacy entrance traps removed on load.');
 console.log(`PASS: 4–8 rooms; all 9 start/exit regions; ${loopFloors} loop, ${treeFloors} tree, ${branchFloors} branching, ${deadEndFloors} dead-end floors; stairs ${minWalk}–${maxWalk} steps (${nearStairs} nearby); safe spawns and deterministic save/load checked.`);
