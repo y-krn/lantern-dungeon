@@ -43,7 +43,7 @@
     }
     shoot(){if(this.player.ammo!=='arrow')return false;return this.use(this.player.bag.indexOf('arrow'));}
     say(text,type='normal'){this.log.unshift({text,type,turn:this.turn});this.log=this.log.slice(0,40);}
-    effect(type,x,y,value){this.effects.push({type,x,y,value});}
+    effect(type,x,y,value,text){this.effects.push({type,x,y,value,text});}
     canStep(x,y,dx,dy){return !!this.tile(x+dx,y+dy)&&(!(dx&&dy)||(!!this.tile(x+dx,y)&&!!this.tile(x,y+dy)));}
     generateFloor(){
       this.tiles=Array(W*H).fill(0);this.seen=Array(W*H).fill(false);this.visible=Array(W*H).fill(false);this.rooms=[];this.enemies=[];this.items=[];this.traps=[];
@@ -95,7 +95,7 @@
     attack(){if(this.status!=='playing')return false;const p=this.player,[dx,dy]=p.facing,e=this.canStep(p.x,p.y,dx,dy)?this.enemyAt(p.x+dx,p.y+dy):null;if(e)this.hit(e,this.attackPower()+this.int(-1,2));else{this.say('剣を振った。目の前に敵はいない。');this.effect('swing',p.x+dx,p.y+dy,0);}this.finishTurn();return true;}
     wait(){if(this.status!=='playing')return false;this.finishTurn();return true;}
     hit(enemy,damage){enemy.hp-=damage;enemy.awake=true;this.say(`${enemy.name}に${damage}ダメージ。`);this.effect('hit',enemy.x,enemy.y,damage);if(enemy.hp<=0){this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`,'good');this.player.exp+=enemy.exp;this.player.gold+=this.int(3,12)*this.floor;this.effect('kill',enemy.x,enemy.y,0);while(this.player.exp>=this.player.nextExp){this.player.exp-=this.player.nextExp;this.player.level++;this.player.nextExp=Math.floor(this.player.nextExp*1.35)+3;this.player.maxHp+=6;this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.say(`レベル${this.player.level}になった！ 体力と攻撃力が上がった。`,'good');this.effect('level',this.player.x,this.player.y,this.player.level);}}}
-    collect(){const p=this.player;const item=this.items.find(i=>i.x===p.x&&i.y===p.y);if(!item)return;if(item.kind==='gold'){p.gold+=item.amount;this.say(`${item.amount}Gを拾った。`,'good');}else if(item.kind==='weapon'){p.weapon++;this.say(`${this.weaponName()}を手に入れ、装備した。`,'good');}else if(item.kind==='shield'){p.shield++;this.say(`${this.shieldName()}を手に入れ、装備した。`,'good');}else{const stacks=item.kind==='arrow'&&this.arrowCount()>0;if(this.inventoryEntries().length>=16&&!stacks){this.say('持ち物がいっぱい。アイテムを使って空きを作ろう。');return;}p.bag.push(item.kind);this.say(`${ITEMS[item.kind].name}を拾った。`,'good');}this.effect('pickup',p.x,p.y,item.kind);this.items.splice(this.items.indexOf(item),1);}
+    collect(){const p=this.player;const item=this.items.find(i=>i.x===p.x&&i.y===p.y);if(!item)return;if(item.kind==='gold'){p.gold+=item.amount;this.say(`${item.amount}Gを拾った。`,'good');}else if(item.kind==='weapon'){p.weapon++;this.say(`${this.weaponName()}を手に入れ、装備した。`,'good');}else if(item.kind==='shield'){p.shield++;this.say(`${this.shieldName()}を手に入れ、装備した。`,'good');}else{const stacks=item.kind==='arrow'&&this.arrowCount()>0;if(this.inventoryEntries().length>=16&&!stacks){this.say('持ち物がいっぱい。アイテムを使って空きを作ろう。');return;}p.bag.push(item.kind);this.say(`${ITEMS[item.kind].name}を拾った。`,'good');}this.effect('pickup',p.x,p.y,item.kind,this.log[0].text);this.items.splice(this.items.indexOf(item),1);}
     triggerTrap(){const p=this.player,t=this.traps.find(t=>t.x===p.x&&t.y===p.y&&!t.spent);if(!t)return;t.found=true;t.spent=true;const d=this.int(2,5);p.hp-=d;this.say(`足元にトゲの罠！ ${d}ダメージ。`,'danger');this.effect('damage',p.x,p.y,d);}
     use(index){
       if(this.status!=='playing')return false;const p=this.player,kind=p.bag[index];if(!ITEMS[kind])return false;

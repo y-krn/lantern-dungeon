@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 require('./dist/engine.js');
-const {W,H,DIRS}=DungeonData;
+const {W,H,DIRS,ITEMS}=DungeonData;
 
 function reachable(game,start=game.player){
   const seen=new Set([game.key(start.x,start.y)]),queue=[[start.x,start.y]];
@@ -95,6 +95,18 @@ for(let seed=1;seed<=100;seed++){
   game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.arrowCount(),2);assert.equal(game.inventoryEntries().length,16);assert.equal(game.items.length,0);
   game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(p.bag.includes('potion'),false);
   p.bag=Array(16).fill('bread');game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(game.arrowCount(),0);
+}
+{
+  const game=new DungeonEngine(22),p=game.player;
+  for(const kind of [...Object.keys(ITEMS),'gold','weapon','shield']){
+    game.effects=[];game.items=[{x:p.x,y:p.y,kind,amount:42}];game.collect();
+    const text=kind==='gold'?'42Gを拾った。':kind==='weapon'?`${game.weaponName()}を手に入れ、装備した。`:kind==='shield'?`${game.shieldName()}を手に入れ、装備した。`:`${ITEMS[kind].name}を拾った。`;
+    assert.deepEqual(game.effects,[{type:'pickup',x:p.x,y:p.y,value:kind,text}]);
+    // Later events in the same turn must not replace the pickup message.
+    game.say('足元にトゲの罠！ 3ダメージ。','danger');assert.equal(game.effects[0].text,text);
+  }
+  p.bag=Array(16).fill('bread');game.effects=[];game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();
+  assert.equal(game.effects.length,0);assert.equal(game.items.length,1);
 }
 {
   const game=new DungeonEngine(9);game.floor=10;game.generateFloor();game.enemies=[];game.items=[];game.traps=[];game.player.x=game.stairs.x;game.player.y=game.stairs.y;game.wait();assert.equal(game.status,'won');
