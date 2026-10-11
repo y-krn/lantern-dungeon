@@ -9,6 +9,14 @@ function reachable(game,start=game.player){
 }
 
 function roomAt(game,p){return game.rooms.find(r=>p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h);}
+function entranceCells(game){
+  const entrances=new Set();
+  // Enumerate legal moves from corridors into rooms, including diagonals.
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(game.tile(x,y)&&!roomAt(game,{x,y})){
+    for(const[dx,dy]of DIRS)if(game.canStep(x,y,dx,dy)&&roomAt(game,{x:x+dx,y:y+dy}))entrances.add(game.key(x+dx,y+dy));
+  }
+  return entrances;
+}
 function arena(seed){
   const game=new DungeonEngine(seed),r=roomAt(game,game.player);
   game.player.x=r.cx;game.player.y=r.cy;game.enemies=[];game.items=[];game.traps=[];game.reveal();return game;
@@ -63,6 +71,9 @@ for(let seed=1;seed<=100;seed++){
     assert(!positions.has(game.key(game.player.x,game.player.y)));
     assert(!positions.has(game.key(game.stairs.x,game.stairs.y)));
     for(const hazard of [...game.enemies,...game.traps]){assert.notEqual(roomAt(game,hazard),startRoom);assert(Math.max(Math.abs(hazard.x-game.player.x),Math.abs(hazard.y-game.player.y))>2);}
+    const entrances=entranceCells(game);assert(entrances.size>0);
+    assert.equal(game.traps.length,Math.min(floor,5),'Entrance exclusion must preserve the trap budget');
+    for(const trap of game.traps)assert(!entrances.has(game.key(trap.x,trap.y)),`Entrance trap: seed ${seed}, floor ${floor}, ${trap.x}/${trap.y}`);
     assert(game.items.filter(i=>i.kind==='bread').length>=3);
     if(floor===10){const guardian=game.enemies.find(e=>e.type==='guardian');assert(guardian);assert.equal(roomAt(game,guardian),exitRoom);}
     const topology=passageTopology(game),walk=stairDistance(game);
@@ -99,6 +110,20 @@ for(const raw of savedFloors.values()){
   const replay=DungeonEngine.restore(raw);game.generateFloor();replay.generateFloor();assert.equal(game.serialize(),replay.serialize());
 }
 assert.equal(new DungeonEngine(81234).serialize(),new DungeonEngine(81234).serialize());
+{
+  const game=new DungeonEngine(42);game.floor=5;game.generateFloor();
+  const safeTraps=game.traps.map((t,i)=>({...t,found:i%2===0,spent:i%2===0}));
+  game.enemies=[];game.items=[];game.traps=[...safeTraps];
+  const expected=game.serialize(),entrances=entranceCells(game);
+  game.traps.push(...[...entrances].map(k=>({x:k%W,y:Math.floor(k/W),found:false,spent:false})));
+  const restored=DungeonEngine.restore(game.serialize());assert(restored);
+  assert.deepEqual(restored.traps,safeTraps,'Loading removes legacy entrance traps and preserves other traps');
+  assert.equal(restored.serialize(),expected,'Entrance cleanup must not change other saved state');
+  const k=entrances.values().next().value,x=k%W,y=Math.floor(k/W);
+  const[dx,dy]=DIRS.find(([dx,dy])=>game.canStep(x,y,dx,dy)&&!roomAt(game,{x:x+dx,y:y+dy}));
+  restored.player.x=x+dx;restored.player.y=y+dy;const hp=restored.player.hp;
+  assert(restored.move(-dx,-dy));assert.equal(restored.player.hp,hp,'Entering a restored room must not trigger a legacy trap');
+}
 for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.state.rooms=Array(count).fill(saved.state.rooms[0]);assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);}
 {
   const saved=JSON.parse(savedFloors.get(6));delete saved.state.layout;delete saved.state.monsterHouse;
@@ -231,5 +256,6 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   const game=new DungeonEngine(9);game.floor=10;game.generateFloor();const guardian=game.enemies.find(e=>e.type==='guardian');game.enemies=[guardian];guardian.x=game.rooms[3].cx;guardian.y=game.rooms[3].cy;game.player.x=game.stairs.x;game.player.y=game.stairs.y;game.wait();assert.equal(game.status,'playing');
 }
 console.log('PASS: 1,000 generated floors connected; collision, entities, food, hunger, inventory, arrow stacking/equipment, level-up, save/load, death and victory checked.');
+console.log('PASS: no entrance traps in 1,000 floors, including diagonal entry; trap budgets preserved; legacy entrance traps removed on load.');
 console.log(`PASS: 4–8 rooms; all 9 start/exit regions; ${loopFloors} loop, ${treeFloors} tree, ${branchFloors} branching, ${deadEndFloors} dead-end floors; stairs ${minWalk}–${maxWalk} steps (${nearStairs} nearby); safe spawns and deterministic save/load checked.`);
 console.log(`PASS: layouts ${JSON.stringify(layouts)}, no consecutive repeats; deep/shallow halls ${deepHalls}/${shallowHalls}; dead-end loot ${lootHits} vs uniform ${uniformLootHits.toFixed(1)}, ${emptyDeadEnds} empty dead ends; ${houseFloors} optional houses, dormant/entry activation, scroll and save/load checked.`);

@@ -47,6 +47,7 @@
     effect(type,x,y,value,text){this.effects.push({type,x,y,value,text});}
     canStep(x,y,dx,dy){return !!this.tile(x+dx,y+dy)&&(!(dx&&dy)||(!!this.tile(x+dx,y)&&!!this.tile(x,y+dy)));}
     roomAt(x,y){return this.rooms.find(r=>x>=r.x&&y>=r.y&&x<r.x+r.w&&y<r.y+r.h);}
+    isRoomEntrance(x,y){const room=this.roomAt(x,y);return !!room&&DIRS.some(([dx,dy])=>this.roomAt(x+dx,y+dy)!==room&&this.canStep(x,y,dx,dy));}
     layoutName(){return LAYOUT_NAMES[this.layout]||'';}
     roomDoorCount(room){
       const doors=new Set();
@@ -115,7 +116,7 @@
       const exitRoom=otherRooms[this.int(0,otherRooms.length-1)];
       this.stairs={x:this.int(exitRoom.x,exitRoom.x+exitRoom.w-1),y:this.int(exitRoom.y,exitRoom.y+exitRoom.h-1)};
       const used=new Set([this.key(this.player.x,this.player.y),this.key(this.stairs.x,this.stairs.y)]);
-      const emptySpot=(rooms=this.rooms)=>{for(let i=0;i<500;i++){const r=rooms[this.int(0,rooms.length-1)],x=this.int(r.x,r.x+r.w-1),y=this.int(r.y,r.y+r.h-1),k=this.key(x,y);if(!used.has(k)){used.add(k);return{x,y};}}return null;};
+      const emptySpot=(rooms=this.rooms,avoidEntrances=false)=>{for(let i=0;i<500;i++){const r=rooms[this.int(0,rooms.length-1)],x=this.int(r.x,r.x+r.w-1),y=this.int(r.y,r.y+r.h-1),k=this.key(x,y);if(!used.has(k)&&(!avoidEntrances||!this.isRoomEntrance(x,y))){used.add(k);return{x,y};}}return null;};
       const guardianSpot=this.floor===10?emptySpot([exitRoom]):null;
       const deadEnds=otherRooms.filter(r=>r!==exitRoom&&this.roomDoorCount(r)===1);
       const houseRoom=this.floor>=4&&this.floor<10&&deadEnds.length&&this.random()<.15?deadEnds[this.int(0,deadEnds.length-1)]:null;
@@ -138,7 +139,7 @@
         const bonus=type==='ghost'?4:type==='bat'?2:0;
         this.enemies.push({...pos,id:i,type,name:type==='slime'?'苔スライム':type==='bat'?'洞窟コウモリ':'灯りの亡霊',hp:7+this.floor*2+bonus,maxHp:7+this.floor*2+bonus,attack:2+Math.ceil(this.floor*.8)+bonus/2,exp:3+Math.floor(this.floor/2)+bonus,awake:false,house:i<houseSpots.length});
       }
-      for(let i=0;i<Math.min(this.floor,5);i++){const pos=emptySpot(ordinaryRooms);if(pos)this.traps.push({...pos,found:false,spent:false});}
+      for(let i=0;i<Math.min(this.floor,5);i++){const pos=emptySpot(ordinaryRooms,true);if(pos)this.traps.push({...pos,found:false,spent:false});}
       if(guardianSpot)this.enemies.push({...guardianSpot,id:99,type:'guardian',name:'星の番人',hp:65,maxHp:65,attack:14,exp:30,awake:true});
       this.reveal();
     }
@@ -208,7 +209,7 @@
     weaponName(){return ['木の剣','銅の剣','鉄の剣','星鉄の剣'][Math.min(3,this.player.weapon)];}
     shieldName(){return ['旅人の盾','銅の盾','鉄の盾','星鉄の盾'][Math.min(3,this.player.shield)];}
     serialize(){const{effects,...state}=this;return JSON.stringify({version:1,state});}
-    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>10||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.effects=[];game.reveal();return game;}catch{return null;}}
+    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>10||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.traps=game.traps.filter(t=>!game.isRoomEntrance(t.x,t.y));game.effects=[];game.reveal();return game;}catch{return null;}}
   }
   Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES,LAYOUT_NAMES}});
 })(typeof window!=='undefined'?window:globalThis);
