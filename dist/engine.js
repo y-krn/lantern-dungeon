@@ -9,6 +9,7 @@
     map: {name:'地図の巻物',icon:'▧',description:'この階の地形と階段の場所を明らかにします。'},
     arrow: {name:'木の矢',icon:'➶',description:'装備して「矢を放つ」で向いている方向へ発射。1本消費し、最初の敵に12ダメージ。'}
   };
+  const ITEM_ORDER = Object.keys(ITEMS);
   const FLOOR_NAMES=['苔むした入口','静かな回廊','忘れられた倉庫','ひかり草の庭','古井戸の底','眠れる鉱山','月影の遺跡','深淵の回廊','星を待つ間','ランタンの聖域'];
   class DungeonEngine {
     constructor(seed = Date.now()) {
@@ -33,7 +34,7 @@
         if(kind==='arrow'&&arrows){arrows.count++;return;}
         const entry={kind,index,count:1};entries.push(entry);if(kind==='arrow')arrows=entry;
       });
-      return entries;
+      return entries.sort((a,b)=>ITEM_ORDER.indexOf(a.kind)-ITEM_ORDER.indexOf(b.kind)||a.index-b.index);
     }
     equipArrow(){
       if(this.status!=='playing'||!this.arrowCount())return false;

@@ -56,7 +56,7 @@ for(let seed=1;seed<=100;seed++){
 {
   const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.items=[];game.traps=[];
   p.bag=['potion','arrow','bread','arrow','potion','arrow'];
-  assert.deepEqual(game.inventoryEntries(),[{kind:'potion',index:0,count:1},{kind:'arrow',index:1,count:3},{kind:'bread',index:2,count:1},{kind:'potion',index:4,count:1}]);
+  assert.deepEqual(game.inventoryEntries(),[{kind:'bread',index:2,count:1},{kind:'potion',index:0,count:1},{kind:'potion',index:4,count:1},{kind:'arrow',index:1,count:3}]);
   assert.equal(game.shoot(),false);assert.equal(game.turn,0);
   assert(game.equipArrow());assert.equal(p.ammo,'arrow');assert.equal(game.arrowCount(),3);assert.equal(game.turn,1);assert.equal(p.weapon,0);assert.equal(p.shield,0);
   const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.deepEqual(restored.player,p);assert.equal(restored.arrowCount(),3);
@@ -70,6 +70,24 @@ for(let seed=1;seed<=100;seed++){
   const migrated=DungeonEngine.restore(JSON.stringify(legacy));assert(migrated);assert.equal(migrated.player.ammo,null);assert.equal(migrated.inventoryEntries().length,2);assert.equal(migrated.arrowCount(),2);
   legacy.state.player.ammo='potion';assert.equal(DungeonEngine.restore(JSON.stringify(legacy)),null);
   game.status='dead';p.bag=['arrow'];assert.equal(game.equipArrow(),false);p.ammo='arrow';assert.equal(game.shoot(),false);assert.equal(game.arrowCount(),1);
+}
+{
+  const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.items=[];game.traps=[];
+  p.bag=['map','arrow','potion','scroll','bread','potion','arrow','bread'];p.hunger=20;p.hp=5;
+  const bag=[...p.bag],saved=game.serialize();
+  assert.deepEqual(game.inventoryEntries(),[
+    {kind:'bread',index:4,count:1},{kind:'bread',index:7,count:1},
+    {kind:'potion',index:2,count:1},{kind:'potion',index:5,count:1},
+    {kind:'scroll',index:3,count:1},{kind:'map',index:0,count:1},{kind:'arrow',index:1,count:2}
+  ]);
+  assert.deepEqual(p.bag,bag);assert.equal(game.serialize(),saved);assert.equal(game.turn,0);
+  const restored=DungeonEngine.restore(saved);assert(restored);assert.deepEqual(restored.inventoryEntries(),game.inventoryEntries());
+  assert(game.use(game.inventoryEntries()[0].index));assert.equal(p.hunger,70);assert.equal(p.hp,5);
+  assert.deepEqual(p.bag,['map','arrow','potion','scroll','potion','arrow','bread']);
+  assert(game.use(game.inventoryEntries().find(e=>e.kind==='potion').index));assert.equal(p.hp,30);assert.equal(p.hunger,70);
+  game.items=[{x:p.x,y:p.y,kind:'bread',amount:1}];game.collect();
+  assert.deepEqual(game.inventoryEntries().map(e=>e.kind),['bread','bread','potion','scroll','map','arrow']);
+  p.bag=[];assert.deepEqual(game.inventoryEntries(),[]);
 }
 {
   const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.traps=[];
