@@ -76,3 +76,13 @@
   .map-legend span::before{width:4px;height:4px}
   .map-legend small{text-align:center}
 }
+
+.dungeon-label{margin:0 3px 12px;color:var(--gold);font-size:12px;line-height:1.6}
+.dungeon-list{display:grid;gap:12px;margin:20px 0}
+.dungeon-choice{width:100%;text-align:left;background:#302d39;border:1px solid #817052;border-radius:8px;padding:17px 15px;min-height:96px}
+.dungeon-choice:hover:not(:disabled){background:#3c3540;border-color:var(--gold)}
+.dungeon-choice:disabled{opacity:1;border-color:#564e61;cursor:not-allowed}
+.dungeon-choice-heading{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:15px;font-weight:600;color:var(--gold)}
+.dungeon-choice-heading>span{font-size:11px;font-weight:400}
+.dungeon-choice:disabled .dungeon-choice-heading{color:var(--muted)}
+.dungeon-choice-description{display:block;font-size:12px;line-height:1.8;color:#c1b8c8;margin-top:9px}

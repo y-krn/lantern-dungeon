@@ -358,3 +358,88 @@ console.log('PASS: 1,000 generated floors connected; collision, entities, food, 
 console.log('PASS: no entrance traps in 1,000 floors, including diagonal entry; trap budgets preserved; legacy entrance traps removed on load.');
 console.log(`PASS: 4–8 rooms; all 9 start/exit regions; ${loopFloors} loop, ${treeFloors} tree, ${branchFloors} branching, ${deadEndFloors} dead-end floors; stairs ${minWalk}–${maxWalk} steps (${nearStairs} nearby); safe spawns and deterministic save/load checked.`);
 console.log(`PASS: layouts ${JSON.stringify(layouts)}, no consecutive repeats; deep/shallow halls ${deepHalls}/${shallowHalls}; dead-end loot ${lootHits} vs uniform ${uniformLootHits.toFixed(1)}, ${emptyDeadEnds} empty dead ends; ${houseFloors} optional houses, dormant/entry activation, scroll and save/load checked.`);
+
+// Dungeon progression: legacy saves, permanent unlocks, and all 30 challenge floors.
+{
+  assert.throws(()=>new DungeonEngine(1,'depths'),RangeError);
+  assert.throws(()=>new DungeonEngine(1,'unknown',true),RangeError);
+  const tutorial=new DungeonEngine(9);
+  assert.equal(tutorial.dungeon,'tutorial');assert.equal(tutorial.maxFloor(),10);assert.equal(tutorial.tutorialCleared,false);
+  const old=JSON.parse(tutorial.serialize());delete old.state.dungeon;delete old.state.tutorialCleared;
+  assert.equal(DungeonEngine.restore(JSON.stringify(old)).dungeon,'tutorial');
+  tutorial.floor=10;tutorial.generateFloor();
+  const guardian=tutorial.enemies.find(e=>e.type==='guardian');
+  guardian.x=tutorial.rooms.find(r=>r!==tutorial.roomAt(tutorial.stairs.x,tutorial.stairs.y)).cx;
+  guardian.y=tutorial.rooms.find(r=>r!==tutorial.roomAt(tutorial.stairs.x,tutorial.stairs.y)).cy;
+  tutorial.enemies=[guardian];tutorial.traps=[];tutorial.items=[];
+  tutorial.player.x=tutorial.stairs.x;tutorial.player.y=tutorial.stairs.y;
+  tutorial.wait();assert.equal(tutorial.status,'playing');assert.equal(tutorial.tutorialCleared,false);
+  tutorial.hit(guardian,guardian.hp);tutorial.wait();
+  assert.equal(tutorial.status,'won');assert.equal(tutorial.tutorialCleared,true);assert.equal(tutorial.descend(),false);
+  const legacyWin=JSON.parse(tutorial.serialize());delete legacyWin.state.dungeon;delete legacyWin.state.tutorialCleared;
+  assert.equal(DungeonEngine.restore(JSON.stringify(legacyWin)).tutorialCleared,true);
+  legacyWin.state.status='dead';assert.equal(DungeonEngine.restore(JSON.stringify(legacyWin)).tutorialCleared,false);
+  const deep=new DungeonEngine(9,'depths',tutorial.tutorialCleared);
+  for(const floor of [10,20,29]){
+    deep.floor=floor;deep.generateFloor();assert(!deep.enemies.some(e=>e.type==='guardian'));
+    deep.enemies=[];deep.player.x=deep.stairs.x;deep.player.y=deep.stairs.y;deep.wait();
+    assert.equal(deep.status,'playing');assert(deep.descend());assert.equal(deep.floor,floor+1);
+  }
+  const restored=DungeonEngine.restore(deep.serialize());assert(restored);assert.equal(restored.floor,30);assert.equal(restored.dungeon,'depths');
+  assert.deepEqual(restored.player,deep.player);assert.equal(restored.tutorialCleared,true);
+  const boss=deep.enemies.find(e=>e.type==='guardian');assert.equal(boss.name,'深淵の番人');assert.equal(boss.maxHp,180);assert.equal(boss.attack,34);
+  const room=deep.rooms.find(r=>r!==deep.roomAt(deep.stairs.x,deep.stairs.y));boss.x=room.cx;boss.y=room.cy;
+  deep.enemies=[boss];deep.traps=[];deep.items=[];deep.player.x=deep.stairs.x;deep.player.y=deep.stairs.y;
+  assert.equal(deep.descend(),false);deep.wait();assert.equal(deep.status,'playing');
+  deep.hit(boss,boss.hp);deep.wait();assert.equal(deep.status,'won');assert.equal(deep.descend(),false);assert.equal(deep.floor,30);
+  assert.equal(DungeonEngine.restore(deep.serialize()).status,'won');
+  const invalid=JSON.parse(deep.serialize());
+  invalid.state.floor=31;assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
+  invalid.state.floor=30;invalid.state.dungeon='tutorial';assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
+  invalid.state.dungeon='unknown';assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
+  invalid.state.dungeon='depths';invalid.state.tutorialCleared=false;assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
+  invalid.state.tutorialCleared='true';assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
+  const retry=new DungeonEngine(9,'depths',true);assert.equal(retry.floor,1);assert.equal(retry.player.level,1);assert.equal(retry.player.gold,0);assert.equal(retry.player.weapon,0);
+}
+for(let seed=1;seed<=100;seed++){
+  const game=new DungeonEngine(seed,'depths',true);
+  for(let floor=1;floor<=30;floor++){
+    game.floor=floor;game.generateFloor();
+    assert(game.floorName());const visited=reachable(game),positions=new Set();
+    for(let k=0;k<W*H;k++)if(game.tiles[k])assert(visited.has(k),`Disconnected challenge floor ${seed}/${floor}`);
+    assert(visited.has(game.key(game.stairs.x,game.stairs.y)));
+    for(const entity of [...game.enemies,...game.items,...game.traps]){
+      const k=game.key(entity.x,entity.y);assert(game.tile(entity.x,entity.y));assert(!positions.has(k));positions.add(k);
+    }
+    assert(!positions.has(game.key(game.player.x,game.player.y)));assert(!positions.has(game.key(game.stairs.x,game.stairs.y)));
+    for(const hazard of [...game.enemies,...game.traps])assert.notEqual(game.roomAt(hazard.x,hazard.y),game.roomAt(game.player.x,game.player.y));
+    assert.equal(game.items.filter(i=>i.kind==='bread').length,2);
+    assert.equal(game.items.filter(i=>i.kind==='potion').length,2);
+    assert.equal(game.items.some(i=>i.kind==='weapon'),floor%3===2);assert.equal(game.items.some(i=>i.kind==='shield'),floor%3===0);
+    assert.equal(game.enemies.length,6+Math.floor(floor*.75)+(floor===30?1:0));
+    assert.equal(game.traps.length,Math.min(floor+2,8));assert(game.traps.every(t=>!game.isRoomEntrance(t.x,t.y)));
+    const enemies=game.enemies.filter(e=>e.type!=='guardian');
+    for(const e of enemies){const bonus=e.type==='ghost'?4:e.type==='bat'?2:0;assert.equal(e.maxHp,10+floor*2+bonus);assert.equal(e.attack,3+Math.ceil(floor*.8)+bonus/2);}
+    assert.equal(game.enemies.some(e=>e.type==='guardian'),floor===30);
+    if(floor===30||floor===11){const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.equal(restored.floor,floor);assert.deepEqual(restored.enemies,game.enemies);}
+  }
+}
+{
+  const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
+  const storage=new Map(),context={DungeonEngine,camera:{x:0,y:0},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:''}),clearPickupNotice(){},closeModal(){},updateUI(){}};
+  vm.createContext(context);
+  const startup=source.slice(source.indexOf('  const SAVE_KEY='),source.indexOf('  let sound='));
+  const save=source.slice(source.indexOf('  function save()'),source.indexOf('  function beep('));
+  const startNew=source.slice(source.indexOf('  function startNew('),source.indexOf('  function confirmNew('));
+  vm.runInContext(startup+save+startNew,context);
+  vm.runInContext("engine.tutorialCleared=true;save();startNew('depths');engine.floor=23;engine.generateFloor();save();",context);
+  assert.equal(storage.get('lantern-dungeon-progress-v1'),'true');
+  const resumed=DungeonEngine.restore(storage.get('lantern-dungeon-v1'));assert.equal(resumed.floor,23);assert.equal(resumed.dungeon,'depths');
+  vm.runInContext("engine.status='dead';save();startNew('tutorial');save();",context);
+  assert.equal(DungeonEngine.restore(storage.get('lantern-dungeon-v1')).tutorialCleared,true);
+  // Even a missing/corrupt adventure retains the separately saved unlock.
+  storage.set('lantern-dungeon-v1','broken');
+  const freshContext={...context};vm.createContext(freshContext);vm.runInContext(startup+'globalThis.unlocked=engine.tutorialCleared;',freshContext);assert.equal(freshContext.unlocked,true);
+  context.localStorage.setItem=()=>{throw new Error('Storage unavailable');};vm.runInContext('save();globalThis.unlocked=engine.tutorialCleared;',context);assert.equal(context.unlocked,true);
+}
+console.log('PASS: 3,000 challenge floors connected; stronger enemies, supplies, equipment, safe spawns, 30F guardian gate; legacy migration and permanent unlock across retries/load/storage failures checked.');

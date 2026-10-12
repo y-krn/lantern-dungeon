@@ -11,15 +11,25 @@
   };
   const ITEM_ORDER = Object.keys(ITEMS);
   const FLOOR_NAMES=['苔むした入口','静かな回廊','忘れられた倉庫','ひかり草の庭','古井戸の底','眠れる鉱山','月影の遺跡','深淵の回廊','星を待つ間','ランタンの聖域'];
+  const DEPTH_NAMES=['封じられた入口','冷たい石廊','影の倉庫','枯れ草の庭','底なしの井戸','黒鉄の鉱山','月蝕の遺跡','闇の回廊','沈黙の間','深淵の門','霧の地下道','崩れた礼拝堂','灰の書庫','忘却の庭','凍える水路','古代の採掘場','亡霊の広場','黄昏の回廊','祈りの残響','星なき祭壇','虚ろな石廊','黒曜の倉庫','眠らぬ庭園','奈落の井戸','深層の鉱脈','砕けた王座','影の聖堂','最後の回廊','番人の間','深淵の聖域'];
+  const DUNGEONS={
+    tutorial:{name:'灯りの迷宮',label:'チュートリアル',floors:10,treasure:'星のランタン',guardian:'星の番人',bossHp:65,bossAttack:14,bossExp:30,names:FLOOR_NAMES},
+    depths:{name:'深淵の迷宮',label:'高難度',floors:30,treasure:'深淵のランタン',guardian:'深淵の番人',bossHp:180,bossAttack:34,bossExp:100,names:DEPTH_NAMES}
+  };
   const LAYOUT_NAMES={branch:'枝分かれの迷宮',ring:'巡る回廊',hall:'大広間の迷宮'};
   class DungeonEngine {
-    constructor(seed = Date.now()) {
+    constructor(seed = Date.now(), dungeon = 'tutorial', tutorialCleared = false) {
+      if(!Object.hasOwn(DUNGEONS,dungeon)||dungeon==='depths'&&tutorialCleared!==true)throw new RangeError('Dungeon is unknown or locked');
+      this.dungeon=dungeon;this.tutorialCleared=tutorialCleared===true;
       this.seed=seed>>>0; this.rng=this.seed||1; this.floor=1; this.turn=0; this.status='playing'; this.log=[]; this.effects=[];
       this.player={x:0,y:0,hp:30,maxHp:30,hunger:100,level:1,exp:0,nextExp:8,gold:0,weapon:0,shield:0,ammo:null,facing:[0,1],bag:['bread','potion','scroll']};
       this.generateFloor();
       this.say('ランタンを灯した。小さな冒険のはじまり。','good');
-      this.say('地下10階に眠る「星のランタン」を探そう。');
+      this.say(`${this.dungeonInfo().name}へ。地下${this.maxFloor()}階に眠る「${this.dungeonInfo().treasure}」を探そう。`);
     }
+    dungeonInfo(){return DUNGEONS[this.dungeon];}
+    maxFloor(){return this.dungeonInfo().floors;}
+    floorName(){return this.dungeonInfo().names[this.floor-1];}
     random(){this.rng=(Math.imul(this.rng,1664525)+1013904223)>>>0;return this.rng/4294967296;}
     int(a,b){return a+Math.floor(this.random()*(b-a+1));}
     key(x,y){return y*W+x;}
@@ -117,9 +127,10 @@
       this.stairs={x:this.int(exitRoom.x,exitRoom.x+exitRoom.w-1),y:this.int(exitRoom.y,exitRoom.y+exitRoom.h-1)};
       const used=new Set([this.key(this.player.x,this.player.y),this.key(this.stairs.x,this.stairs.y)]);
       const emptySpot=(rooms=this.rooms,avoidEntrances=false)=>{for(let i=0;i<500;i++){const r=rooms[this.int(0,rooms.length-1)],x=this.int(r.x,r.x+r.w-1),y=this.int(r.y,r.y+r.h-1),k=this.key(x,y);if(!used.has(k)&&(!avoidEntrances||!this.isRoomEntrance(x,y))){used.add(k);return{x,y};}}return null;};
-      const guardianSpot=this.floor===10?emptySpot([exitRoom]):null;
+      const hard=this.dungeon==='depths',info=this.dungeonInfo();
+      const guardianSpot=this.floor===this.maxFloor()?emptySpot([exitRoom]):null;
       const deadEnds=otherRooms.filter(r=>r!==exitRoom&&this.roomDoorCount(r)===1);
-      const houseRoom=this.floor>=4&&this.floor<10&&deadEnds.length&&this.random()<.15?deadEnds[this.int(0,deadEnds.length-1)]:null;
+      const houseRoom=this.floor>=4&&this.floor<this.maxFloor()&&deadEnds.length&&this.random()<(hard ? .2 : .15)?deadEnds[this.int(0,deadEnds.length-1)]:null;
       if(houseRoom)this.monsterHouse={room:this.rooms.indexOf(houseRoom),triggered:false};
       const houseSpots=houseRoom?Array.from({length:5},()=>emptySpot([houseRoom])):[];
       const rewardRooms=deadEnds.filter(r=>r!==houseRoom),ordinaryRooms=otherRooms.filter(r=>r!==houseRoom);
@@ -128,19 +139,19 @@
         const pos=emptySpot(pool);if(pos)this.items.push({...pos,kind,amount:kind==='gold'?this.int(20,65)*this.floor:1});
       };
       // Each floor guarantees food and healing as well as randomly placed supplies.
-      ['bread','bread','bread','potion','potion','gold','gold','gold','arrow',this.random()<.5?'map':'scroll'].forEach(kind=>addItem(kind));
-      if(this.floor===2||this.floor===5||this.floor===8)addItem('weapon',otherRooms);
-      if(this.floor===3||this.floor===6||this.floor===9)addItem('shield',otherRooms);
+      [...Array(hard?2:3).fill('bread'),'potion','potion','gold','gold','gold','arrow',this.random()<.5?'map':'scroll'].forEach(kind=>addItem(kind));
+      if(this.floor%3===2)addItem('weapon',otherRooms);
+      if(this.floor%3===0)addItem('shield',otherRooms);
       if(houseRoom){addItem('gold',[houseRoom],false);addItem('gold',[houseRoom],false);addItem('scroll',[houseRoom],false);}
-      const count=4+Math.floor(this.floor*.75);
+      const count=4+Math.floor(this.floor*.75)+(hard?2:0);
       for(let i=0;i<count;i++){
         const pos=i<houseSpots.length?houseSpots[i]:emptySpot(ordinaryRooms);if(!pos)continue;
         const type=this.floor<3?'slime':this.floor<6?(this.random()<.45?'bat':'slime'):(this.random()<.5?'ghost':'bat');
         const bonus=type==='ghost'?4:type==='bat'?2:0;
-        this.enemies.push({...pos,id:i,type,name:type==='slime'?'苔スライム':type==='bat'?'洞窟コウモリ':'灯りの亡霊',hp:7+this.floor*2+bonus,maxHp:7+this.floor*2+bonus,attack:2+Math.ceil(this.floor*.8)+bonus/2,exp:3+Math.floor(this.floor/2)+bonus,awake:false,house:i<houseSpots.length});
+        this.enemies.push({...pos,id:i,type,name:type==='slime'?'苔スライム':type==='bat'?'洞窟コウモリ':'灯りの亡霊',hp:7+this.floor*2+bonus+(hard?3:0),maxHp:7+this.floor*2+bonus+(hard?3:0),attack:2+Math.ceil(this.floor*.8)+bonus/2+(hard?1:0),exp:3+Math.floor(this.floor/2)+bonus,awake:false,house:i<houseSpots.length});
       }
-      for(let i=0;i<Math.min(this.floor,5);i++){const pos=emptySpot(ordinaryRooms,true);if(pos)this.traps.push({...pos,found:false,spent:false});}
-      if(guardianSpot)this.enemies.push({...guardianSpot,id:99,type:'guardian',name:'星の番人',hp:65,maxHp:65,attack:14,exp:30,awake:true});
+      for(let i=0;i<Math.min(this.floor+(hard?2:0),hard?8:5);i++){const pos=emptySpot(ordinaryRooms,true);if(pos)this.traps.push({...pos,found:false,spent:false});}
+      if(guardianSpot)this.enemies.push({...guardianSpot,id:99,type:'guardian',name:info.guardian,hp:info.bossHp,maxHp:info.bossHp,attack:info.bossAttack,exp:info.bossExp,awake:true});
       this.reveal();
     }
     lineOfSight(x0,y0,x1,y1){
@@ -193,8 +204,8 @@
       if(this.player.hp>0)this.enemyTurn();
       this.enemies=this.enemies.filter(e=>e.hp>0);this.reveal();
       if(this.player.hp<=0){this.player.hp=0;this.status='dead';this.say('ランタンの灯りが、静かに消えた。','danger');this.effect('dead',this.player.x,this.player.y,0);}
-      if(this.onStairs()&&this.floor===10&&this.status==='playing'){
-        if(this.enemies.some(e=>e.type==='guardian'&&e.hp>0))this.say('星の番人がランタンを守っている。番人を倒してから手に入れよう。');else{this.status='won';this.say('星のランタンを手に入れた！ 冒険の灯りは、永遠に。','good');this.effect('won',this.player.x,this.player.y,0);}
+      if(this.onStairs()&&this.floor===this.maxFloor()&&this.status==='playing'){
+        if(this.enemies.some(e=>e.type==='guardian'&&e.hp>0))this.say(`${this.dungeonInfo().guardian}がランタンを守っている。番人を倒してから手に入れよう。`);else{this.status='won';if(this.dungeon==='tutorial')this.tutorialCleared=true;this.say(`${this.dungeonInfo().treasure}を手に入れた！ ${this.dungeon==='tutorial'?'チュートリアル完了。「深淵の迷宮」が解放された。':'30階の深淵を踏破した！'}`,'good');this.effect('won',this.player.x,this.player.y,0);}
       }
     }
     enemyTurn(){
@@ -211,11 +222,11 @@
       }
     }
     onStairs(){return this.player.x===this.stairs.x&&this.player.y===this.stairs.y;}
-    descend(){if(this.status!=='playing'||!this.onStairs()||this.floor===10)return false;this.floor++;this.turn++;this.generateFloor();this.say(`地下${this.floor}階「${FLOOR_NAMES[this.floor-1]}」へ降りた。`,'good');this.effect('descend',this.player.x,this.player.y,this.floor);return true;}
-    weaponName(){return ['木の剣','銅の剣','鉄の剣','星鉄の剣'][Math.min(3,this.player.weapon)];}
-    shieldName(){return ['旅人の盾','銅の盾','鉄の盾','星鉄の盾'][Math.min(3,this.player.shield)];}
+    descend(){if(this.status!=='playing'||!this.onStairs()||this.floor>=this.maxFloor())return false;this.floor++;this.turn++;this.generateFloor();this.say(`地下${this.floor}階「${this.floorName()}」へ降りた。`,'good');this.effect('descend',this.player.x,this.player.y,this.floor);return true;}
+    weaponName(){return ['木の剣','銅の剣','鉄の剣','星鉄の剣'][Math.min(3,this.player.weapon)]+(this.player.weapon>3?` +${this.player.weapon-3}`:'');}
+    shieldName(){return ['旅人の盾','銅の盾','鉄の盾','星鉄の盾'][Math.min(3,this.player.shield)]+(this.player.shield>3?` +${this.player.shield-3}`:'');}
     serialize(){const{effects,...state}=this;return JSON.stringify({version:1,state});}
-    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>10||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.traps=game.traps.filter(t=>!game.isRoomEntrance(t.x,t.y));game.effects=[];game.reveal();return game;}catch{return null;}}
+    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;const dungeon=s?.dungeon??'tutorial';if(!Object.hasOwn(DUNGEONS,dungeon)||(s?.tutorialCleared!=null&&typeof s.tutorialCleared!=='boolean')||(dungeon==='depths'&&s.tutorialCleared!==true))return null;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>DUNGEONS[dungeon].floors||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.dungeon=dungeon;game.tutorialCleared=s.tutorialCleared===true||(dungeon==='tutorial'&&s.status==='won'&&s.floor===10);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.traps=game.traps.filter(t=>!game.isRoomEntrance(t.x,t.y));game.effects=[];game.reveal();return game;}catch{return null;}}
   }
-  Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES,LAYOUT_NAMES}});
+  Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES,LAYOUT_NAMES,DUNGEONS}});
 })(typeof window!=='undefined'?window:globalThis);
