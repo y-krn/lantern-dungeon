@@ -438,11 +438,10 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   assert.equal(migrated.items[0].discovered,true);assert.equal(migrated.items[1].discovered,undefined);
   assert.equal(migrated.enemies[1].lastSeen,undefined);
   // Exercise the renderer itself: remembered positions, hidden occupants, removal and marker priority.
-  const fs=require('node:fs'),vm=require('node:vm');
-  const source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
-  const draw=source.slice(source.indexOf('  function drawMinimap()'),source.indexOf('  function toggleMinimap()'));
+  const createDungeonRenderer=require('./dist/renderer.js');
   const calls=[],mini={fillStyle:'',fillRect(...args){calls.push({color:this.fillStyle,args});}};
-  function markers(){calls.length=0;vm.runInNewContext(draw+'drawMinimap();',{mini,engine:game,W,H,MONSTERS:DungeonData.MONSTERS});return calls.filter(c=>['#d08288','#ffc857'].includes(c.color));}
+  const renderer=createDungeonRenderer({canvas:{getContext:()=>({})},minimap:{getContext:()=>mini},getEngine:()=>game});
+  function markers(){calls.length=0;renderer.drawMinimap();return calls.filter(c=>['#d08288','#ffc857'].includes(c.color));}
   assert.equal(markers().length,4);
   const stairsIndex=calls.findIndex(c=>c.color==='#5ca9ff');
   assert(stairsIndex>0);assert.equal(calls[stairsIndex-1].color,'#131c20');
@@ -460,7 +459,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   const source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
   const notice={textContent:''},timers=new Map();let nextTimer=0,clock=0;
   const context={pickupNotice:notice,setTimeout(fn,ms){const id=++nextTimer;timers.set(id,{fn,at:clock+ms});return id;},clearTimeout(id){timers.delete(id);}};
-  const start=source.indexOf('  let pickupTimer;'),end=source.indexOf('  const SAVE_KEY=',start);
+  const start=source.indexOf('  let pickupTimer;'),end=source.indexOf('  const SAVE_KEY',start);
   vm.createContext(context);vm.runInContext(source.slice(start,end),context);
   function advance(ms){clock+=ms;for(const[id,timer]of timers)if(timer.at<=clock){timers.delete(id);timer.fn();}}
   context.showPickupNotice('回復草を拾った。');assert.equal(notice.textContent,'回復草を拾った。');
@@ -546,9 +545,9 @@ for(let seed=1;seed<=100;seed++){
 }
 {
   const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
-  const storage=new Map(),context={DungeonEngine,camera:{x:0,y:0},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:''}),clearPickupNotice(){},closeModal(){},updateUI(){}};
+  const storage=new Map(),context={DungeonEngine,renderer:{reset(){}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:''}),clearPickupNotice(){},closeModal(){},updateUI(){}};
   vm.createContext(context);
-  const startup=source.slice(source.indexOf('  const SAVE_KEY='),source.indexOf('  let sound='));
+  const startup=source.slice(source.indexOf('  const SAVE_KEY'),source.indexOf('  let sound'));
   const save=source.slice(source.indexOf('  function save()'),source.indexOf('  function beep('));
   const startNew=source.slice(source.indexOf('  function startNew('),source.indexOf('  function confirmNew('));
   vm.runInContext(startup+save+startNew,context);

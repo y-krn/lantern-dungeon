@@ -1,203 +1,670 @@
 (() => {
-  'use strict';
-  const {W,H,INVENTORY_CAPACITY,DIRS,ITEMS,DUNGEONS,MONSTERS,MONSTER_MARKS}=DungeonData;
-  const $=id=>document.getElementById(id);
-  const canvas=$('game'),ctx=canvas.getContext('2d'),mini=$('minimap').getContext('2d');
-  const pickupNotice=document.createElement('div');
-  pickupNotice.className='pickup-notice';pickupNotice.setAttribute('role','status');pickupNotice.setAttribute('aria-atomic','true');$('game-viewport').append(pickupNotice);
+  "use strict";
+  const {
+    INVENTORY_CAPACITY,
+    DIRS,
+    ITEMS,
+    DUNGEONS,
+    MONSTERS,
+    MONSTER_MARKS,
+  } = DungeonData;
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("game");
+  const pickupNotice = document.createElement("div");
+  pickupNotice.className = "pickup-notice";
+  pickupNotice.setAttribute("role", "status");
+  pickupNotice.setAttribute("aria-atomic", "true");
+  $("game-viewport").append(pickupNotice);
   let pickupTimer;
-  function clearPickupNotice(){clearTimeout(pickupTimer);pickupNotice.textContent='';}
-  function showPickupNotice(text){clearPickupNotice();pickupNotice.textContent=text;pickupTimer=setTimeout(clearPickupNotice,1000);}
-  const SAVE_KEY='lantern-dungeon-v1',PROGRESS_KEY='lantern-dungeon-progress-v1';
-  let engine,storageAvailable=true,tutorialCleared=false;
-  try{tutorialCleared=localStorage.getItem(PROGRESS_KEY)==='true';engine=DungeonEngine.restore(localStorage.getItem(SAVE_KEY));}catch{storageAvailable=false;}
-  const resumed=!!engine;engine ||= new DungeonEngine();engine.tutorialCleared ||= tutorialCleared;
-  let sound=false,audio=null,tile=40,camera={x:0,y:0},lastInput=0,particles=[],labels=[],frame=0,modalKind='',minimapVisible=true,playerTween=null,announcedEnd=false,turnOnly=false;
-  const facingNames=['上','右上','右','右下','下','左下','左','左上'];
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const palette={'.':null,o:'#302831',d:'#493744',b:'#754c3d',c:'#b87545',t:'#dea45e',l:'#f5ce8d',s:'#eabb92',w:'#f9e4b6',g:'#869374',n:'#4e6658',a:'#a4c69b',p:'#d49bba',v:'#87759b',k:'#262632',h:'#a48e67',i:'#dae6bb',r:'#d27c80'};
-  const sprites={
-    hero:[
-      '.....oooooo.....','....obbbbbbo....','...obcttttcbo...','..obcttttttcbo..','..obbbbbbbbbbo..','....ossossso....','....osdssdsso...','....osssssso....','.....owwwwo.....','...oonnwnnnoo...','..obonngnnnobo..','..obonnnnnnobo..','..oconnnnnnoco..','..ooonnhhnnooo..','....obbbbbbo....','....obboobbo....','....ohhoohho....','...oohhoohhoo...'
-    ],
-    heroUp:[
-      '.....oooooo.....','....obbbbbbo....','...obcttttcbo...','..obcttttttcbo..','..obbbbbbbbbbo..','....obbbbbbo....','....obbbbbbo....','....obbbbbbo....','.....onnnno.....','...oonnnnnnoo...','..obohhhhhhobo..','..obohllllhobo..','..obohllllhobo..','..ooohhhhhoooo..','....obbbbbbo....','....obboobbo....','....ohhoohho....','...oohhoohhoo...'
-    ],
-    heroUpRight:[
-      '......oooooo....','.....obbbbbbo...','....obcttttcbo..','...obcttttttcbo.','...obbbbbbbbbbo.','.....obbbbsso...','.....obbbbssso..','.....obbbbsso...','......onnwno....','....oonnnnnoo...','...ohhhhhnnobo..','...ohlllhngobo..','...ohlllhnnoco..','...ohhhhhnnooo..','.....obbbbbo....','.....obboobbo...','.....ohhoohho...','....oohhoohhoo..'
-    ],
-    heroRight:[
-      '......ooooo.....','.....obbbbbo....','....obctttcbo...','....obctttttboo.','....obbbbbbbbbo.','......obsssso...','......obsdsso...','......obsssso...','......onwwo.....','.....onnnnoo....','....ohhhnnobo...','....ohllngobo...','....ohllnnoco...','....ohhhnnooo...','.....obbbbo.....','.....obbbbo.....','.....ohhhhho....','.....oohhhhoo...'
-    ],
-    heroDownRight:[
-      '......oooooo....','.....obbbbbbo...','....obcttttcbo..','...obcttttttcbo.','...obbbbbbbbbbo.','.....ossssso....','.....osdssdso...','.....ossssso....','......owwwo.....','....oonwnnnoo...','...obonngnnobo..','...obonnnnnobo..','...oconnnnnoco..','...ooonnhnnooo..','.....obbbbbo....','.....obboobbo...','.....ohhoohho...','....oohhoohhoo..'
-    ],
-    slime:['................','................','................','................','......oooo......','....oonnnnoo....','...onnggggnno...','..onggaaggagno..','..onggaaaggagno.','.ongggaagggggno.','.onigggggggigno.','.onkigggggikgno.','..onggiiigggno..','...onnnnnnnno...','....ooooooo.....','................'],
-    bat:['................','................','....o......o....','...ovoo..oovo...','..ovvvvoovvvvo..','.ovvpvvoovvpvvo.','ovvpvvvkkvvvpvvo','ovvvvkkvvkkvvvvo','.ovvkkwvvwkkvvo.','..ookkvvvvkk oo.','....okvpvvko....','.....ovvvvo.....','......ovvo......','.......oo.......','................','................'],
-    ghost:['................','......oooo......','.....ovvvvo.....','....ovppppvo....','...ovppppppvo...','...ovpwpwp pvo..','...ovpkpkppvo...','...ovppppppvo...','...ovvppppvvo...','...ovvvppvvvo...','...ovvvvvvvvo...','...ovvovvovvo...','...ovoovoovoo...','....o..oo..o....','................','................'],
-    guardian:['......ohho......','.....ohhhho.....','....ohhllhho....','...ohllllllho...','..ohhhhoohhhho..','..ovvowwowvvo...','..ovvokkokvvo...','...ovvllvvvo....','.oohhvvvvhhoo...','ohhhvvvvvvhhho..','ohhvvlhh lvvhho.','ohhvvllllvvhho..','.ohvvvvvvvhho...','..ovvhllhvvo....','..ohhhoohhho....','.oohho..ohhoo...'],
-    beetle:['................','....o......o....','....ovo..ovo....','.....ovvvvo.....','....ovwkkwvo....','...ovvvvvvvvo...','..ovvvvppvvvvo..','.oovvppvvppvvoo.','...ovvpvvpvvo...','..oovvpvvpvvoo..','...ovvppppvvo...','..oovvvvvvvvoo..','....ovvvvvvo....','.....oooooo.....','................','................'],
-    plant:['................','.....oooooo.....','....ovppppvo....','...ovppwpppvo...','...ovpkkkppvo...','....ovppppvo....','.....ovvvvo.....','.......no.......','..oo...no...oo..','.ovvo..no..ovvo.','..ovvono.novvo..','...ovvnnnnvvo...','....oonnnoo.....','.....onnno......','....ooooooo.....','................'],
-    mimic:['................','................','.....oooooo.....','...oovppppvoo...','..ovvvvvvvvvvo..','..ovwkvvvkwvvo..','..ovvvvvvvvvvo..','..ooooooo.oooo..','..owkwkwkwkwwo..','..okkkkkkkkkko..','..owkwkwkwkwwo..','..ovvvvvvvvvvo..','...ovvppppvvo...','....ooooooo.....','....oo...oo.....','................'],
-    moth:['................','....o......o....','...ovoo..oovo...','..ovppvoovppvo..','.ovpppvpvppppvo.','ovppvpvvvvpvppvo','ovpvvvpvpvvvp.pv','ovppvpvvvvpvppvo','.ovppvvwvvppvo..','..ovvppvppvvo...','...ovvvv.vvo....','...ovppvppvo....','....ovvvvvo.....','.....ovvvo......','......ooo.......','................'],
-    golem:['................','.....oooooo.....','....ovvvvvvo....','....ovwkkwvo....','....ovvvvvvo....','.....ovvvvo.....','..ooovppppvooo..','.ovvvvppppvvvvo.','.ovvpvvvvvpvvvo.','.ovvpvvvvvpvvvo.','.ovvvvppppvvvvo.','..ooovvvvvvooo..','....ovvoovvo....','....ovvoovvo....','...ovvvoovvvo...','...oooo..oooo...'],
-    bread:['................','................','................','......oooo......','....oottttoo....','...otllttllto...','..otllttttllto..','..ottttlttttto..','..otttllttttto..','..otttttttl tto.','...octtttttco...','....occcccco....','.....oooooo.....','................','................','................'],
-    potion:['................','................','.......a........','......an..a.....','.....aanngn.....','....aaannnn.....','.....nnann......','.......no.......','.....ooaoo......','....onaggno.....','....ongggno.....','.....onnno......','......ooo.......','................','................','................'],
-    scroll:['................','.....oooooo.....','.....ohllho.....','.....ollllo.....','.....olhhlo.....','.....olhhlo.....','.....ollllo.....','.....ollhlo.....','.....olhhlo.....','.....ollhlo.....','.....ollllo.....','.....ohllho.....','.....oooooo.....','.......hh.......','.......hh.......','................'],
-    arrow:['................','..........hh....','.........hhh....','........hh......','.......hh.......','......hh........','.....hh.........','....hh..........','...hhhh.........','..hhhh..........','..hh............','................','................','................','................','................']
-  };
-  const monsterMarks=[[],[[6,4],[7,4],[8,4],[9,4]],[[7,3],[6,4],[8,4],[7,5]],[[5,5],[6,4],[7,3],[8,4],[9,5]],[[7,3],[7,4],[6,4],[8,4],[7,5]],[[5,3],[7,3],[9,3],[5,4],[6,5],[7,5],[8,5],[9,4]],[[7,2],[5,3],[7,3],[9,3],[6,4],[7,4],[8,4],[5,5],[9,5]]];
-  function sprite(context,type,x,y,scale=2,alpha=1,flip=false,species=null){const m=MONSTERS[species],pattern=sprites[type]||sprites.scroll;
-    const colors=m?{...palette,...(type==='slime'?{n:m.colors[0],g:m.colors[1],a:m.colors[2],i:m.colors[2]}:type==='guardian'?{h:m.colors[1],l:m.colors[2],v:m.colors[0]}:{v:m.colors[1],p:m.colors[2],n:m.colors[0]})}:palette;context.save();context.globalAlpha=alpha;if(flip){context.translate(x+16*scale,y);context.scale(-1,1);x=0;y=0;}for(let row=0;row<pattern.length;row++)for(let col=0;col<pattern[row].length;col++){const color=colors[pattern[row][col]];if(color){context.fillStyle=color;context.fillRect(Math.round(x+col*scale),Math.round(y+row*scale),Math.ceil(scale),Math.ceil(scale));}}if(m){context.fillStyle='#fff1c9';for(const[col,row]of monsterMarks[m.tier])context.fillRect(Math.round(x+col*scale),Math.round(y+row*scale),Math.ceil(scale),Math.ceil(scale));}context.restore();}
-  function heroSprite([dx,dy]){return dx===0?(dy<0?'heroUp':'hero'):dy<0?'heroUpRight':dy>0?'heroDownRight':'heroRight';}
-  function directionInput(dx,dy,faceOnly=turnOnly,force=false){act(()=>faceOnly?engine.face(dx,dy):engine.move(dx,dy),force||faceOnly);}
-  function toggleTurnOnly(){if($('modal').open||engine.status!=='playing')return;turnOnly=!turnOnly;updateUI();}
-  function hash(x,y,s=0){let h=Math.imul(x+101+s,374761393)+Math.imul(y+97,668265263)+Math.imul(engine.floor,1274126177);h=(h^(h>>>13))>>>0;return(h%10000)/10000;}
-  function save(){if(!storageAvailable){$('save-label').textContent='保存無効。このタブで冒険を続けられます';return;}try{if(engine.tutorialCleared)localStorage.setItem(PROGRESS_KEY,'true');localStorage.setItem(SAVE_KEY,engine.serialize());$('save-label').textContent='冒険は自動で保存されます';}catch{storageAvailable=false;$('save-label').textContent='保存できません。このタブで冒険を続けられます';}}
-  function beep(kind){if(!sound)return;try{audio ||= new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.connect(g);g.connect(audio.destination);const now=audio.currentTime;const tones={hit:[180,80,.08],damage:[100,45,.12],pickup:[650,850,.13],heal:[430,780,.22],kill:[380,140,.11],level:[540,1080,.35],descend:[280,560,.4],lightning:[800,60,.23],won:[660,1320,.5],dead:[200,40,.5]};const[f,to,duration]=tones[kind]||[110,85,.025];o.type=kind==='damage'?'sawtooth':'triangle';o.frequency.setValueAtTime(f,now);o.frequency.exponentialRampToValueAtTime(to,now+duration);g.gain.setValueAtTime(.045,now);g.gain.exponentialRampToValueAtTime(.001,now+duration);o.start(now);o.stop(now+duration);}catch{sound=false;updateSoundButton();}}
-  function flushEffects(){for(const e of engine.effects){beep(e.type);if(e.type==='pickup')showPickupNotice(e.text);if(['hit','damage','heal','level'].includes(e.type))labels.push({...e,born:performance.now(),text:e.type==='damage'?`−${e.value}`:e.type==='hit'?`${e.value}`:e.type==='level'?'LEVEL UP':`+${e.value}`});if(['hit','kill','pickup','heal','lightning','level','won'].includes(e.type)&&!reduced)for(let i=0;i<10;i++)particles.push({x:e.x+.5,y:e.y+.5,vx:(Math.random()-.5)*.05,vy:-Math.random()*.04,life:1,color:e.type==='heal'?'#b2d694':e.type==='lightning'?'#e7e9f5':'#ebc985'});if(e.type==='damage'){$('damage-flash').classList.add('active');setTimeout(()=>$('damage-flash').classList.remove('active'),200);}}
-    engine.effects=[];
+  function clearPickupNotice() {
+    clearTimeout(pickupTimer);
+    pickupNotice.textContent = "";
   }
-  function updateUI(){const p=engine.player,info=engine.dungeonInfo();$('quest-title').textContent=`${info.label} · ${info.name}`;$('quest-goal').textContent=`地下${engine.maxFloor()}階の「${info.treasure}」を探そう`;$('dungeon-label').textContent=`${info.label} · ${info.name}（${engine.floor} / ${engine.maxFloor()}階）`;$('floor-label').textContent=`地下 ${engine.floor} 階`;$('floor-name').textContent=engine.floorName()+(engine.layoutName()?` · ${engine.layoutName()}`:'');$('turn-count').textContent=engine.turn;$('level').textContent=p.level;$('hp').textContent=p.hp;$('max-hp').textContent=p.maxHp;$('mobile-hp').textContent=`${p.hp} / ${p.maxHp}`;$('mobile-hunger').textContent=`${p.hunger}%`;$('hunger').textContent=p.hunger;$('hp-bar').style.width=`${p.hp/p.maxHp*100}%`;$('hunger-bar').style.width=`${p.hunger}%`;$('exp-bar').style.width=`${p.exp/p.nextExp*100}%`;$('exp-label').textContent=`${p.exp} / ${p.nextExp}`;$('gold').textContent=p.gold;$('weapon-name').textContent=engine.weaponName();$('shield-name').textContent=engine.shieldName();$('attack-stat').textContent=engine.attackPower();$('defense-stat').textContent=engine.defense();$('hero-title').textContent=p.level>=8?'星を目指す探検家':p.level>=4?'迷宮を歩く探検家':'駆け出しの探検家';document.body.classList.toggle('low-hunger',p.hunger<20);document.body.classList.toggle('low-hp',p.hp/p.maxHp<.3);$('state-label').textContent=engine.status==='dead'?'冒険終了':engine.status==='won'?'踏破達成':'探索中';$('stairs-button').disabled=!engine.onStairs()||engine.status!=='playing'||engine.floor===engine.maxFloor();
-    $('bag-count').textContent=`${engine.inventoryCount()} / ${INVENTORY_CAPACITY}`;$('ammo-name').textContent=p.ammo==='arrow'?'木の矢':'未装備';$('ammo-count').textContent=engine.arrowCount();$('shoot-button').disabled=engine.status!=='playing'||p.ammo!=='arrow'||!engine.arrowCount();
-    const facingIndex=DIRS.findIndex(([dx,dy])=>dx===p.facing[0]&&dy===p.facing[1]);
-    $('facing-label').textContent=`向き：${facingNames[facingIndex]}`;
-    $('turn-button').setAttribute('aria-pressed',String(turnOnly));$('turn-button').textContent=turnOnly?'向き変更中':'向き変更';
-    $('direction-help').textContent=turnOnly?'方向ボタンで向きだけ変更。ターンは進みません。':'Shift＋方向キーで向きだけ変更。';
-    document.querySelectorAll('[data-direction]').forEach(b=>{const[dx,dy]=b.dataset.direction.split(',').map(Number),name=facingNames[DIRS.findIndex(d=>d[0]===dx&&d[1]===dy)];b.disabled=engine.status!=='playing';b.setAttribute('aria-label',turnOnly?`${name}を向く`:`${name}へ`);});
-    ['attack-button','wait-button','bag-button','touch-wait','turn-button'].forEach(id=>$(id).disabled=engine.status!=='playing');
-    const threat=engine.enemies.find(e=>e.intent&&engine.visible[engine.key(e.x,e.y)]);
-    const nearest=engine.enemies.find(e=>e.hp>0&&Math.max(Math.abs(e.x-p.x),Math.abs(e.y-p.y))===1);
-    $('location-hint').textContent=engine.status==='dead'?'新しい冒険で、もう一度灯りを。':engine.status==='won'?`${info.treasure}を手に入れた！`:threat?`${threat.name}が攻撃準備。黄色の予告マスから移動！`:p.hunger<20?'お腹が空いてきた。持ち物からパンを食べよう。':p.hp/p.maxHp<.3?'体力が少ない。持ち物から回復草を使おう。':engine.onStairs()?engine.floor===engine.maxFloor()?`${info.guardian}を倒してランタンを手に入れよう。`:'階段を見つけた！ Enter で次の階へ。':engine.monsterHouse?.triggered&&engine.roomAt(p.x,p.y)===engine.rooms[engine.monsterHouse.room]&&engine.enemies.some(e=>e.house&&e.hp>0)?'モンスターハウス！ 通路へ退くか、灯札で切り抜けよう。':nearest?MONSTERS[nearest.species]?.trait==='mimic'&&!nearest.revealed?'怪しい金貨の山が近い。':`${nearest.name}が近い。${MONSTERS[nearest.species]?.feature?.split('。')[0]||'敵に向かって移動すると攻撃'}。`:engine.turn<8?'灯りの届く先へ、進んでみよう。':'あせらず、一歩ずつ。';
-    const list=$('event-log');list.replaceChildren();for(const event of engine.log.slice(0,5)){const li=document.createElement('li');li.className=event.type;li.textContent=event.text;list.append(li);}
-    if(engine.status!=='playing'&&!announcedEnd){announcedEnd=true;const endedEngine=engine;setTimeout(()=>{if(engine===endedEngine)showEnd();},350);}
+  function showPickupNotice(text) {
+    clearPickupNotice();
+    pickupNotice.textContent = text;
+    pickupTimer = setTimeout(clearPickupNotice, 1000);
   }
-  function act(action,force=false){if($('modal').open||engine.status!=='playing')return;const now=performance.now();if(!force&&now-lastInput<95)return;lastInput=now;const before={x:engine.player.x,y:engine.player.y,facing:engine.player.facing.join(','),log:engine.log[0]},floor=engine.floor;const changed=action();if(!changed&&before.facing===engine.player.facing.join(',')&&before.log===engine.log[0])return;if(floor!==engine.floor){clearPickupNotice();camera.x=engine.player.x+.5;camera.y=engine.player.y+.5;playerTween=null;}else if(!reduced&&(before.x!==engine.player.x||before.y!==engine.player.y))playerTween={from:before,born:now};flushEffects();updateUI();save();}
-  function floorTile(x,y,px,py,visible){const r=hash(x,y),unit=tile/16;const colors=engine.floor>=7?['#353644','#383949','#303341','#393a46']:['#424b3b','#454e3e','#3c4638','#46513f'];ctx.fillStyle=colors[Math.floor(r*4)];ctx.fillRect(px,py,tile,tile);ctx.fillStyle=engine.floor>=7?'#292d3a':'#343f31';ctx.fillRect(px,py,tile,unit);ctx.fillRect(px,py,unit,tile);ctx.fillStyle='#98aa7b13';ctx.fillRect(px+unit,py+unit,tile-unit*2,unit);ctx.fillRect(px+unit,py+unit,unit,tile-unit*2);const n=hash(x,y,5);if(n<.18){ctx.fillStyle='#27382f';ctx.fillRect(px+unit*4,py+unit*9,unit*5,unit);ctx.fillRect(px+unit*9,py+unit*10,unit*3,unit);}else if(n<.43){ctx.fillStyle='#60745275';ctx.fillRect(px+unit*3,py+unit*12,unit*2,unit);ctx.fillRect(px+unit*11,py+unit*4,unit,unit*2);}if(n>.93){ctx.fillStyle='#b0c4876b';ctx.fillRect(px+unit*10,py+unit*11,unit,unit);ctx.fillStyle='#728357';ctx.fillRect(px+unit*9,py+unit*12,unit*2,unit);}if(!visible){ctx.fillStyle='#0b111acc';ctx.fillRect(px,py,tile,tile);}}
-  function wallTile(x,y,px,py,visible){const s=tile/16;const below=engine.tile(x,y+1);ctx.fillStyle=engine.floor>=7?'#343645':'#384639';ctx.fillRect(px,py,tile,tile);ctx.fillStyle=engine.floor>=7?'#595466':'#596450';ctx.fillRect(px+s,py+s,tile-s*2,s*5);ctx.fillStyle='#131f2299';ctx.fillRect(px,py+s*7,tile,s);ctx.fillRect(px+s*8,py,s,s*7);ctx.fillRect(px+s*4,py+s*8,s,s*7);ctx.fillStyle=engine.floor>=7?'#484451':'#465440';ctx.fillRect(px+s,py+s*9,s*3,s*5);ctx.fillRect(px+s*5,py+s*9,s*10,s*5);ctx.fillStyle='#98a78125';ctx.fillRect(px+s,py+s,tile-s*2,s);if(below){ctx.fillStyle='#182321';ctx.fillRect(px,py+tile-s*2,tile,s*2);ctx.fillStyle='#25332a';ctx.fillRect(px+s,py+tile-s*4,tile-s*2,s*2);}if(hash(x,y,3)<.3){ctx.fillStyle='#677a4b';ctx.fillRect(px+s*2,py+s*6,s*5,s);ctx.fillRect(px+s*3,py+s*7,s,s*3);ctx.fillStyle='#82945b';ctx.fillRect(px+s*2,py+s*6,s*2,s);}if(visible&&below&&(hash(x,y,12)<.08||engine.rooms.some(r=>y===r.y-1&&x===r.x+2)))torch(px+tile/2,py+tile*.45);if(!visible){ctx.fillStyle='#0b111ace';ctx.fillRect(px,py,tile,tile);}}
-  function torch(x,y){const s=tile/16,t=reduced?0:Math.sin(frame*.08+x)*s;const glow=ctx.createRadialGradient(x,y,0,x,y,tile*2.8);glow.addColorStop(0,'#eeb35e35');glow.addColorStop(1,'#eeb35e00');ctx.fillStyle=glow;ctx.fillRect(x-tile*3,y-tile*3,tile*6,tile*6);ctx.fillStyle='#4c332e';ctx.fillRect(x-s,y,s*2,s*6);ctx.fillStyle='#a88352';ctx.fillRect(x-s*2,y+s*3,s*4,s);ctx.fillStyle='#de8b49';ctx.fillRect(x-s*2,y-s*2-t,s*4,s*5+t);ctx.fillStyle='#ffd792';ctx.fillRect(x-s,y-s*3-t,s*2,s*4+t);ctx.fillStyle='#fff1c0';ctx.fillRect(x,y-s,s,s*2);}
-  function drawStairs(px,py){const s=tile/16;ctx.fillStyle='#243731';ctx.fillRect(px+s*2,py+s*2,s*12,s*12);ctx.fillStyle='#879b84';ctx.fillRect(px+s*2,py+s*2,s*12,s*2);for(let i=0;i<4;i++){ctx.fillStyle=['#768a76','#607563','#4a6358','#34514c'][i];ctx.fillRect(px+s*(3+i),py+s*(5+i*2),s*(10-i*2),s);ctx.fillStyle='#152c2b';ctx.fillRect(px+s*(3+i),py+s*(6+i*2),s*(10-i*2),s);}ctx.fillStyle='#a6d5bf';ctx.fillRect(px+s*12,py+s*3,s,s);}
-  function drawLantern(px,py){const s=tile/16;const glow=ctx.createRadialGradient(px+tile/2,py+tile/2,0,px+tile/2,py+tile/2,tile*3);glow.addColorStop(0,'#fadf9440');glow.addColorStop(1,'#fadf9400');ctx.fillStyle=glow;ctx.fillRect(px-tile*3,py-tile*3,tile*7,tile*7);ctx.fillStyle='#e1ae60';ctx.fillRect(px+s*5,py+s*4,s*6,s*9);ctx.fillRect(px+s*6,py+s*2,s*4,s*2);ctx.fillStyle='#fff0ac';ctx.fillRect(px+s*6,py+s*6,s*4,s*5);ctx.fillStyle='#4c3432';ctx.fillRect(px+s*6,py+s*3,s*4,s);ctx.fillStyle='#b2c0a1';ctx.fillRect(px+s*4,py+s*14,s*8,s);}
-  function drawItem(item,px,py,now){const bob=reduced?0:Math.sin(now/700+item.x)*tile*.035;const s=tile/16;ctx.fillStyle='#09181566';ctx.beginPath();ctx.ellipse(px+tile/2,py+tile*.83,tile*.25,tile*.09,0,0,Math.PI*2);ctx.fill();if(item.kind==='gold'){ctx.fillStyle='#7c5d32';ctx.fillRect(px+s*5,py+s*7+bob,s*7,s*5);ctx.fillStyle='#d3a65d';ctx.fillRect(px+s*5,py+s*6+bob,s*7,s*4);ctx.fillStyle='#f9d995';ctx.fillRect(px+s*6,py+s*6+bob,s*4,s);ctx.fillRect(px+s*6,py+s*7+bob,s,s*2);}else if(item.kind==='weapon'){ctx.save();ctx.translate(px+tile/2,py+tile/2);ctx.rotate(Math.PI/4);ctx.fillStyle='#d1d6bc';ctx.fillRect(-s,-s*6,s*2,s*9);ctx.fillStyle='#e8c37e';ctx.fillRect(-s*3,s*2,s*6,s);ctx.fillStyle='#977346';ctx.fillRect(-s,s*3,s*2,s*4);ctx.restore();}else if(item.kind==='shield'){ctx.fillStyle='#987b54';ctx.fillRect(px+s*4,py+s*4,s*8,s*7);ctx.fillRect(px+s*5,py+s*11,s*6,s);ctx.fillRect(px+s*6,py+s*12,s*4,s);ctx.fillStyle='#bcb79c';ctx.fillRect(px+s*5,py+s*5,s*6,s*5);ctx.fillStyle='#6a6657';ctx.fillRect(px+s*7,py+s*6,s*2,s*4);}else sprite(ctx,item.kind==='map'?'scroll':item.kind,px,py+bob,s);}
-  function render(now){frame++;ctx.imageSmoothingEnabled=false;const p=engine.player;
-    const cols=canvas.width/tile,rows=canvas.height/tile,targetX=Math.max(cols/2,Math.min(W-cols/2,p.x+.5)),targetY=Math.max(rows/2,Math.min(H-rows/2,p.y+.5));
-    if(!camera.x||reduced){camera.x=targetX;camera.y=targetY;}else{camera.x+=(targetX-camera.x)*.2;camera.y+=(targetY-camera.y)*.2;}
-    const offsetX=Math.round(canvas.width/2-camera.x*tile),offsetY=Math.round(canvas.height/2-camera.y*tile);
-    ctx.fillStyle='#11191c';ctx.fillRect(0,0,canvas.width,canvas.height);
-    const minX=Math.max(0,Math.floor(-offsetX/tile)-1),maxX=Math.min(W,Math.ceil((canvas.width-offsetX)/tile)+1),minY=Math.max(0,Math.floor(-offsetY/tile)-1),maxY=Math.min(H,Math.ceil((canvas.height-offsetY)/tile)+1);
-    for(let y=minY;y<maxY;y++)for(let x=minX;x<maxX;x++){const k=y*W+x,px=x*tile+offsetX,py=y*tile+offsetY;if(engine.seen[k]){if(engine.tiles[k])floorTile(x,y,px,py,engine.visible[k]);else wallTile(x,y,px,py,engine.visible[k]);}else{ctx.fillStyle=hash(x,y)<.5?'#131c1d':'#15201f';ctx.fillRect(px,py,tile-1,tile-1);if(hash(x,y,2)<.18){ctx.fillStyle='#203027';ctx.fillRect(px+tile*.3,py+tile*.7,2,2);}}}
-    if(engine.seen[engine.key(engine.stairs.x,engine.stairs.y)]){const sx=engine.stairs.x*tile+offsetX,sy=engine.stairs.y*tile+offsetY;if(engine.floor===engine.maxFloor()&&engine.visible[engine.key(engine.stairs.x,engine.stairs.y)])drawLantern(sx,sy);else drawStairs(sx,sy);if(!engine.visible[engine.key(engine.stairs.x,engine.stairs.y)]){ctx.fillStyle='#0b111a99';ctx.fillRect(sx,sy,tile,tile);}}
-    for(const t of engine.traps)if(t.found&&engine.seen[engine.key(t.x,t.y)]){const px=t.x*tile+offsetX,py=t.y*tile+offsetY;ctx.fillStyle='#c4976c';for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(px+tile*(.25+i*.2),py+tile*.7);ctx.lineTo(px+tile*(.35+i*.2),py+tile*.4);ctx.lineTo(px+tile*(.45+i*.2),py+tile*.7);ctx.fill();}}
-    for(const item of engine.items)if(engine.visible[engine.key(item.x,item.y)])drawItem(item,item.x*tile+offsetX,item.y*tile+offsetY,now);
-    for(const e of engine.enemies)if(e.hp>0&&e.intent&&engine.visible[engine.key(e.x,e.y)]){const px=e.intent.x*tile+offsetX,py=e.intent.y*tile+offsetY;ctx.fillStyle='#f5c66e40';ctx.fillRect(px,py,tile,tile);ctx.strokeStyle='#ffdf85';ctx.lineWidth=tile/12;ctx.strokeRect(px+tile/12,py+tile/12,tile*5/6,tile*5/6);ctx.beginPath();ctx.moveTo(px+tile*.3,py+tile*.3);ctx.lineTo(px+tile*.7,py+tile*.7);ctx.moveTo(px+tile*.7,py+tile*.3);ctx.lineTo(px+tile*.3,py+tile*.7);ctx.stroke();}
-    let drawX=p.x,drawY=p.y;if(playerTween){const t=Math.min(1,(now-playerTween.born)/100);drawX=playerTween.from.x+(p.x-playerTween.from.x)*t;drawY=playerTween.from.y+(p.y-playerTween.from.y)*t;if(t===1)playerTween=null;}
-    const entities=engine.enemies.filter(e=>e.hp>0&&engine.visible[engine.key(e.x,e.y)]).map(e=>({...e,isPlayer:false}));entities.push({x:drawX,y:drawY,isPlayer:true,type:'hero'});entities.sort((a,b)=>a.y-b.y);
-    for(const e of entities){const px=e.x*tile+offsetX,py=e.y*tile+offsetY,s=tile/16;ctx.fillStyle='#06151466';ctx.beginPath();ctx.ellipse(px+tile/2,py+tile*.85,tile*.33,tile*.13,0,0,Math.PI*2);ctx.fill();let bob=['bat','moth'].includes(e.type)&&!reduced?Math.sin(now/230+e.id)*s*1.2:0;if(!e.isPlayer&&MONSTERS[e.species]?.trait==='mimic'&&!e.revealed)drawItem({kind:'gold',x:e.x},px,py,now);else sprite(ctx,e.isPlayer?heroSprite(p.facing):e.type,px,py-(e.isPlayer?tile*.125:0)+bob,s,1,e.isPlayer&&p.facing[0]<0,e.species);
-      if(e.intent){ctx.fillStyle='#ffdf85';ctx.font=`bold ${Math.round(tile*.5)}px sans-serif`;ctx.textAlign='center';ctx.fillText('!',px+tile/2,py-tile*.05);}
-if(!e.isPlayer&&e.hp<e.maxHp){ctx.fillStyle='#10171ee0';ctx.fillRect(px+tile*.16,py-tile*.12,tile*.68,s*2);ctx.fillStyle='#db8790';ctx.fillRect(px+tile*.18,py-tile*.10,tile*.64*e.hp/e.maxHp,s);}
-      if(e.isPlayer){const lx=px+tile*(p.facing[0]<0?.15:.85),ly=py+tile*.68;const light=ctx.createRadialGradient(lx,ly,0,lx,ly,tile*3.4);light.addColorStop(0,'#edca8226');light.addColorStop(.5,'#edca820c');light.addColorStop(1,'#edca8200');ctx.fillStyle=light;ctx.fillRect(lx-tile*4,ly-tile*4,tile*8,tile*8);ctx.fillStyle='#b38954';ctx.fillRect(lx-s,ly-s*2,s*3,s*4);ctx.fillStyle='#ffde92';ctx.fillRect(lx,ly-s,s,s*2);
-        const[dx,dy]=p.facing,length=Math.hypot(dx,dy),vx=dx/length,vy=dy/length,cx=px+tile*.5+vx*tile*.8,cy=py+tile*.5+vy*tile*.8;
-        ctx.beginPath();ctx.moveTo(cx+vx*s*2,cy+vy*s*2);ctx.lineTo(cx-vx*s*1.5-vy*s*1.5,cy-vy*s*1.5+vx*s*1.5);ctx.lineTo(cx-vx*s*1.5+vy*s*1.5,cy-vy*s*1.5-vx*s*1.5);ctx.closePath();ctx.fillStyle='#ffe2a1';ctx.strokeStyle='#302831';ctx.lineWidth=s*.7;ctx.stroke();ctx.fill();}}
-    for(const particle of particles){particle.x+=particle.vx;particle.y+=particle.vy;particle.vy+=.0007;particle.life-=.035;ctx.fillStyle=particle.color;ctx.globalAlpha=Math.max(0,particle.life);ctx.fillRect(particle.x*tile+offsetX,particle.y*tile+offsetY,tile/12,tile/12);}ctx.globalAlpha=1;particles=particles.filter(p=>p.life>0);
-    for(const label of labels){const age=(now-label.born)/900;if(age>1)continue;ctx.save();ctx.globalAlpha=1-age;ctx.font=`bold ${Math.round(tile*.42)}px sans-serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#181921';const x=(label.x+.5)*tile+offsetX,y=(label.y-.2-age*.7)*tile+offsetY;ctx.strokeText(label.text,x,y);ctx.fillStyle=label.type==='damage'?'#ffada9':label.type==='heal'?'#c3edaa':'#fff0b3';ctx.fillText(label.text,x,y);ctx.restore();}labels=labels.filter(l=>now-l.born<900);
-    const vignette=ctx.createRadialGradient(canvas.width/2,canvas.height/2,canvas.height*.25,canvas.width/2,canvas.height/2,canvas.width*.7);vignette.addColorStop(0,'#070e1000');vignette.addColorStop(1,'#070e1066');ctx.fillStyle=vignette;ctx.fillRect(0,0,canvas.width,canvas.height);
-    drawMinimap();requestAnimationFrame(render);
+  const SAVE_KEY = "lantern-dungeon-v1",
+    PROGRESS_KEY = "lantern-dungeon-progress-v1";
+  let engine,
+    storageAvailable = true,
+    tutorialCleared = false;
+  try {
+    tutorialCleared = localStorage.getItem(PROGRESS_KEY) === "true";
+    engine = DungeonEngine.restore(localStorage.getItem(SAVE_KEY));
+  } catch {
+    storageAvailable = false;
   }
-  function drawMinimap(){
-    mini.fillStyle='#131c20';mini.fillRect(0,0,144,96);const sx=144/W,sy=96/H;
-    for(let y=0;y<H;y++)for(let x=0;x<W;x++){const k=y*W+x;if(engine.seen[k]&&engine.tiles[k]){mini.fillStyle=engine.visible[k]?'#a6b192':'#4a6154';mini.fillRect(x*sx,y*sy,Math.ceil(sx),Math.ceil(sy));}}
-    for(const item of engine.items)if(item.discovered){mini.fillStyle='#ffc857';mini.fillRect(item.x*sx,item.y*sy,3,3);}
-    for(const e of engine.enemies)if(e.hp>0&&e.lastSeen){mini.fillStyle=MONSTERS[e.species]?.trait==='mimic'&&!e.revealed?'#ffc857':'#d08288';mini.fillRect(e.lastSeen.x*sx,e.lastSeen.y*sy,3,3);}
-    if(engine.seen[engine.key(engine.stairs.x,engine.stairs.y)]){mini.fillStyle='#131c20';mini.fillRect(engine.stairs.x*sx-1,engine.stairs.y*sy-1,6,6);mini.fillStyle='#5ca9ff';mini.fillRect(engine.stairs.x*sx,engine.stairs.y*sy,4,4);}
-    mini.fillStyle='#ffe2a1';mini.fillRect(engine.player.x*sx,engine.player.y*sy,4,4);
+  const resumed = !!engine;
+  engine ||= new DungeonEngine();
+  engine.tutorialCleared ||= tutorialCleared;
+  let sound = false,
+    audio = null,
+    lastInput = 0,
+    modalKind = "",
+    minimapVisible = true,
+    announcedEnd = false,
+    turnOnly = false;
+  const facingNames = ["上", "右上", "右", "右下", "下", "左下", "左", "左上"];
+  const renderer = createDungeonRenderer({
+    canvas,
+    minimap: $("minimap"),
+    viewport: $("game-viewport"),
+    getEngine: () => engine,
+    reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
+  });
+  function directionInput(dx, dy, faceOnly = turnOnly, force = false) {
+    act(
+      () => (faceOnly ? engine.face(dx, dy) : engine.move(dx, dy)),
+      force || faceOnly,
+    );
   }
-  function toggleMinimap(){minimapVisible=!minimapVisible;$('minimap-content').hidden=!minimapVisible;$('minimap-toggle').setAttribute('aria-expanded',String(minimapVisible));}
-  function resize(){const rect=$('game-viewport').getBoundingClientRect();canvas.width=880;canvas.height=Math.round(880*rect.height/rect.width);tile=rect.width<500?48:40;camera.x=0;}
-  function closeModal(){$('modal').close();modalKind='';canvas.focus({preventScroll:true});}
-  function openModal(kind,html){modalKind=kind;$('modal-content').innerHTML=html;if(!$('modal').open)$('modal').showModal();$('modal-content').querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',closeModal));}
-  const modalHeader=title=>`<div class="modal-header"><h2>${title}</h2><button class="close-modal" data-close aria-label="閉じる">×</button></div>`;
-  const escapeHTML=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function itemCard(item,buttons='',suffix=''){
-    const kind=typeof item==='string'?item:item.kind;
-    const icon=['scroll','map','identify','uncurse'].includes(kind)?'✧':ITEMS[kind].icon;
+  function toggleTurnOnly() {
+    if ($("modal").open || engine.status !== "playing") return;
+    turnOnly = !turnOnly;
+    updateUI();
+  }
+  function save() {
+    if (!storageAvailable) {
+      $("save-label").textContent = "保存無効。このタブで冒険を続けられます";
+      return;
+    }
+    try {
+      if (engine.tutorialCleared) localStorage.setItem(PROGRESS_KEY, "true");
+      localStorage.setItem(SAVE_KEY, engine.serialize());
+      $("save-label").textContent = "冒険は自動で保存されます";
+    } catch {
+      storageAvailable = false;
+      $("save-label").textContent =
+        "保存できません。このタブで冒険を続けられます";
+    }
+  }
+  function beep(kind) {
+    if (!sound) return;
+    try {
+      audio ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === "suspended") audio.resume();
+      const o = audio.createOscillator(),
+        g = audio.createGain();
+      o.connect(g);
+      g.connect(audio.destination);
+      const now = audio.currentTime;
+      const tones = {
+        hit: [180, 80, 0.08],
+        damage: [100, 45, 0.12],
+        pickup: [650, 850, 0.13],
+        heal: [430, 780, 0.22],
+        kill: [380, 140, 0.11],
+        level: [540, 1080, 0.35],
+        descend: [280, 560, 0.4],
+        lightning: [800, 60, 0.23],
+        won: [660, 1320, 0.5],
+        dead: [200, 40, 0.5],
+      };
+      const [f, to, duration] = tones[kind] || [110, 85, 0.025];
+      o.type = kind === "damage" ? "sawtooth" : "triangle";
+      o.frequency.setValueAtTime(f, now);
+      o.frequency.exponentialRampToValueAtTime(to, now + duration);
+      g.gain.setValueAtTime(0.045, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      o.start(now);
+      o.stop(now + duration);
+    } catch {
+      sound = false;
+      updateSoundButton();
+    }
+  }
+  function flushEffects() {
+    for (const e of engine.effects) {
+      beep(e.type);
+      if (e.type === "pickup") showPickupNotice(e.text);
+      renderer.effect(e);
+      if (e.type === "damage") {
+        $("damage-flash").classList.add("active");
+        setTimeout(() => $("damage-flash").classList.remove("active"), 200);
+      }
+    }
+    engine.effects = [];
+  }
+  function updateUI() {
+    const p = engine.player,
+      info = engine.dungeonInfo();
+    $("quest-title").textContent = `${info.label} · ${info.name}`;
+    $("quest-goal").textContent =
+      `地下${engine.maxFloor()}階の「${info.treasure}」を探そう`;
+    $("dungeon-label").textContent =
+      `${info.label} · ${info.name}（${engine.floor} / ${engine.maxFloor()}階）`;
+    $("floor-label").textContent = `地下 ${engine.floor} 階`;
+    $("floor-name").textContent =
+      engine.floorName() +
+      (engine.layoutName() ? ` · ${engine.layoutName()}` : "");
+    $("turn-count").textContent = engine.turn;
+    $("level").textContent = p.level;
+    $("hp").textContent = p.hp;
+    $("max-hp").textContent = p.maxHp;
+    $("mobile-hp").textContent = `${p.hp} / ${p.maxHp}`;
+    $("mobile-hunger").textContent = `${p.hunger}%`;
+    $("hunger").textContent = p.hunger;
+    $("hp-bar").style.width = `${(p.hp / p.maxHp) * 100}%`;
+    $("hunger-bar").style.width = `${p.hunger}%`;
+    $("exp-bar").style.width = `${(p.exp / p.nextExp) * 100}%`;
+    $("exp-label").textContent = `${p.exp} / ${p.nextExp}`;
+    $("gold").textContent = p.gold;
+    $("weapon-name").textContent = engine.weaponName();
+    $("shield-name").textContent = engine.shieldName();
+    $("attack-stat").textContent = engine.attackPower();
+    $("defense-stat").textContent = engine.defense();
+    $("hero-title").textContent =
+      p.level >= 8
+        ? "星を目指す探検家"
+        : p.level >= 4
+          ? "迷宮を歩く探検家"
+          : "駆け出しの探検家";
+    document.body.classList.toggle("low-hunger", p.hunger < 20);
+    document.body.classList.toggle("low-hp", p.hp / p.maxHp < 0.3);
+    $("state-label").textContent =
+      engine.status === "dead"
+        ? "冒険終了"
+        : engine.status === "won"
+          ? "踏破達成"
+          : "探索中";
+    $("stairs-button").disabled =
+      !engine.onStairs() ||
+      engine.status !== "playing" ||
+      engine.floor === engine.maxFloor();
+    $("bag-count").textContent =
+      `${engine.inventoryCount()} / ${INVENTORY_CAPACITY}`;
+    $("ammo-name").textContent = p.ammo === "arrow" ? "木の矢" : "未装備";
+    $("ammo-count").textContent = engine.arrowCount();
+    $("shoot-button").disabled =
+      engine.status !== "playing" || p.ammo !== "arrow" || !engine.arrowCount();
+    const facingIndex = DIRS.findIndex(
+      ([dx, dy]) => dx === p.facing[0] && dy === p.facing[1],
+    );
+    $("facing-label").textContent = `向き：${facingNames[facingIndex]}`;
+    $("turn-button").setAttribute("aria-pressed", String(turnOnly));
+    $("turn-button").textContent = turnOnly ? "向き変更中" : "向き変更";
+    $("direction-help").textContent = turnOnly
+      ? "方向ボタンで向きだけ変更。ターンは進みません。"
+      : "Shift＋方向キーで向きだけ変更。";
+    document.querySelectorAll("[data-direction]").forEach((b) => {
+      const [dx, dy] = b.dataset.direction.split(",").map(Number),
+        name = facingNames[DIRS.findIndex((d) => d[0] === dx && d[1] === dy)];
+      b.disabled = engine.status !== "playing";
+      b.setAttribute("aria-label", turnOnly ? `${name}を向く` : `${name}へ`);
+    });
+    [
+      "attack-button",
+      "wait-button",
+      "bag-button",
+      "touch-wait",
+      "turn-button",
+    ].forEach((id) => ($(id).disabled = engine.status !== "playing"));
+    const threat = engine.enemies.find(
+      (e) => e.intent && engine.visible[engine.key(e.x, e.y)],
+    );
+    const nearest = engine.enemies.find(
+      (e) =>
+        e.hp > 0 && Math.max(Math.abs(e.x - p.x), Math.abs(e.y - p.y)) === 1,
+    );
+    $("location-hint").textContent =
+      engine.status === "dead"
+        ? "新しい冒険で、もう一度灯りを。"
+        : engine.status === "won"
+          ? `${info.treasure}を手に入れた！`
+          : threat
+            ? `${threat.name}が攻撃準備。黄色の予告マスから移動！`
+            : p.hunger < 20
+              ? "お腹が空いてきた。持ち物からパンを食べよう。"
+              : p.hp / p.maxHp < 0.3
+                ? "体力が少ない。持ち物から回復草を使おう。"
+                : engine.onStairs()
+                  ? engine.floor === engine.maxFloor()
+                    ? `${info.guardian}を倒してランタンを手に入れよう。`
+                    : "階段を見つけた！ Enter で次の階へ。"
+                  : engine.monsterHouse?.triggered &&
+                      engine.roomAt(p.x, p.y) ===
+                        engine.rooms[engine.monsterHouse.room] &&
+                      engine.enemies.some((e) => e.house && e.hp > 0)
+                    ? "モンスターハウス！ 通路へ退くか、灯札で切り抜けよう。"
+                    : nearest
+                      ? MONSTERS[nearest.species]?.trait === "mimic" &&
+                        !nearest.revealed
+                        ? "怪しい金貨の山が近い。"
+                        : `${nearest.name}が近い。${MONSTERS[nearest.species]?.feature?.split("。")[0] || "敵に向かって移動すると攻撃"}。`
+                      : engine.turn < 8
+                        ? "灯りの届く先へ、進んでみよう。"
+                        : "あせらず、一歩ずつ。";
+    const list = $("event-log");
+    list.replaceChildren();
+    for (const event of engine.log.slice(0, 5)) {
+      const li = document.createElement("li");
+      li.className = event.type;
+      li.textContent = event.text;
+      list.append(li);
+    }
+    if (engine.status !== "playing" && !announcedEnd) {
+      announcedEnd = true;
+      const endedEngine = engine;
+      setTimeout(() => {
+        if (engine === endedEngine) showEnd();
+      }, 350);
+    }
+  }
+  function act(action, force = false) {
+    if ($("modal").open || engine.status !== "playing") return;
+    const now = performance.now();
+    if (!force && now - lastInput < 95) return;
+    lastInput = now;
+    const before = {
+        x: engine.player.x,
+        y: engine.player.y,
+        facing: engine.player.facing.join(","),
+        log: engine.log[0],
+      },
+      floor = engine.floor;
+    const changed = action();
+    if (
+      !changed &&
+      before.facing === engine.player.facing.join(",") &&
+      before.log === engine.log[0]
+    )
+      return;
+    if (floor !== engine.floor) {
+      clearPickupNotice();
+      renderer.reset({ x: engine.player.x + 0.5, y: engine.player.y + 0.5 });
+    } else if (before.x !== engine.player.x || before.y !== engine.player.y)
+      renderer.movePlayer(before, now);
+    flushEffects();
+    updateUI();
+    save();
+  }
+  function toggleMinimap() {
+    minimapVisible = !minimapVisible;
+    $("minimap-content").hidden = !minimapVisible;
+    $("minimap-toggle").setAttribute("aria-expanded", String(minimapVisible));
+  }
+  function closeModal() {
+    $("modal").close();
+    modalKind = "";
+    canvas.focus({ preventScroll: true });
+  }
+  function openModal(kind, html) {
+    modalKind = kind;
+    $("modal-content").innerHTML = html;
+    if (!$("modal").open) $("modal").showModal();
+    $("modal-content")
+      .querySelectorAll("[data-close]")
+      .forEach((b) => b.addEventListener("click", closeModal));
+  }
+  const modalHeader = (title) =>
+    `<div class="modal-header"><h2>${title}</h2><button class="close-modal" data-close aria-label="閉じる">×</button></div>`;
+  const escapeHTML = (value) =>
+    String(value).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  function itemCard(item, buttons = "", suffix = "") {
+    const kind = typeof item === "string" ? item : item.kind;
+    const icon = ["scroll", "map", "identify", "uncurse"].includes(kind)
+      ? "✧"
+      : ITEMS[kind].icon;
     return `<div class="item-card"><span class="item-icon" style="color:var(--gold)">${icon}</span><div><strong>${escapeHTML(engine.itemName(item))}${suffix}</strong><p>${escapeHTML(engine.itemDescription(item))}</p></div><div class="item-actions">${buttons}</div></div>`;
   }
-  function showBag(){
-    if(engine.status!=='playing')return;
-    const p=engine.player,entries=engine.inventoryEntries().sort((a,b)=>Number(b.kind==='arrow')-Number(a.kind==='arrow'));
-    const equipment=Object.entries(p.equipment).filter(([,item])=>item);
-    const equippedCards=equipment.map(([kind,item])=>itemCard(item,`<button class="use-button" data-unequip="${kind}">外す</button>`,'（装備中）')).join('');
-    const bagCards=entries.map(({kind,index,count})=>{
-      const item=p.bag[index],gear=typeof item==='object',scroll=['scroll','map','identify','uncurse'].includes(kind),equipped=kind==='arrow'&&p.ammo==='arrow';
-      const buttons=gear?`<button class="use-button" data-use="${index}">装備</button><button class="use-button" data-drop="${index}">置く</button>`:kind==='arrow'?`<button class="use-button" data-equip>${equipped?'外す':'装備'}</button>`:`<button class="use-button" data-use="${index}">${kind==='bread'?'食べる':scroll?'かざす':'使う'}</button>`;
-      const naming=scroll&&!engine.identification.known.includes(kind)?`<button class="use-button" data-name="${index}">名前</button>`:'';
-      return itemCard(item,buttons+naming,kind==='arrow'?` × ${count}${equipped?'（装備中）':''}`:'');
-    }).join('');
-    openModal('bag',`<div class="modal-inner">${modalHeader('旅の持ち物')}<p class="modal-description">持ち物 ${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠。装備中の武器・盾も各1枠を使います。予備装備と道具も1個につき1枠、矢は1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。<br>使用・装備・解除・床に置く操作で1ターン。鑑定の対象選択・命名では時間は進みません。木の矢はまとめて1枠、装備後Rキーで発射できます。</p><div class="item-list">${equippedCards}${bagCards}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`);
-    $('modal-content').querySelectorAll('[data-use]').forEach(b=>b.addEventListener('click',()=>{
-      const index=Number(b.dataset.use);
-      if(engine.scrollNeedsTarget(index)){showIdentify(index);return;}
-      closeModal();act(()=>engine.use(index),true);
-    }));
-    $('modal-content').querySelectorAll('[data-equip]').forEach(b=>b.addEventListener('click',()=>{closeModal();act(()=>engine.equipArrow(),true);}));
-    $('modal-content').querySelectorAll('[data-unequip]').forEach(b=>b.addEventListener('click',()=>{closeModal();act(()=>engine.unequip(b.dataset.unequip),true);}));
-    $('modal-content').querySelectorAll('[data-drop]').forEach(b=>b.addEventListener('click',()=>{closeModal();act(()=>engine.dropEquipment(Number(b.dataset.drop)),true);}));
-    $('modal-content').querySelectorAll('[data-name]').forEach(b=>b.addEventListener('click',()=>showItemName(Number(b.dataset.name))));
+  function showBag() {
+    if (engine.status !== "playing") return;
+    const p = engine.player,
+      entries = engine
+        .inventoryEntries()
+        .sort(
+          (a, b) => Number(b.kind === "arrow") - Number(a.kind === "arrow"),
+        );
+    const equipment = Object.entries(p.equipment).filter(([, item]) => item);
+    const equippedCards = equipment
+      .map(([kind, item]) =>
+        itemCard(
+          item,
+          `<button class="use-button" data-unequip="${kind}">外す</button>`,
+          "（装備中）",
+        ),
+      )
+      .join("");
+    const bagCards = entries
+      .map(({ kind, index, count }) => {
+        const item = p.bag[index],
+          gear = typeof item === "object",
+          scroll = ["scroll", "map", "identify", "uncurse"].includes(kind),
+          equipped = kind === "arrow" && p.ammo === "arrow";
+        const buttons = gear
+          ? `<button class="use-button" data-use="${index}">装備</button><button class="use-button" data-drop="${index}">置く</button>`
+          : kind === "arrow"
+            ? `<button class="use-button" data-equip>${equipped ? "外す" : "装備"}</button>`
+            : `<button class="use-button" data-use="${index}">${kind === "bread" ? "食べる" : scroll ? "かざす" : "使う"}</button>`;
+        const naming =
+          scroll && !engine.identification.known.includes(kind)
+            ? `<button class="use-button" data-name="${index}">名前</button>`
+            : "";
+        return itemCard(
+          item,
+          buttons + naming,
+          kind === "arrow" ? ` × ${count}${equipped ? "（装備中）" : ""}` : "",
+        );
+      })
+      .join("");
+    openModal(
+      "bag",
+      `<div class="modal-inner">${modalHeader("旅の持ち物")}<p class="modal-description">持ち物 ${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠。装備中の武器・盾も各1枠を使います。予備装備と道具も1個につき1枠、矢は1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。<br>使用・装備・解除・床に置く操作で1ターン。鑑定の対象選択・命名では時間は進みません。木の矢はまとめて1枠、装備後Rキーで発射できます。</p><div class="item-list">${equippedCards}${bagCards}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`,
+    );
+    $("modal-content")
+      .querySelectorAll("[data-use]")
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          const index = Number(b.dataset.use);
+          if (engine.scrollNeedsTarget(index)) {
+            showIdentify(index);
+            return;
+          }
+          closeModal();
+          act(() => engine.use(index), true);
+        }),
+      );
+    $("modal-content")
+      .querySelectorAll("[data-equip]")
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          closeModal();
+          act(() => engine.equipArrow(), true);
+        }),
+      );
+    $("modal-content")
+      .querySelectorAll("[data-unequip]")
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          closeModal();
+          act(() => engine.unequip(b.dataset.unequip), true);
+        }),
+      );
+    $("modal-content")
+      .querySelectorAll("[data-drop]")
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          closeModal();
+          act(() => engine.dropEquipment(Number(b.dataset.drop)), true);
+        }),
+      );
+    $("modal-content")
+      .querySelectorAll("[data-name]")
+      .forEach((b) =>
+        b.addEventListener("click", () => showItemName(Number(b.dataset.name))),
+      );
   }
-  function showIdentify(index){
-    const p=engine.player,targets=[...Object.entries(p.equipment).filter(([,item])=>item).map(([target,item])=>({target,item})),...engine.inventoryEntries().filter(entry=>entry.index!==index).map(entry=>({target:entry.index,item:p.bag[entry.index]}))];
-    openModal('identify',`<div class="modal-inner">${modalHeader('鑑定する持ち物')}<p class="modal-description">${escapeHTML(engine.itemName(p.bag[index]))}で持ち物を1つ鑑定します。対象を選ぶと灯札を1枚消費し、1ターン進みます。キャンセルでは灯札もターンも消費しません。</p><div class="item-list">${targets.map(({target,item})=>itemCard(item,`<button class="use-button" data-target="${target}">鑑定</button>`,typeof target==='string'?'（装備中）':'')).join('')}</div><button class="secondary-button" id="identify-cancel">キャンセル</button></div>`);
-    $('modal-content').querySelectorAll('[data-target]').forEach(b=>b.addEventListener('click',()=>{const value=b.dataset.target,target=/^\d+$/.test(value)?Number(value):value;closeModal();act(()=>engine.use(index,target),true);}));
-    $('identify-cancel').addEventListener('click',showBag);
+  function showIdentify(index) {
+    const p = engine.player,
+      targets = [
+        ...Object.entries(p.equipment)
+          .filter(([, item]) => item)
+          .map(([target, item]) => ({ target, item })),
+        ...engine
+          .inventoryEntries()
+          .filter((entry) => entry.index !== index)
+          .map((entry) => ({ target: entry.index, item: p.bag[entry.index] })),
+      ];
+    openModal(
+      "identify",
+      `<div class="modal-inner">${modalHeader("鑑定する持ち物")}<p class="modal-description">${escapeHTML(engine.itemName(p.bag[index]))}で持ち物を1つ鑑定します。対象を選ぶと灯札を1枚消費し、1ターン進みます。キャンセルでは灯札もターンも消費しません。</p><div class="item-list">${targets.map(({ target, item }) => itemCard(item, `<button class="use-button" data-target="${target}">鑑定</button>`, typeof target === "string" ? "（装備中）" : "")).join("")}</div><button class="secondary-button" id="identify-cancel">キャンセル</button></div>`,
+    );
+    $("modal-content")
+      .querySelectorAll("[data-target]")
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          const value = b.dataset.target,
+            target = /^\d+$/.test(value) ? Number(value) : value;
+          closeModal();
+          act(() => engine.use(index, target), true);
+        }),
+      );
+    $("identify-cancel").addEventListener("click", showBag);
   }
-  function showItemName(index){
-    const kind=engine.player.bag[index];
-    openModal('name',`<div class="modal-inner">${modalHeader('灯札に名前を付ける')}<p class="modal-description">推測した効果を20文字以内で記録できます。同じ仮名の灯札すべてに表示されます。名前を付けても識別済みにはなりません。</p><form id="item-name-form"><label for="item-name">${escapeHTML(engine.itemName(kind))}</label><input id="item-name" maxlength="20" autocomplete="off"><button class="primary-button" type="submit">名前を保存</button></form><button class="secondary-button" id="name-cancel">キャンセル</button></div>`);
-    $('item-name').value=engine.identification.names[kind]||'';$('item-name').focus();
-    $('item-name-form').addEventListener('submit',event=>{event.preventDefault();engine.nameScroll(index,$('item-name').value);save();showBag();});
-    $('name-cancel').addEventListener('click',showBag);
+  function showItemName(index) {
+    const kind = engine.player.bag[index];
+    openModal(
+      "name",
+      `<div class="modal-inner">${modalHeader("灯札に名前を付ける")}<p class="modal-description">推測した効果を20文字以内で記録できます。同じ仮名の灯札すべてに表示されます。名前を付けても識別済みにはなりません。</p><form id="item-name-form"><label for="item-name">${escapeHTML(engine.itemName(kind))}</label><input id="item-name" maxlength="20" autocomplete="off"><button class="primary-button" type="submit">名前を保存</button></form><button class="secondary-button" id="name-cancel">キャンセル</button></div>`,
+    );
+    $("item-name").value = engine.identification.names[kind] || "";
+    $("item-name").focus();
+    $("item-name-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      engine.nameScroll(index, $("item-name").value);
+      save();
+      showBag();
+    });
+    $("name-cancel").addEventListener("click", showBag);
   }
-  function showMonsters(){
-    openModal('monsters',`<div class="modal-inner">${modalHeader('魔物図鑑')}<p class="modal-description">全${Object.keys(MONSTERS).length}種。同じ名前の魔物は、階数やダンジョンが変わっても同じ能力です。強い別種は色・頭の模様・名前で見分けられます。敵の特徴と対処法を確認しましょう。遠距離攻撃と強打は黄色のマスに予告され、次の行動でそのマスから移動すると回避できます。</p><div class="item-list">${Object.entries(MONSTERS).map(([species,m])=>`<div class="item-card"><canvas data-monster="${species}" width="48" height="48" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p>${m.color}・${MONSTER_MARKS[m.tier]}<br>HP ${m.hp} ／ 攻撃力 ${m.attack} ／ 経験値 ${m.exp}<br><b>特徴</b>：${m.feature}<br><b>対処</b>：${m.counter}</p></div></div>`).join('')}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`);
-    $('modal-content').querySelectorAll('[data-monster]').forEach(c=>{const m=MONSTERS[c.dataset.monster],context=c.getContext('2d');context.imageSmoothingEnabled=false;sprite(context,m.type,0,0,3,1,false,c.dataset.monster);});
-    $('modal').scrollTop=0;$('modal-content').querySelector('[data-close]').focus({preventScroll:true});
+  function showMonsters() {
+    openModal(
+      "monsters",
+      `<div class="modal-inner">${modalHeader("魔物図鑑")}<p class="modal-description">全${Object.keys(MONSTERS).length}種。同じ名前の魔物は、階数やダンジョンが変わっても同じ能力です。強い別種は色・頭の模様・名前で見分けられます。敵の特徴と対処法を確認しましょう。遠距離攻撃と強打は黄色のマスに予告され、次の行動でそのマスから移動すると回避できます。</p><div class="item-list">${Object.entries(
+        MONSTERS,
+      )
+        .map(
+          ([species, m]) =>
+            `<div class="item-card"><canvas data-monster="${species}" width="48" height="48" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p>${m.color}・${MONSTER_MARKS[m.tier]}<br>HP ${m.hp} ／ 攻撃力 ${m.attack} ／ 経験値 ${m.exp}<br><b>特徴</b>：${m.feature}<br><b>対処</b>：${m.counter}</p></div></div>`,
+        )
+        .join(
+          "",
+        )}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`,
+    );
+    $("modal-content")
+      .querySelectorAll("[data-monster]")
+      .forEach((c) => {
+        const m = MONSTERS[c.dataset.monster],
+          context = c.getContext("2d");
+        context.imageSmoothingEnabled = false;
+        renderer.sprite(context, m.type, 0, 0, 3, 1, false, c.dataset.monster);
+      });
+    $("modal").scrollTop = 0;
+    $("modal-content")
+      .querySelector("[data-close]")
+      .focus({ preventScroll: true });
   }
-  function showHelp(){openModal('help',`<div class="modal-inner">${modalHeader('迷宮の歩き方')}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を見つけよう。</p><p class="modal-description">あなたが1回行動すると、敵も1回行動します。操作を止めている間、時間は進みません。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃。壁にぶつかってもターンは進みません。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角を斜めにすり抜けることはできません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>Shiftを押しながら移動キーで、その場で向きだけ変更。Tまたは「向き変更」で切り替えると、方向ボタンや迷宮タップでも向きだけ変えられます。ターン・満腹度は変わらず、敵も動きません。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃。空振りも1ターン。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ発射。1本消費し、最初の敵に12ダメージ。</p></div><div class="help-row"><span>. / X</span><p>足踏み。満腹なら7ターンごとに体力が1回復。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床のアイテムは上に乗ると拾います。武器・盾は全階で同じ確率で出現し、拾うだけでは強化されません。持ち物から選んで装備すると、補正値と呪いが判明します。呪われた装備は清めの灯札で解呪するまで外せません。木の矢も持ち物から装備・解除でき、本数にかかわらず1枠です。</p></div><div class="help-row"><span>灯札の識別</span><p>チュートリアルの灯札は識別済み。深淵の迷宮では冒険ごとに仮名が変わり、かざすか真名の灯札で鑑定すると同種すべてが識別されます。「名前」で推測を記録でき、命名や対象選択では時間は進みません。</p></div><div class="help-row"><span>魔物の見分け方</span><p>同じ名前なら能力は同じ。強い別種は色と頭の模様が変わります。黄色の予告マスから移動すると遠距離攻撃・強打を回避できます。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る（${Object.keys(MONSTERS).length}種）</button><div class="help-row"><span>満腹度・保存</span><p>通常は4ターンで満腹度が1減少。革の盾を装備すると8ターンで1減少。0になると毎ターン体力が減少。冒険はブラウザに自動保存されます。</p></div><p class="modal-description">${engine.dungeonInfo().guardian}を倒し、最深部のランタンにたどり着くとクリア。チュートリアル10階の踏破で、高難度の深淵の迷宮30階が解放されます。倒れたら、新しい迷宮で再出発です。</p><button class="primary-button" data-close>冒険に戻る</button></div>`);$('monster-guide-button').addEventListener('click',showMonsters);}
-  function startNew(dungeon=engine.dungeon){
-    const next=new DungeonEngine(Date.now(),dungeon,engine.tutorialCleared);
-    clearPickupNotice();closeModal();engine=next;announcedEnd=false;turnOnly=false;particles=[];labels=[];camera.x=0;playerTween=null;updateUI();save();
+  function showHelp() {
+    openModal(
+      "help",
+      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を見つけよう。</p><p class="modal-description">あなたが1回行動すると、敵も1回行動します。操作を止めている間、時間は進みません。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃。壁にぶつかってもターンは進みません。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角を斜めにすり抜けることはできません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>Shiftを押しながら移動キーで、その場で向きだけ変更。Tまたは「向き変更」で切り替えると、方向ボタンや迷宮タップでも向きだけ変えられます。ターン・満腹度は変わらず、敵も動きません。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃。空振りも1ターン。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ発射。1本消費し、最初の敵に12ダメージ。</p></div><div class="help-row"><span>. / X</span><p>足踏み。満腹なら7ターンごとに体力が1回復。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床のアイテムは上に乗ると拾います。武器・盾は全階で同じ確率で出現し、拾うだけでは強化されません。持ち物から選んで装備すると、補正値と呪いが判明します。呪われた装備は清めの灯札で解呪するまで外せません。木の矢も持ち物から装備・解除でき、本数にかかわらず1枠です。</p></div><div class="help-row"><span>灯札の識別</span><p>チュートリアルの灯札は識別済み。深淵の迷宮では冒険ごとに仮名が変わり、かざすか真名の灯札で鑑定すると同種すべてが識別されます。「名前」で推測を記録でき、命名や対象選択では時間は進みません。</p></div><div class="help-row"><span>魔物の見分け方</span><p>同じ名前なら能力は同じ。強い別種は色と頭の模様が変わります。黄色の予告マスから移動すると遠距離攻撃・強打を回避できます。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る（${Object.keys(MONSTERS).length}種）</button><div class="help-row"><span>満腹度・保存</span><p>通常は4ターンで満腹度が1減少。革の盾を装備すると8ターンで1減少。0になると毎ターン体力が減少。冒険はブラウザに自動保存されます。</p></div><p class="modal-description">${engine.dungeonInfo().guardian}を倒し、最深部のランタンにたどり着くとクリア。チュートリアル10階の踏破で、高難度の深淵の迷宮30階が解放されます。倒れたら、新しい迷宮で再出発です。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
+    );
+    $("monster-guide-button").addEventListener("click", showMonsters);
   }
-  function confirmNew(){
-    openModal('new',`<div class="modal-inner">${modalHeader('ダンジョンを選ぶ')}<p class="modal-description">挑む迷宮を選んで、地下1階から出発します。現在の冒険の持ち物・レベル・所持金はリセットされます。クリアによる解放は引き継がれます。</p><div class="dungeon-list">${Object.entries(DUNGEONS).map(([id,info])=>`<button class="dungeon-choice" data-dungeon="${id}" ${id==='depths'&&!engine.tutorialCleared?'disabled':''}><span class="dungeon-choice-heading">${info.name}<span>${info.label} · ${info.floors}階</span></span><span class="dungeon-choice-description">${id==='tutorial'?'移動・戦闘・道具の使い方を覚える10階の冒険。':engine.tutorialCleared?'解放済み。敵と罠が増え、パンが少ない30階の冒険。':'未解放。チュートリアルをクリアすると選べます。'}</span></button>`).join('')}</div><button class="secondary-button" data-close>今の冒険に戻る</button></div>`);
-    $('modal-content').querySelectorAll('[data-dungeon]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.dungeon==='depths'&&!engine.tutorialCleared)return;startNew(b.dataset.dungeon);}));
+  function startNew(dungeon = engine.dungeon) {
+    const next = new DungeonEngine(Date.now(), dungeon, engine.tutorialCleared);
+    clearPickupNotice();
+    closeModal();
+    engine = next;
+    announcedEnd = false;
+    turnOnly = false;
+    renderer.reset();
+    updateUI();
+    save();
   }
-  function showEnd(){
-    const won=engine.status==='won',tutorial=engine.dungeon==='tutorial',p=engine.player,info=engine.dungeonInfo();
-    openModal('end',`<div class="modal-inner"><div class="end-symbol">${won?'✦':'☾'}</div>${modalHeader(won? tutorial?'チュートリアル完了！':'深淵の迷宮、踏破！':'また、灯りをともして。')}<p class="modal-description">${won?`${info.guardian}を倒し、${info.treasure}を手に入れました。${tutorial?'高難度の「深淵の迷宮」が解放されました。次は地下30階を目指しましょう。':'地下30階の冒険を達成しました。灯りは、永遠に。'}`:'ランタンの灯りが消え、商人は村に戻りました。見つけた道も、学んだことも、次の冒険の道しるべ。'}</p><div class="end-stats"><div><strong>${engine.floor}F</strong><span>到達した階</span></div><div><strong>${p.level}</strong><span>レベル</span></div><div><strong>${p.gold}</strong><span>獲得ゴールド</span></div></div><p class="modal-description" style="text-align:center">${engine.turn} ターンの冒険</p><button class="primary-button" id="restart-end">${won&&tutorial?'深淵の迷宮に挑む':'同じダンジョンに再挑戦'}</button><button class="secondary-button" id="choose-end">ダンジョンを選ぶ</button><button class="secondary-button" data-close>迷宮を振り返る</button></div>`);
-    $('restart-end').addEventListener('click',()=>startNew(won&&tutorial?'depths':engine.dungeon));$('choose-end').addEventListener('click',confirmNew);
+  function confirmNew() {
+    openModal(
+      "new",
+      `<div class="modal-inner">${modalHeader("ダンジョンを選ぶ")}<p class="modal-description">挑む迷宮を選んで、地下1階から出発します。現在の冒険の持ち物・レベル・所持金はリセットされます。クリアによる解放は引き継がれます。</p><div class="dungeon-list">${Object.entries(
+        DUNGEONS,
+      )
+        .map(
+          ([id, info]) =>
+            `<button class="dungeon-choice" data-dungeon="${id}" ${id === "depths" && !engine.tutorialCleared ? "disabled" : ""}><span class="dungeon-choice-heading">${info.name}<span>${info.label} · ${info.floors}階</span></span><span class="dungeon-choice-description">${id === "tutorial" ? "移動・戦闘・道具の使い方を覚える10階の冒険。" : engine.tutorialCleared ? "解放済み。敵と罠が増え、パンが少ない30階の冒険。" : "未解放。チュートリアルをクリアすると選べます。"}</span></button>`,
+        )
+        .join(
+          "",
+        )}</div><button class="secondary-button" data-close>今の冒険に戻る</button></div>`,
+    );
+    $("modal-content")
+      .querySelectorAll("[data-dungeon]")
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          if (b.dataset.dungeon === "depths" && !engine.tutorialCleared) return;
+          startNew(b.dataset.dungeon);
+        }),
+      );
   }
-  function updateSoundButton(){$('sound-button').setAttribute('aria-pressed',String(sound));$('sound-button').setAttribute('aria-label',sound?'効果音を無効にする':'効果音を有効にする');$('sound-waves').setAttribute('d',sound?'M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14':'m16 9 5 6m0-6-5 6');}
-  $('minimap-toggle').addEventListener('click',toggleMinimap);
-  $('turn-button').addEventListener('click',toggleTurnOnly);
-  $('attack-button').addEventListener('click',()=>act(()=>engine.attack(),true));$('shoot-button').addEventListener('click',()=>act(()=>engine.shoot(),true));$('wait-button').addEventListener('click',()=>act(()=>engine.wait(),true));$('touch-wait').addEventListener('click',()=>act(()=>engine.wait(),true));$('stairs-button').addEventListener('click',()=>act(()=>engine.descend(),true));$('bag-button').addEventListener('click',showBag);$('help-button').addEventListener('click',showHelp);$('new-game-button').addEventListener('click',confirmNew);$('sound-button').addEventListener('click',()=>{sound=!sound;updateSoundButton();if(sound)beep('pickup');});document.querySelectorAll('[data-direction]').forEach(button=>button.addEventListener('click',()=>{const[dx,dy]=button.dataset.direction.split(',').map(Number);directionInput(dx,dy,turnOnly,true);}));
-  $('modal').addEventListener('cancel',()=>{modalKind='';canvas.focus({preventScroll:true});});$('modal').addEventListener('click',event=>{if(event.target===$('modal')){const r=$('modal').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)closeModal();}});
-  const bindings={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0],q:[-1,-1],e:[1,-1],z:[-1,1],c:[1,1]};
-  document.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey)return;const key=event.key.length===1?event.key.toLowerCase():event.key;if($('modal').open)return;if(event.target.matches('input,textarea,select'))return;
-    if(bindings[key]){event.preventDefault();const[dx,dy]=bindings[key];directionInput(dx,dy,turnOnly||event.shiftKey);}
-    else if(key==='t'){event.preventDefault();if(!event.repeat)toggleTurnOnly();}
-    else if(key===' '||key==='f'){if(key===' '&&event.target instanceof HTMLButtonElement)return;event.preventDefault();act(()=>engine.attack());}
-    else if(key==='r'){event.preventDefault();act(()=>engine.shoot());}
-    else if(key==='.'||key==='x'){event.preventDefault();act(()=>engine.wait());}
-    else if(key==='i'){event.preventDefault();if(!event.repeat)showBag();}
-    else if(key==='Enter'&&event.target===canvas){event.preventDefault();act(()=>engine.descend());}
-    else if(key==='m'){event.preventDefault();if(!event.repeat){toggleMinimap();}}
-    else if(key==='?'||key==='h'){event.preventDefault();if(!event.repeat)showHelp();}
-    else if(key==='Enter'&&event.target===document.body){event.preventDefault();act(()=>engine.descend());}
+  function showEnd() {
+    const won = engine.status === "won",
+      tutorial = engine.dungeon === "tutorial",
+      p = engine.player,
+      info = engine.dungeonInfo();
+    openModal(
+      "end",
+      `<div class="modal-inner"><div class="end-symbol">${won ? "✦" : "☾"}</div>${modalHeader(won ? (tutorial ? "チュートリアル完了！" : "深淵の迷宮、踏破！") : "また、灯りをともして。")}<p class="modal-description">${won ? `${info.guardian}を倒し、${info.treasure}を手に入れました。${tutorial ? "高難度の「深淵の迷宮」が解放されました。次は地下30階を目指しましょう。" : "地下30階の冒険を達成しました。灯りは、永遠に。"}` : "ランタンの灯りが消え、商人は村に戻りました。見つけた道も、学んだことも、次の冒険の道しるべ。"}</p><div class="end-stats"><div><strong>${engine.floor}F</strong><span>到達した階</span></div><div><strong>${p.level}</strong><span>レベル</span></div><div><strong>${p.gold}</strong><span>獲得ゴールド</span></div></div><p class="modal-description" style="text-align:center">${engine.turn} ターンの冒険</p><button class="primary-button" id="restart-end">${won && tutorial ? "深淵の迷宮に挑む" : "同じダンジョンに再挑戦"}</button><button class="secondary-button" id="choose-end">ダンジョンを選ぶ</button><button class="secondary-button" data-close>迷宮を振り返る</button></div>`,
+    );
+    $("restart-end").addEventListener("click", () =>
+      startNew(won && tutorial ? "depths" : engine.dungeon),
+    );
+    $("choose-end").addEventListener("click", confirmNew);
+  }
+  function updateSoundButton() {
+    $("sound-button").setAttribute("aria-pressed", String(sound));
+    $("sound-button").setAttribute(
+      "aria-label",
+      sound ? "効果音を無効にする" : "効果音を有効にする",
+    );
+    $("sound-waves").setAttribute(
+      "d",
+      sound ? "M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" : "m16 9 5 6m0-6-5 6",
+    );
+  }
+  $("minimap-toggle").addEventListener("click", toggleMinimap);
+  $("turn-button").addEventListener("click", toggleTurnOnly);
+  $("attack-button").addEventListener("click", () =>
+    act(() => engine.attack(), true),
+  );
+  $("shoot-button").addEventListener("click", () =>
+    act(() => engine.shoot(), true),
+  );
+  $("wait-button").addEventListener("click", () =>
+    act(() => engine.wait(), true),
+  );
+  $("touch-wait").addEventListener("click", () =>
+    act(() => engine.wait(), true),
+  );
+  $("stairs-button").addEventListener("click", () =>
+    act(() => engine.descend(), true),
+  );
+  $("bag-button").addEventListener("click", showBag);
+  $("help-button").addEventListener("click", showHelp);
+  $("new-game-button").addEventListener("click", confirmNew);
+  $("sound-button").addEventListener("click", () => {
+    sound = !sound;
+    updateSoundButton();
+    if (sound) beep("pickup");
   });
-  canvas.addEventListener('pointerdown',event=>{canvas.focus({preventScroll:true});const r=canvas.getBoundingClientRect(),worldX=((event.clientX-r.left)/r.width*canvas.width-canvas.width/2)/tile+camera.x,worldY=((event.clientY-r.top)/r.height*canvas.height-canvas.height/2)/tile+camera.y;const dx=Math.sign(Math.floor(worldX)-engine.player.x),dy=Math.sign(Math.floor(worldY)-engine.player.y);if(dx||dy)directionInput(dx,dy,turnOnly||event.shiftKey,true);else if(!turnOnly&&!event.shiftKey)act(()=>engine.wait(),true);});
-  new ResizeObserver(resize).observe($('game-viewport'));resize();
-  const portrait=$('portrait').getContext('2d');portrait.imageSmoothingEnabled=false;sprite(portrait,'hero',8,5,2);
-  if(resumed&&engine.status==='playing')engine.say('ランタンを灯し直した。冒険の続きへ。','good');updateUI();save();requestAnimationFrame(render);
+  document.querySelectorAll("[data-direction]").forEach((button) =>
+    button.addEventListener("click", () => {
+      const [dx, dy] = button.dataset.direction.split(",").map(Number);
+      directionInput(dx, dy, turnOnly, true);
+    }),
+  );
+  $("modal").addEventListener("cancel", () => {
+    modalKind = "";
+    canvas.focus({ preventScroll: true });
+  });
+  $("modal").addEventListener("click", (event) => {
+    if (event.target === $("modal")) {
+      const r = $("modal").getBoundingClientRect();
+      if (
+        event.clientX < r.left ||
+        event.clientX > r.right ||
+        event.clientY < r.top ||
+        event.clientY > r.bottom
+      )
+        closeModal();
+    }
+  });
+  const bindings = {
+    ArrowUp: [0, -1],
+    ArrowDown: [0, 1],
+    ArrowLeft: [-1, 0],
+    ArrowRight: [1, 0],
+    w: [0, -1],
+    s: [0, 1],
+    a: [-1, 0],
+    d: [1, 0],
+    q: [-1, -1],
+    e: [1, -1],
+    z: [-1, 1],
+    c: [1, 1],
+  };
+  document.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if ($("modal").open) return;
+    if (event.target.matches("input,textarea,select")) return;
+    if (bindings[key]) {
+      event.preventDefault();
+      const [dx, dy] = bindings[key];
+      directionInput(dx, dy, turnOnly || event.shiftKey);
+    } else if (key === "t") {
+      event.preventDefault();
+      if (!event.repeat) toggleTurnOnly();
+    } else if (key === " " || key === "f") {
+      if (key === " " && event.target instanceof HTMLButtonElement) return;
+      event.preventDefault();
+      act(() => engine.attack());
+    } else if (key === "r") {
+      event.preventDefault();
+      act(() => engine.shoot());
+    } else if (key === "." || key === "x") {
+      event.preventDefault();
+      act(() => engine.wait());
+    } else if (key === "i") {
+      event.preventDefault();
+      if (!event.repeat) showBag();
+    } else if (key === "Enter" && event.target === canvas) {
+      event.preventDefault();
+      act(() => engine.descend());
+    } else if (key === "m") {
+      event.preventDefault();
+      if (!event.repeat) {
+        toggleMinimap();
+      }
+    } else if (key === "?" || key === "h") {
+      event.preventDefault();
+      if (!event.repeat) showHelp();
+    } else if (key === "Enter" && event.target === document.body) {
+      event.preventDefault();
+      act(() => engine.descend());
+    }
+  });
+  canvas.addEventListener("pointerdown", (event) => {
+    canvas.focus({ preventScroll: true });
+    const [dx, dy] = renderer.directionAt(event);
+    if (dx || dy) directionInput(dx, dy, turnOnly || event.shiftKey, true);
+    else if (!turnOnly && !event.shiftKey) act(() => engine.wait(), true);
+  });
+  new ResizeObserver(() => renderer.resize()).observe($("game-viewport"));
+  renderer.resize();
+  const portrait = $("portrait").getContext("2d");
+  portrait.imageSmoothingEnabled = false;
+  renderer.sprite(portrait, "hero", 8, 5, 2);
+  if (resumed && engine.status === "playing")
+    engine.say("ランタンを灯し直した。冒険の続きへ。", "good");
+  updateUI();
+  save();
+  renderer.start();
   // Read-only snapshots make integration diagnostics possible without mutating a live run.
-  window.lanternGame={snapshot:()=>JSON.parse(engine.serialize()),get status(){return engine.status;}};
+  window.lanternGame = {
+    snapshot: () => JSON.parse(engine.serialize()),
+    get status() {
+      return engine.status;
+    },
+  };
 })();

@@ -102,10 +102,10 @@ python3 -m http.server 4173 --directory dist
 ## 検証
 
 ```sh
-node --check dist/engine.js
-node --check dist/game.js
-node check-engine.cjs
+node check.cjs
 ```
+
+`check.cjs` は全JavaScriptファイルの構文と既存のゲーム検証をまとめて実行します。`check-modules.cjs` はHTMLの読込順、ブラウザとCommonJSでの状態・乱数の一致、描画時の状態不変、冒険切替、画面サイズ別のタップ座標、描画ループの重複防止を検証します。
 
 `check-identification.cjs` は個体別の装備鑑定、呪いによる交換禁止、解呪、灯札の同種識別、命名とリセット、対象選択の取消、保存・旧セーブ移行、壊れた鑑定状態の拒否を検証します。`check-equipment.cjs` は武器・盾12種の全階共通抽選、4,000回の床アイテム生成、装備込み20枠、満杯時の持ち替え・解除・矢の追加、特殊効果、保存復帰と旧装備の性能維持を検証します。
 
@@ -115,8 +115,16 @@ node check-engine.cjs
 
 - `dist/index.html`：画面と操作パネル。
 - `dist/style.css`：デスクトップ・タッチ端末の表示。
-- `dist/engine.js`：シード付き乱数、迷宮生成、ターン制ルール。
-- `dist/game.js`：Canvas描画、ドット絵、操作、効果音、自動保存。
+- `dist/data.js`：アイテム・装備・魔物・ダンジョンの定義と共通の判定関数。
+- `dist/world.js`：部屋・通路・階段・敵・アイテム・罠の生成。
+- `dist/enemies.js`：敵の行動、追跡、射撃予告、再生、転移。
+- `dist/save.js`：セーブの検証と旧形式からの移行。
+- `dist/engine.js`：シード付き乱数、持ち物・戦闘・ターン制ルール。各処理の呼出元。
+- `dist/renderer.js`：Canvas描画、ドット絵、ミニマップ、カメラ・演出・タップ座標。
+- `dist/game.js`：画面更新、操作、ダイアログ、効果音、自動保存。
+- `check.cjs`：依存ライブラリ不要の一括検証。
 - `.openai/hosting.json`：Sitesの配置先と静的配信設定。
 
 ゲーム中の読み取り専用スナップショットは `window.lanternGame.snapshot()` から取得できます。
+
+`dist/` のJavaScriptはビルド生成物ではなく、直接編集するソースです。機能追加は担当ファイルに置き、ゲーム状態の変更はエンジンの操作経由で行います。描画は状態を読み取るだけで、敵AIや生成処理はDOMに依存しません。`index.html` の `defer` 読込順を維持してください。Node.jsでは従来どおり `require('./dist/engine.js')` で依存ファイルも読み込めます。
