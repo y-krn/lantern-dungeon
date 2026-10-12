@@ -107,7 +107,7 @@
   const modalHeader=title=>`<div class="modal-header"><h2>${title}</h2><button class="close-modal" data-close aria-label="閉じる">×</button></div>`;
   function showBag(){
     if(engine.status!=='playing')return;
-    const p=engine.player,entries=engine.inventoryEntries();
+    const p=engine.player,entries=engine.inventoryEntries().sort((a,b)=>Number(b.kind==='arrow')-Number(a.kind==='arrow'));
     const equipment=[
       {name:engine.weaponName(),icon:'⚔',description:`攻撃力 ${engine.attackPower()}。剣を拾うと自動で装備を更新します。`},
       {name:engine.shieldName(),icon:'◈',description:`防御力 ${engine.defense()}。盾を拾うと自動で装備を更新します。`}
