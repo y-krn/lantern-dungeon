@@ -7,7 +7,7 @@
   pickupNotice.className='pickup-notice';pickupNotice.setAttribute('role','status');pickupNotice.setAttribute('aria-atomic','true');$('game-viewport').append(pickupNotice);
   let pickupTimer;
   function clearPickupNotice(){clearTimeout(pickupTimer);pickupNotice.textContent='';}
-  function showPickupNotice(text){clearPickupNotice();pickupNotice.textContent=`直近の入手：${text}`;pickupTimer=setTimeout(clearPickupNotice,1000);}
+  function showPickupNotice(text){clearPickupNotice();pickupNotice.textContent=text;pickupTimer=setTimeout(clearPickupNotice,1000);}
   const SAVE_KEY='lantern-dungeon-v1';
   let engine,storageAvailable=true;
   try{engine=DungeonEngine.restore(localStorage.getItem(SAVE_KEY));}catch{storageAvailable=false;}

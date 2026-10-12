@@ -340,11 +340,11 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   const start=source.indexOf('  let pickupTimer;'),end=source.indexOf('  const SAVE_KEY=',start);
   vm.createContext(context);vm.runInContext(source.slice(start,end),context);
   function advance(ms){clock+=ms;for(const[id,timer]of timers)if(timer.at<=clock){timers.delete(id);timer.fn();}}
-  context.showPickupNotice('回復草を拾った。');assert.equal(notice.textContent,'直近の入手：回復草を拾った。');
-  advance(999);assert.equal(notice.textContent,'直近の入手：回復草を拾った。');
+  context.showPickupNotice('回復草を拾った。');assert.equal(notice.textContent,'回復草を拾った。');
+  advance(999);assert.equal(notice.textContent,'回復草を拾った。');
   advance(1);assert.equal(notice.textContent,'');
   context.showPickupNotice('焼きたてパンを拾った。');advance(500);
-  context.showPickupNotice('42Gを拾った。');advance(500);assert.equal(notice.textContent,'直近の入手：42Gを拾った。');
+  context.showPickupNotice('42Gを拾った。');advance(500);assert.equal(notice.textContent,'42Gを拾った。');
   advance(500);assert.equal(notice.textContent,'');
   context.showPickupNotice('木の矢を拾った。');context.clearPickupNotice();
   assert.equal(notice.textContent,'');assert.equal(timers.size,0);
