@@ -659,6 +659,10 @@
     engine.say("ランタンを灯し直した。冒険の続きへ。", "good");
   updateUI();
   save();
+  window.addEventListener("pagehide", save);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") save();
+  });
   renderer.start();
   // Read-only snapshots make integration diagnostics possible without mutating a live run.
   window.lanternGame = {

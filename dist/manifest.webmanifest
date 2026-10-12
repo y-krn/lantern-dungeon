@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "灯りの迷宮 — 小さな商人の大冒険",
+  "short_name": "灯りの迷宮",
+  "description": "一歩ごとに世界が動く、ターン制の迷宮探索ゲーム。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#15151f",
+  "theme_color": "#15151f",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
