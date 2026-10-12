@@ -5,16 +5,16 @@
   const ITEMS = {
     bread: {name:'焼きたてパン',icon:'◒',description:'満腹度を50回復。お腹が空く前にひと休み。'},
     potion: {name:'回復草',icon:'✿',description:'体力を25回復。ピンチの前に使いましょう。'},
-    scroll: {name:'雷の巻物',icon:'▤',description:'見えている敵すべてに18ダメージ。'},
-    map: {name:'地図の巻物',icon:'▧',description:'この階の地形と階段の場所を明らかにします。'},
+    scroll: {name:'雷光の灯札',icon:'✧',description:'かざすと灯りが雷に変わり、見えている敵すべてに18ダメージ。'},
+    map: {name:'道しるべの灯札',icon:'✧',description:'かざすと光の道筋が浮かび、この階の地形と階段の場所を明らかにします。'},
     arrow: {name:'木の矢',icon:'➶',description:'装備して「矢を放つ」で向いている方向へ発射。1本消費し、最初の敵に12ダメージ。'},
-    identify: {name:'インパスの巻物',icon:'▤',description:'選んだ持ち物1つを鑑定します。巻物は同じ種類すべて、剣・盾はその1つの補正値と呪いが判明します。'},
-    uncurse: {name:'シャナクの巻物',icon:'▤',description:'装備中の剣・盾の呪いをすべて解きます。持ち物にある未装備の品には効きません。'},
+    identify: {name:'真名の灯札',icon:'✧',description:'ランタンの光で、選んだ持ち物1つの正体を照らします。灯札は同じ種類すべて、剣・盾はその1つの補正値と呪いが判明します。'},
+    uncurse: {name:'清めの灯札',icon:'✧',description:'清らかな灯りで、装備中の剣・盾の呪いをすべて解きます。持ち物にある未装備の品には効きません。'},
     weapon: {name:'剣',icon:'⚔',description:'装備すると補正値と呪いが判明します。呪われた装備は外せません。'},
     shield: {name:'盾',icon:'◈',description:'装備すると補正値と呪いが判明します。呪われた装備は外せません。'}
   };
   const SCROLLS=['scroll','map','identify','uncurse'];
-  const SCROLL_NAMES=['赤い巻物','青い巻物','黄色い巻物','緑の巻物'];
+  const SCROLL_NAMES=['赤い灯札','青い灯札','黄色い灯札','緑の灯札'];
   const EQUIPMENT_NAMES={weapon:['木の剣','銅の剣','鉄の剣','星鉄の剣'],shield:['旅人の盾','銅の盾','鉄の盾','星鉄の盾']};
   const itemKind=item=>typeof item==='string'?item:item?.kind;
   const isEquipment=item=>!!item&&typeof item==='object'&&Object.hasOwn(EQUIPMENT_NAMES,item.kind);
@@ -61,7 +61,7 @@
   for(const [key,hunger]of [['jadeBat',3],['jadeGhost',4],['lanternMoth',3],['eclipseMoth',5]])Object.assign(MONSTERS[key],{trait:'hunger',hunger,feature:`近接攻撃が当たると、体力に加えて満腹度を${hunger}減らします。`,counter:'矢で先に倒すか、パンを温存して接近戦を短くしましょう。'});
   Object.assign(MONSTERS.goldGhost,{trait:'regen',regen:3,feature:'毎ターンHPを3回復します。',counter:'矢と剣を組み合わせ、短いターンで倒しましょう。'});
   Object.assign(MONSTERS.abyssGhost,{trait:'blink',feature:'攻撃を受けると、次の行動で同じ部屋の3マス以内へ転移します。転移中は攻撃しません。',counter:'転移先を確認して矢で追撃。通路では転移できません。'});
-  for(const key of ['ironBeetle','cobaltBeetle']){const armor=key==='ironBeetle'?2:4;Object.assign(MONSTERS[key],{trait:'armor',armor,feature:`剣と矢のダメージを${armor}軽減します。受けるダメージは最低1です。`,counter:'雷の巻物は殻の軽減を無視できます。'});}
+  for(const key of ['ironBeetle','cobaltBeetle']){const armor=key==='ironBeetle'?2:4;Object.assign(MONSTERS[key],{trait:'armor',armor,feature:`剣と矢のダメージを${armor}軽減します。受けるダメージは最低1です。`,counter:'雷光の灯札は殻の軽減を無視できます。'});}
   for(const key of ['thornPlant','moonPlant']){const range=key==='thornPlant'?4:5;Object.assign(MONSTERS[key],{trait:'ranged',stationary:true,range,feature:`移動せず、直線${range}マス以内の1マスを狙って次のターンに攻撃します。`,counter:'射線を外して近づくか、予告に合わせて横へ移動しましょう。'});}
   for(const key of ['coinMimic','starMimic'])Object.assign(MONSTERS[key],{trait:'mimic',feature:'金貨の山に化けています。隣接すると正体を現し、そのターンは攻撃しません。攻撃されると即座に正体を現します。',counter:'正体を見たら距離を取り、矢で迎撃。反撃前の1ターンを使いましょう。'});
   for(const key of ['starGuardian','stoneGolem','obsidianGolem'])Object.assign(MONSTERS[key],{trait:'windup',cadence:key==='starGuardian'?1:2,armor:key==='obsidianGolem'?4:0,feature:`隣の1マスを狙い、次のターンに強打します。${key==='starGuardian'?'': '移動は2ターンに1歩です。'}${key==='obsidianGolem'?'剣と矢のダメージを4軽減します。':''}`,counter:'予告のマスから移動し、空振りの隙に攻撃しましょう。'});
@@ -113,7 +113,7 @@
     itemDescription(item){
       const kind=itemKind(item);
       if(isEquipment(item))return item.identified?`${kind==='weapon'?'攻撃':'防御'}補正 ${item.rank*(kind==='weapon'?3:2)+item.bonus}。${item.cursed?'呪われています。装備すると外せません。':'呪いはありません。'}`:ITEMS[kind].description;
-      return SCROLLS.includes(kind)&&!this.identification.known.includes(kind)?'効果はまだ分かりません。読むか、インパスの巻物で鑑定すると、同じ種類の巻物も識別されます。':ITEMS[kind]?.description||'';
+      return SCROLLS.includes(kind)&&!this.identification.known.includes(kind)?'効果はまだ分かりません。かざすか、真名の灯札で鑑定すると、同じ種類の灯札も識別されます。':ITEMS[kind]?.description||'';
     }
     nameScroll(index,name){
       const kind=itemKind(this.player.bag[index]);
@@ -326,7 +326,7 @@
       }
       if(kind==='bread'){const before=p.hunger;p.hunger=Math.min(100,p.hunger+50);this.say(`パンを食べた。満腹度 +${p.hunger-before}%`,'good');this.effect('heal',p.x,p.y,'満腹');}
       if(kind==='potion'){const before=p.hp;p.hp=Math.min(p.maxHp,p.hp+25);this.say(`回復草を使った。体力 +${p.hp-before}`,'good');this.effect('heal',p.x,p.y,p.hp-before);}
-      if(kind==='scroll'){this.say('雷の巻物を読んだ！');for(const e of this.enemies)if(e.hp>0&&this.visible[this.key(e.x,e.y)])this.hit(e,18,'magic');this.effect('lightning',p.x,p.y,0);}
+      if(kind==='scroll'){this.say('雷光の灯札をかざした！');for(const e of this.enemies)if(e.hp>0&&this.visible[this.key(e.x,e.y)])this.hit(e,18,'magic');this.effect('lightning',p.x,p.y,0);}
       if(kind==='map'){this.seen.fill(true);this.say('迷宮の地図が浮かび上がった。階段はミニマップの水色の印。','good');this.effect('map',p.x,p.y,0);}
       if(kind==='arrow'){const[dx,dy]=p.facing;let x=p.x,y=p.y,hit=false;for(let i=0;i<10;i++){if(!this.canStep(x,y,dx,dy))break;x+=dx;y+=dy;const e=this.enemyAt(x,y);if(e){this.hit(e,12);hit=true;break;}}if(!hit)this.say('木の矢を放った。敵には当たらなかった。');this.effect('arrow',x,y,0);}
       p.bag.splice(index,1);if(kind==='arrow'&&!this.arrowCount())p.ammo=null;this.finishTurn();return true;
@@ -402,6 +402,16 @@
       if(legacy)this.initIdentification(true);
       const info=this.identification;
       if(!info||typeof info.appearances!=='object'||!info.appearances||!Array.isArray(info.known)||!info.names||typeof info.names!=='object'||Array.isArray(info.names))return false;
+      // Only built-in legacy labels change; player-written notes keep their original text.
+      for(const kind of SCROLLS){
+        const appearance=info.appearances[kind];
+        if(['赤い巻物','青い巻物','黄色い巻物','緑の巻物'].includes(appearance))info.appearances[kind]=appearance.replace('巻物','灯札');
+      }
+      const legacyNames={'インパスの巻物':'真名の灯札','シャナクの巻物':'清めの灯札','雷の巻物':'雷光の灯札','地図の巻物':'道しるべの灯札','赤い巻物':'赤い灯札','青い巻物':'青い灯札','黄色い巻物':'黄色い灯札','緑の巻物':'緑の灯札'};
+      for(const entry of this.log)if(typeof entry?.text==='string'){
+        for(const [oldName,newName]of Object.entries(legacyNames))entry.text=entry.text.replaceAll(oldName,newName);
+        entry.text=entry.text.replaceAll('灯札を読んだ','灯札をかざした');
+      }
       if(Object.keys(info.appearances).length!==SCROLLS.length||SCROLLS.some(kind=>!SCROLL_NAMES.includes(info.appearances[kind]))||new Set(Object.values(info.appearances)).size!==SCROLLS.length||info.known.some(kind=>!SCROLLS.includes(kind))||new Set(info.known).size!==info.known.length||Object.entries(info.names).some(([kind,name])=>!SCROLLS.includes(kind)||typeof name!=='string'||name.length>20))return false;
       if(p.equipment==null){
         if(!legacy)return false;

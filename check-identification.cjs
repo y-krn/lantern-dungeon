@@ -46,9 +46,9 @@ function quiet(seed=42,dungeon='depths'){
   assert(game.itemName('map').includes('地図？'));assert.equal(game.identification.known.length,0);
   const saved=game.serialize(),restored=DungeonEngine.restore(saved);assert(restored);assert.equal(restored.serialize(),saved);
   assert.equal(restored.itemName('map'),game.itemName('map'));
-  assert(game.use(3,1));assert.equal(p.bag.length,3);assert.equal(game.itemName(p.bag[0]),'地図の巻物');
-  assert.equal(game.itemName(p.bag[1]),'地図の巻物');assert(game.itemName('scroll').includes('未識別'));
-  game.floor=2;game.generateFloor();assert.equal(game.itemName('map'),'地図の巻物');
+  assert(game.use(3,1));assert.equal(p.bag.length,3);assert.equal(game.itemName(p.bag[0]),'道しるべの灯札');
+  assert.equal(game.itemName(p.bag[1]),'道しるべの灯札');assert(game.itemName('scroll').includes('未識別'));
+  game.floor=2;game.generateFloor();assert.equal(game.itemName('map'),'道しるべの灯札');
   assert.equal(game.identification.appearances.map,original.replace('（未識別）',''));
   const again=new DungeonEngine(42,'depths',true);assert.equal(again.identification.known.length,0);
   assert.deepEqual(again.identification.names,{});assert.equal(again.itemName('map'),original);
@@ -58,8 +58,8 @@ function quiet(seed=42,dungeon='depths'){
 // Reading without an effective target still identifies a non-targeted scroll.
 {
   const game=quiet(),p=game.player;p.bag=['scroll','scroll','uncurse'];
-  assert(game.use(0));assert.equal(game.itemName(p.bag[0]),'雷の巻物');assert.equal(game.turn,1);
-  assert(game.use(1));assert.equal(game.itemName('uncurse'),'シャナクの巻物');
+  assert(game.use(0));assert.equal(game.itemName(p.bag[0]),'雷光の灯札');assert.equal(game.turn,1);
+  assert(game.use(1));assert.equal(game.itemName('uncurse'),'清めの灯札');
   p.bag=['identify','bread'];const saved=game.serialize();
   assert.equal(game.use(0),false);assert.equal(game.use(0,0),false);assert.equal(game.serialize(),saved);
   assert(game.use(0,1));assert.deepEqual(p.bag,['bread']);
@@ -84,6 +84,20 @@ function quiet(seed=42,dungeon='depths'){
   assert.equal(restored.attackPower(),20);assert.equal(restored.defense(),9);
   assert.deepEqual(restored.identification.known,scrolls);assert(!restored.player.equipment.weapon.cursed);
   assert.equal(restored.items[0].identified,false);assert.equal(restored.items[0].bonus,0);
+  const raw=restored.serialize();assert.equal(DungeonEngine.restore(raw).serialize(),raw);
+}
+// Old built-in names migrate while notes, inventory, curses and RNG remain intact.
+{
+  const game=quiet(),saved=JSON.parse(game.serialize()),state=saved.state;
+  state.player.bag=['identify','uncurse',gear('weapon',true,-1)];
+  state.identification.known=['identify'];state.identification.names.uncurse='解呪？';
+  for(const kind of scrolls)state.identification.appearances[kind]=state.identification.appearances[kind].replace('灯札','巻物');
+  state.log=[{text:'インパスの巻物とシャナクの巻物を拾った。',type:'normal',turn:0},{text:'雷の巻物を読んだ！',type:'normal',turn:0}];
+  const restored=DungeonEngine.restore(JSON.stringify(saved));assert(restored);
+  assert.deepEqual(restored.player,state.player);assert.equal(restored.rng,state.rng);assert.equal(restored.turn,state.turn);
+  assert.deepEqual(restored.identification.known,['identify']);assert.equal(restored.identification.names.uncurse,'解呪？');
+  assert.equal(restored.itemName('identify'),'真名の灯札');assert(restored.itemName('uncurse').includes('灯札'));
+  assert.equal(restored.log[0].text,'真名の灯札と清めの灯札を拾った。');assert.equal(restored.log[1].text,'雷光の灯札をかざした！');
   const raw=restored.serialize();assert.equal(DungeonEngine.restore(raw).serialize(),raw);
 }
 // Reject corrupt appearance maps, notes and equipment instead of silently losing saves.
