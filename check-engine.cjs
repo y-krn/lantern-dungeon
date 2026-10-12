@@ -2,6 +2,39 @@ const assert = require('node:assert/strict');
 require('./dist/engine.js');
 const {W,H,DIRS,ITEMS}=DungeonData;
 
+// A species keeps its identity and combat stats across both dungeons and saves.
+{
+  const {MONSTERS}=DungeonData,encountered=new Set(),statsByName=new Map();
+  for(const dungeon of ['tutorial','depths'])for(let seed=1;seed<=100;seed++){
+    const game=new DungeonEngine(seed,dungeon,true);
+    for(let floor=1;floor<=game.maxFloor();floor++){
+      game.floor=floor;game.generateFloor();
+      for(const e of game.enemies){
+        const m=MONSTERS[e.species];assert(m);encountered.add(e.species);
+        const stats=[e.maxHp,e.attack,e.exp];
+        if(statsByName.has(e.name))assert.deepEqual(stats,statsByName.get(e.name));else statsByName.set(e.name,stats);
+        assert.equal(e.name,m.name);assert.equal(e.type,m.type);assert.equal(e.hp,m.hp);
+      }
+      const raw=game.serialize(),restored=DungeonEngine.restore(raw);assert(restored);assert.equal(restored.serialize(),raw);
+    }
+  }
+  assert.deepEqual([...encountered].sort(),Object.keys(MONSTERS).sort());
+  for(const dungeon of ['tutorial','depths']){
+    const game=new DungeonEngine(71,dungeon,true);game.floor=dungeon==='tutorial'?5:30;game.generateFloor();
+    const saved=JSON.parse(game.serialize()),legacy=saved.state.enemies[0];
+    const species=legacy.species;delete legacy.species;
+    legacy.name=legacy.type==='slime'?'苔スライム':legacy.type==='bat'?'洞窟コウモリ':'灯りの亡霊';
+    legacy.maxHp+=4;legacy.hp=legacy.maxHp-5;legacy.attack+=2;
+    const restored=DungeonEngine.restore(JSON.stringify(saved));assert(restored);
+    assert.equal(restored.enemies[0].species,species);assert.equal(restored.enemies[0].hp,MONSTERS[species].hp-5);
+    const again=restored.serialize();assert.equal(DungeonEngine.restore(again).serialize(),again);
+    legacy.hp=0;assert.equal(DungeonEngine.restore(JSON.stringify(saved)).enemies[0].hp,0);
+    legacy.hp=1;assert.equal(DungeonEngine.restore(JSON.stringify(saved)).enemies[0].hp,1);
+    legacy.species='unknown';assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);
+  }
+  console.log('PASS: all 15 species encountered in 4,000 floors; same-name stats fixed across dungeons; exact save round-trip and damaged/dead legacy migration checked.');
+}
+
 {
   const game=new DungeonEngine(42),p=game.player;
   p.hunger=0;p.hp=1;game.turn=27;

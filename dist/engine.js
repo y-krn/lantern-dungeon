@@ -17,6 +17,27 @@
     depths:{name:'深淵の迷宮',label:'高難度',floors:30,treasure:'深淵のランタン',guardian:'深淵の番人',bossHp:180,bossAttack:34,bossExp:100,names:DEPTH_NAMES}
   };
   const LAYOUT_NAMES={branch:'枝分かれの迷宮',ring:'巡る回廊',hall:'大広間の迷宮'};
+  const MONSTERS={
+    mossSlime:{type:'slime',tier:0,name:'苔スライム',hp:9,attack:3,exp:3,color:'苔色',colors:['#4e6658','#869374','#a4c69b']},
+    amberSlime:{type:'slime',tier:1,name:'琥珀スライム',hp:15,attack:6,exp:5,color:'琥珀色',colors:['#8f482c','#da8b45','#ffd293']},
+    caveBat:{type:'bat',tier:1,name:'洞窟コウモリ',hp:17,attack:7,exp:7,color:'紫',colors:['#564764','#87759b','#d49bba']},
+    emberBat:{type:'bat',tier:2,name:'紅翼コウモリ',hp:25,attack:10,exp:9,color:'赤',colors:['#83354a','#d85d72','#ffa899']},
+    frostBat:{type:'bat',tier:3,name:'氷翼コウモリ',hp:35,attack:14,exp:11,color:'水色',colors:['#365e91','#6cb9e6','#c0edff']},
+    thunderBat:{type:'bat',tier:4,name:'雷翼コウモリ',hp:45,attack:18,exp:14,color:'黄',colors:['#8d6933','#e1bd54','#fff2a0']},
+    jadeBat:{type:'bat',tier:5,name:'翡翠コウモリ',hp:55,attack:22,exp:16,color:'翡翠色',colors:['#286961','#56b89a','#b2f1cf']},
+    obsidianBat:{type:'bat',tier:6,name:'黒曜コウモリ',hp:69,attack:27,exp:20,color:'銀灰色',colors:['#41485f','#8c99ad','#d4deed']},
+    lanternGhost:{type:'ghost',tier:2,name:'灯りの亡霊',hp:27,attack:11,exp:11,color:'薄桃色',colors:['#675777','#87759b','#d49bba']},
+    frostGhost:{type:'ghost',tier:3,name:'氷灯の亡霊',hp:37,attack:15,exp:13,color:'水色',colors:['#365e91','#6cb9e6','#c0edff']},
+    goldGhost:{type:'ghost',tier:4,name:'黄金の亡霊',hp:47,attack:19,exp:16,color:'金色',colors:['#8d6933','#e1bd54','#fff2a0']},
+    jadeGhost:{type:'ghost',tier:5,name:'翡翠の亡霊',hp:57,attack:23,exp:18,color:'翡翠色',colors:['#286961','#56b89a','#b2f1cf']},
+    abyssGhost:{type:'ghost',tier:6,name:'深淵の亡霊',hp:71,attack:28,exp:22,color:'銀紫色',colors:['#53406d','#a494cc','#e7d9ff']},
+    starGuardian:{type:'guardian',tier:4,name:'星の番人',hp:65,attack:14,exp:30,color:'金色',colors:['#76563c','#b99a58','#ffe7a6']},
+    abyssGuardian:{type:'guardian',tier:6,name:'深淵の番人',hp:180,attack:34,exp:100,color:'青紫色',colors:['#353e75','#7f8de0','#ccecff']}
+  };
+  const MONSTER_POOLS=[['mossSlime'],['amberSlime','caveBat'],['emberBat','lanternGhost'],['frostBat','frostGhost'],['thunderBat','goldGhost'],['jadeBat','jadeGhost'],['obsidianBat','abyssGhost']];
+  const MONSTER_MARKS=['無印','横線','菱形','山形','十字','王冠','星形'];
+  function monsterTier(floor,dungeon){const depth=floor+(dungeon==='depths'?2:0);return depth<3?0:depth<6?1:depth<11?2:depth<16?3:depth<21?4:depth<26?5:6;}
+  function monsterStats(species){const m=MONSTERS[species];return{species,type:m.type,name:m.name,maxHp:m.hp,attack:m.attack,exp:m.exp};}
   class DungeonEngine {
     constructor(seed = Date.now(), dungeon = 'tutorial', tutorialCleared = false) {
       if(!Object.hasOwn(DUNGEONS,dungeon)||dungeon==='depths'&&tutorialCleared!==true)throw new RangeError('Dungeon is unknown or locked');
@@ -127,7 +148,7 @@
       this.stairs={x:this.int(exitRoom.x,exitRoom.x+exitRoom.w-1),y:this.int(exitRoom.y,exitRoom.y+exitRoom.h-1)};
       const used=new Set([this.key(this.player.x,this.player.y),this.key(this.stairs.x,this.stairs.y)]);
       const emptySpot=(rooms=this.rooms,avoidEntrances=false)=>{for(let i=0;i<500;i++){const r=rooms[this.int(0,rooms.length-1)],x=this.int(r.x,r.x+r.w-1),y=this.int(r.y,r.y+r.h-1),k=this.key(x,y);if(!used.has(k)&&(!avoidEntrances||!this.isRoomEntrance(x,y))){used.add(k);return{x,y};}}return null;};
-      const hard=this.dungeon==='depths',info=this.dungeonInfo();
+      const hard=this.dungeon==='depths';
       const guardianSpot=this.floor===this.maxFloor()?emptySpot([exitRoom]):null;
       const deadEnds=otherRooms.filter(r=>r!==exitRoom&&this.roomDoorCount(r)===1);
       const houseRoom=this.floor>=4&&this.floor<this.maxFloor()&&deadEnds.length&&this.random()<(hard ? .2 : .15)?deadEnds[this.int(0,deadEnds.length-1)]:null;
@@ -146,12 +167,12 @@
       const count=4+Math.floor(this.floor*.75)+(hard?2:0);
       for(let i=0;i<count;i++){
         const pos=i<houseSpots.length?houseSpots[i]:emptySpot(ordinaryRooms);if(!pos)continue;
-        const type=this.floor<3?'slime':this.floor<6?(this.random()<.45?'bat':'slime'):(this.random()<.5?'ghost':'bat');
-        const bonus=type==='ghost'?4:type==='bat'?2:0;
-        this.enemies.push({...pos,id:i,type,name:type==='slime'?'苔スライム':type==='bat'?'洞窟コウモリ':'灯りの亡霊',hp:7+this.floor*2+bonus+(hard?3:0),maxHp:7+this.floor*2+bonus+(hard?3:0),attack:2+Math.ceil(this.floor*.8)+bonus/2+(hard?1:0),exp:3+Math.floor(this.floor/2)+bonus,awake:false,house:i<houseSpots.length});
+        const tier=monsterTier(this.floor,this.dungeon),pool=MONSTER_POOLS[tier];
+        const species=tier===0?pool[0]:tier===1?(this.random()<.45?pool[1]:pool[0]):(this.random()<.5?pool[1]:pool[0]);
+        this.enemies.push({...pos,id:i,...monsterStats(species),hp:MONSTERS[species].hp,awake:false,house:i<houseSpots.length});
       }
       for(let i=0;i<Math.min(this.floor+(hard?2:0),hard?8:5);i++){const pos=emptySpot(ordinaryRooms,true);if(pos)this.traps.push({...pos,found:false,spent:false});}
-      if(guardianSpot)this.enemies.push({...guardianSpot,id:99,type:'guardian',name:info.guardian,hp:info.bossHp,maxHp:info.bossHp,attack:info.bossAttack,exp:info.bossExp,awake:true});
+      if(guardianSpot){const species=hard?'abyssGuardian':'starGuardian';this.enemies.push({...guardianSpot,id:99,...monsterStats(species),hp:MONSTERS[species].hp,awake:true});}
       this.reveal();
     }
     lineOfSight(x0,y0,x1,y1){
@@ -228,7 +249,17 @@
     weaponName(){return ['木の剣','銅の剣','鉄の剣','星鉄の剣'][Math.min(3,this.player.weapon)]+(this.player.weapon>3?` +${this.player.weapon-3}`:'');}
     shieldName(){return ['旅人の盾','銅の盾','鉄の盾','星鉄の盾'][Math.min(3,this.player.shield)]+(this.player.shield>3?` +${this.player.shield-3}`:'');}
     serialize(){const{effects,...state}=this;return JSON.stringify({version:1,state});}
-    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;const dungeon=s?.dungeon??'tutorial';if(!Object.hasOwn(DUNGEONS,dungeon)||(s?.tutorialCleared!=null&&typeof s.tutorialCleared!=='boolean')||(dungeon==='depths'&&s.tutorialCleared!==true))return null;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>DUNGEONS[dungeon].floors||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.dungeon=dungeon;game.tutorialCleared=s.tutorialCleared===true||(dungeon==='tutorial'&&s.status==='won'&&s.floor===10);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.traps=game.traps.filter(t=>!game.isRoomEntrance(t.x,t.y));game.effects=[];game.reveal();return game;}catch{return null;}}
+    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;const dungeon=s?.dungeon??'tutorial';if(!Object.hasOwn(DUNGEONS,dungeon)||(s?.tutorialCleared!=null&&typeof s.tutorialCleared!=='boolean')||(dungeon==='depths'&&s.tutorialCleared!==true))return null;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>DUNGEONS[dungeon].floors||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.dungeon=dungeon;game.tutorialCleared=s.tutorialCleared===true||(dungeon==='tutorial'&&s.status==='won'&&s.floor===10);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.traps=game.traps.filter(t=>!game.isRoomEntrance(t.x,t.y));for(const e of game.enemies){
+        if(e.species==null){
+          if(!Number.isFinite(e.hp)||!Number.isFinite(e.maxHp))return null;
+          const tier=monsterTier(game.floor,dungeon);
+          e.species=e.type==='guardian'?(dungeon==='depths'?'abyssGuardian':'starGuardian'):e.type==='slime'?(tier===0?'mossSlime':'amberSlime'):Object.keys(MONSTERS).find(key=>MONSTERS[key].type===e.type&&MONSTERS[key].tier===Math.max(e.type==='ghost'?2:1,tier));
+          if(!e.species)return null;
+          const damage=Math.max(0,e.maxHp-e.hp),alive=e.hp>0;
+          Object.assign(e,monsterStats(e.species));e.hp=alive?Math.max(1,e.maxHp-damage):e.hp;
+        }else if(!Object.hasOwn(MONSTERS,e.species)||e.type!==MONSTERS[e.species].type||e.name!==MONSTERS[e.species].name||e.maxHp!==MONSTERS[e.species].hp||e.attack!==MONSTERS[e.species].attack||e.exp!==MONSTERS[e.species].exp||!Number.isFinite(e.hp)||e.hp>e.maxHp)return null;
+      }
+      game.effects=[];game.reveal();return game;}catch{return null;}}
   }
-  Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES,LAYOUT_NAMES,DUNGEONS}});
+  Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES,LAYOUT_NAMES,DUNGEONS,MONSTERS,MONSTER_POOLS,MONSTER_MARKS,monsterTier}});
 })(typeof window!=='undefined'?window:globalThis);
