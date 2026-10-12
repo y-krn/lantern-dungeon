@@ -61,10 +61,10 @@
 .direction-mode>span{font-size:10px;line-height:1.6;color:#c4b6cb}
 @media(max-width:800px){.facing-label{top:46px;font-size:10px}}
 @media(max-width:800px) and (orientation:portrait){
-  .control-deck{grid-template-rows:auto auto}
+  .control-deck{grid-template-rows:auto auto;padding:10px max(16px,env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
   .direction-mode{grid-column:1/-1;grid-row:1;border:0;padding:0;gap:10px}
   .play-area .touch-controls,.action-bar{grid-row:2}
-  .canvas-wrap{height:clamp(180px,calc(100svh - 336px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),460px);height:clamp(180px,calc(100dvh - 336px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),460px)}
+  .canvas-wrap{height:clamp(180px,calc(100svh - 390px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),406px);height:clamp(180px,calc(100dvh - 390px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),406px)}
 }
 
 @media(max-width:800px) and (max-height:650px) and (orientation:portrait){
