@@ -4,7 +4,7 @@
   const $=id=>document.getElementById(id);
   const canvas=$('game'),ctx=canvas.getContext('2d'),mini=$('minimap').getContext('2d');
   const pickupNotice=document.createElement('div');
-  pickupNotice.className='pickup-notice';pickupNotice.setAttribute('role','status');pickupNotice.setAttribute('aria-atomic','true');$('canvas-wrap').append(pickupNotice);
+  pickupNotice.className='pickup-notice';pickupNotice.setAttribute('role','status');pickupNotice.setAttribute('aria-atomic','true');$('game-viewport').append(pickupNotice);
   let pickupTimer;
   function clearPickupNotice(){clearTimeout(pickupTimer);pickupNotice.textContent='';}
   function showPickupNotice(text){clearPickupNotice();pickupNotice.textContent=`直近の入手：${text}`;pickupTimer=setTimeout(clearPickupNotice,1000);}
@@ -101,7 +101,7 @@
     mini.fillStyle='#ffe2a1';mini.fillRect(engine.player.x*sx,engine.player.y*sy,4,4);
   }
   function toggleMinimap(){minimapVisible=!minimapVisible;$('minimap-content').hidden=!minimapVisible;$('minimap-toggle').setAttribute('aria-expanded',String(minimapVisible));}
-  function resize(){const rect=$('canvas-wrap').getBoundingClientRect();canvas.width=880;canvas.height=Math.round(880*rect.height/rect.width);tile=rect.width<500?48:40;camera.x=0;}
+  function resize(){const rect=$('game-viewport').getBoundingClientRect();canvas.width=880;canvas.height=Math.round(880*rect.height/rect.width);tile=rect.width<500?48:40;camera.x=0;}
   function closeModal(){$('modal').close();modalKind='';canvas.focus({preventScroll:true});}
   function openModal(kind,html){modalKind=kind;$('modal-content').innerHTML=html;if(!$('modal').open)$('modal').showModal();$('modal-content').querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',closeModal));}
   const modalHeader=title=>`<div class="modal-header"><h2>${title}</h2><button class="close-modal" data-close aria-label="閉じる">×</button></div>`;
@@ -139,7 +139,7 @@
     else if(key==='Enter'&&event.target===document.body){event.preventDefault();act(()=>engine.descend());}
   });
   canvas.addEventListener('pointerdown',event=>{canvas.focus({preventScroll:true});const r=canvas.getBoundingClientRect(),worldX=((event.clientX-r.left)/r.width*canvas.width-canvas.width/2)/tile+camera.x,worldY=((event.clientY-r.top)/r.height*canvas.height-canvas.height/2)/tile+camera.y;const dx=Math.sign(Math.floor(worldX)-engine.player.x),dy=Math.sign(Math.floor(worldY)-engine.player.y);if(dx||dy)directionInput(dx,dy,turnOnly||event.shiftKey,true);else if(!turnOnly&&!event.shiftKey)act(()=>engine.wait(),true);});
-  new ResizeObserver(resize).observe($('canvas-wrap'));resize();
+  new ResizeObserver(resize).observe($('game-viewport'));resize();
   const portrait=$('portrait').getContext('2d');portrait.imageSmoothingEnabled=false;sprite(portrait,'hero',8,5,2);
   if(resumed&&engine.status==='playing')engine.say('ランタンを灯し直した。冒険の続きへ。','good');updateUI();save();requestAnimationFrame(render);
   // Read-only snapshots make integration diagnostics possible without mutating a live run.
