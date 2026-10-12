@@ -55,3 +55,16 @@
   .secondary-actions button{min-height:44px;font-size:11px}
   dialog{max-height:calc(100svh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
 }
+
+.facing-label{position:absolute;top:13px;left:12px;padding:5px 9px;border:1px solid #e3bc7e66;border-radius:4px;background:#142020ee;color:#ffe2a1;font-size:11px;pointer-events:none}
+.direction-mode{display:flex;align-items:center;gap:12px;padding:8px 12px;background:#20212a;border-top:1px solid var(--border)}
+.direction-mode button{min-height:44px;padding:8px 12px;border:1px solid #817052;border-radius:6px;background:#282430;color:var(--gold);white-space:nowrap;touch-action:manipulation}
+.direction-mode button[aria-pressed=true]{background:#dabb85;color:#282028;border-color:#e5c791}
+.direction-mode>span{font-size:10px;line-height:1.6;color:#c4b6cb}
+@media(max-width:800px){.facing-label{top:46px;font-size:10px}}
+@media(max-width:800px) and (orientation:portrait){
+  .control-deck{grid-template-rows:auto auto}
+  .direction-mode{grid-column:1/-1;grid-row:1;border:0;padding:0;gap:10px}
+  .play-area .touch-controls,.action-bar{grid-row:2}
+  .canvas-wrap{height:clamp(180px,calc(100svh - 336px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),460px);height:clamp(180px,calc(100dvh - 336px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),460px)}
+}

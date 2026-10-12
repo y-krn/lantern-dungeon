@@ -156,9 +156,13 @@
       for(const item of this.items)if(this.visible[this.key(item.x,item.y)])item.discovered=true;
       for(const enemy of this.enemies)if(enemy.hp>0&&this.visible[this.key(enemy.x,enemy.y)])enemy.lastSeen={x:enemy.x,y:enemy.y};
     }
-    move(dx,dy){
+    face(dx,dy){
       if(this.status!=='playing'||!DIRS.some(d=>d[0]===dx&&d[1]===dy))return false;
-      this.player.facing=[dx,dy];if(!this.canStep(this.player.x,this.player.y,dx,dy))return false;
+      this.player.facing=[dx,dy];return true;
+    }
+    move(dx,dy){
+      if(!this.face(dx,dy))return false;
+      if(!this.canStep(this.player.x,this.player.y,dx,dy))return false;
       const x=this.player.x+dx,y=this.player.y+dy,enemy=this.enemyAt(x,y);
       if(enemy){this.hit(enemy,this.attackPower()+this.int(-1,2));}else{this.player.x=x;this.player.y=y;this.collect();this.triggerTrap();}
       this.finishTurn();return true;

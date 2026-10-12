@@ -2,6 +2,43 @@ const assert = require('node:assert/strict');
 require('./dist/engine.js');
 const {W,H,DIRS,ITEMS}=DungeonData;
 
+{
+  const game=new DungeonEngine(42),p=game.player;
+  p.hunger=0;p.hp=1;game.turn=27;
+  game.items=[{x:p.x,y:p.y,kind:'bread',amount:1}];
+  game.traps=[{x:p.x,y:p.y,found:false,spent:false}];
+  game.enemies=[{x:p.x+1,y:p.y,id:1,type:'slime',hp:30,maxHp:30,attack:3,awake:true}];
+  game.tiles[game.key(p.x-1,p.y)]=0;game.reveal();
+  for(const[dx,dy]of DIRS){
+    const expected=JSON.parse(game.serialize());expected.state.player.facing=[dx,dy];
+    assert(game.face(dx,dy));
+    assert.deepEqual(JSON.parse(game.serialize()),expected,'Facing changes no other game state, even beside walls, enemies, items and traps');
+    assert.deepEqual(DungeonEngine.restore(game.serialize()).player.facing,[dx,dy]);
+  }
+  for(const direction of [[0,0],[2,0],[0,-2],[NaN,1],['1',0]]){
+    const saved=game.serialize();assert.equal(game.face(...direction),false);assert.equal(game.serialize(),saved);
+  }
+  for(const status of ['dead','won']){
+    game.status=status;const saved=game.serialize();assert.equal(game.face(0,-1),false);assert.equal(game.serialize(),saved);
+  }
+}
+for(const[dx,dy]of DIRS){
+  for(const action of ['attack','shoot']){
+    const game=new DungeonEngine(42),p=game.player,start={x:p.x,y:p.y};
+    game.items=[];game.traps=[];
+    for(let y=p.y-2;y<=p.y+2;y++)for(let x=p.x-2;x<=p.x+2;x++)game.tiles[game.key(x,y)]=1;
+    const distance=action==='shoot'?2:1;
+    const target={x:p.x+dx*distance,y:p.y+dy*distance,id:1,type:'slime',name:'苔スライム',hp:100,maxHp:100,attack:1,exp:1};
+    game.enemies=[target];p.bag=['arrow'];p.ammo='arrow';game.reveal();
+    assert(game.face(dx,dy));assert.equal(game.turn,0);assert(game[action]());
+    assert(target.hp<100,`${action} follows facing ${dx},${dy}`);
+    assert.deepEqual({x:p.x,y:p.y},start);assert.equal(game.turn,1);
+    if(action==='shoot'){assert.equal(target.hp,88);assert.equal(game.arrowCount(),0);}
+  }
+}
+
+console.log('PASS: eight facing directions change no other state; invalid/end-state input rejected; saved facing and aimed attacks/shots checked.');
+
 function reachable(game,start=game.player){
   const seen=new Set([game.key(start.x,start.y)]),queue=[[start.x,start.y]];
   for(let i=0;i<queue.length;i++)for(const[dx,dy]of DIRS){const[x,y]=queue[i];if(!game.canStep(x,y,dx,dy))continue;const k=game.key(x+dx,y+dy);if(!seen.has(k)){seen.add(k);queue.push([x+dx,y+dy]);}}
