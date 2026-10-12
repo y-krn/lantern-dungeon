@@ -2,6 +2,7 @@
   "name": "lantern-dungeon",
   "compatibility_date": "2026-10-12",
   "workers_dev": true,
+  "previews": {},
   "build": {
     "command": "node check.cjs"
   },
