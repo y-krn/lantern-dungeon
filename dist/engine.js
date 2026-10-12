@@ -7,8 +7,18 @@
     potion: {name:'回復草',icon:'✿',description:'体力を25回復。ピンチの前に使いましょう。'},
     scroll: {name:'雷の巻物',icon:'▤',description:'見えている敵すべてに18ダメージ。'},
     map: {name:'地図の巻物',icon:'▧',description:'この階の地形と階段の場所を明らかにします。'},
-    arrow: {name:'木の矢',icon:'➶',description:'装備して「矢を放つ」で向いている方向へ発射。1本消費し、最初の敵に12ダメージ。'}
+    arrow: {name:'木の矢',icon:'➶',description:'装備して「矢を放つ」で向いている方向へ発射。1本消費し、最初の敵に12ダメージ。'},
+    identify: {name:'インパスの巻物',icon:'▤',description:'選んだ持ち物1つを鑑定します。巻物は同じ種類すべて、剣・盾はその1つの補正値と呪いが判明します。'},
+    uncurse: {name:'シャナクの巻物',icon:'▤',description:'装備中の剣・盾の呪いをすべて解きます。持ち物にある未装備の品には効きません。'},
+    weapon: {name:'剣',icon:'⚔',description:'装備すると補正値と呪いが判明します。呪われた装備は外せません。'},
+    shield: {name:'盾',icon:'◈',description:'装備すると補正値と呪いが判明します。呪われた装備は外せません。'}
   };
+  const SCROLLS=['scroll','map','identify','uncurse'];
+  const SCROLL_NAMES=['赤い巻物','青い巻物','黄色い巻物','緑の巻物'];
+  const EQUIPMENT_NAMES={weapon:['木の剣','銅の剣','鉄の剣','星鉄の剣'],shield:['旅人の盾','銅の盾','鉄の盾','星鉄の盾']};
+  const itemKind=item=>typeof item==='string'?item:item?.kind;
+  const isEquipment=item=>!!item&&typeof item==='object'&&Object.hasOwn(EQUIPMENT_NAMES,item.kind);
+  const validEquipment=item=>isEquipment(item)&&Number.isInteger(item.rank)&&item.rank>=0&&item.rank<=3&&Number.isInteger(item.bonus)&&item.bonus>=-9&&item.bonus<=99&&typeof item.cursed==='boolean'&&typeof item.identified==='boolean';
   const ITEM_ORDER = Object.keys(ITEMS);
   const FLOOR_NAMES=['苔むした入口','静かな回廊','忘れられた倉庫','ひかり草の庭','古井戸の底','眠れる鉱山','月影の遺跡','深淵の回廊','星を待つ間','ランタンの聖域'];
   const DEPTH_NAMES=['封じられた入口','冷たい石廊','影の倉庫','枯れ草の庭','底なしの井戸','黒鉄の鉱山','月蝕の遺跡','闇の回廊','沈黙の間','深淵の門','霧の地下道','崩れた礼拝堂','灰の書庫','忘却の庭','凍える水路','古代の採掘場','亡霊の広場','黄昏の回廊','祈りの残響','星なき祭壇','虚ろな石廊','黒曜の倉庫','眠らぬ庭園','奈落の井戸','深層の鉱脈','砕けた王座','影の聖堂','最後の回廊','番人の間','深淵の聖域'];
@@ -73,6 +83,8 @@
       this.dungeon=dungeon;this.tutorialCleared=tutorialCleared===true;
       this.seed=seed>>>0; this.rng=this.seed||1; this.floor=1; this.turn=0; this.status='playing'; this.log=[]; this.effects=[];
       this.player={x:0,y:0,hp:30,maxHp:30,hunger:100,level:1,exp:0,nextExp:8,gold:0,weapon:0,shield:0,ammo:null,facing:[0,1],bag:['bread','potion','scroll']};
+      this.player.equipment={weapon:{kind:'weapon',rank:0,bonus:0,cursed:false,identified:true},shield:{kind:'shield',rank:0,bonus:0,cursed:false,identified:true}};
+      this.initIdentification();
       this.generateFloor();
       this.say('ランタンを灯した。小さな冒険のはじまり。','good');
       this.say(`${this.dungeonInfo().name}へ。地下${this.maxFloor()}階に眠る「${this.dungeonInfo().treasure}」を探そう。`);
@@ -86,16 +98,68 @@
     inside(x,y){return x>=0&&y>=0&&x<W&&y<H;}
     tile(x,y){return this.inside(x,y)?this.tiles[this.key(x,y)]:0;}
     enemyAt(x,y){return this.enemies.find(e=>e.x===x&&e.y===y&&e.hp>0);}
-    attackPower(){return 5+(this.player.level-1)*2+this.player.weapon*3;}
-    defense(){return 1+this.player.shield*2;}
+    initIdentification(legacy=false){
+      // Appearance randomization has its own seed stream so it cannot change floor geometry.
+      let random=this.seed^0x9e3779b9;const names=[...SCROLL_NAMES];
+      for(let i=names.length-1;i>0;i--){random=(Math.imul(random,1664525)+1013904223)>>>0;const j=random%(i+1);[names[i],names[j]]=[names[j],names[i]];}
+      this.identification={appearances:Object.fromEntries(SCROLLS.map((kind,i)=>[kind,names[i]])),known:legacy||this.dungeon==='tutorial'?[...SCROLLS]:[],names:{}};
+    }
+    itemName(item){
+      const kind=itemKind(item);
+      if(isEquipment(item))return EQUIPMENT_NAMES[kind][item.rank]+(item.identified?`${item.bonus?` ${item.bonus>0?'+':''}${item.bonus}`:''}${item.cursed?'（呪い）':''}`:'（未鑑定）');
+      if(SCROLLS.includes(kind)&&!this.identification.known.includes(kind))return this.identification.appearances[kind]+(this.identification.names[kind]?`「${this.identification.names[kind]}」`:'')+'（未識別）';
+      return ITEMS[kind]?.name||'';
+    }
+    itemDescription(item){
+      const kind=itemKind(item);
+      if(isEquipment(item))return item.identified?`${kind==='weapon'?'攻撃':'防御'}補正 ${item.rank*(kind==='weapon'?3:2)+item.bonus}。${item.cursed?'呪われています。装備すると外せません。':'呪いはありません。'}`:ITEMS[kind].description;
+      return SCROLLS.includes(kind)&&!this.identification.known.includes(kind)?'効果はまだ分かりません。読むか、インパスの巻物で鑑定すると、同じ種類の巻物も識別されます。':ITEMS[kind]?.description||'';
+    }
+    nameScroll(index,name){
+      const kind=itemKind(this.player.bag[index]);
+      if(this.status!=='playing'||!SCROLLS.includes(kind)||this.identification.known.includes(kind)||typeof name!=='string')return false;
+      this.identification.names[kind]=name.trim().slice(0,20);return true;
+    }
+    targetItem(target){return typeof target==='number'&&Number.isInteger(target)?this.player.bag[target]:Object.hasOwn(EQUIPMENT_NAMES,target)?this.player.equipment[target]:null;}
+    identifyItem(target){
+      const item=this.targetItem(target),kind=itemKind(item);if(!ITEMS[kind])return false;
+      if(isEquipment(item))item.identified=true;
+      if(SCROLLS.includes(kind)&&!this.identification.known.includes(kind))this.identification.known.push(kind);
+      this.say(`${this.itemName(item)}と分かった。`,'good');return true;
+    }
+    equipmentBonus(kind){const item=this.player.equipment[kind];return item?item.bonus:0;}
+    attackPower(){return Math.max(1,5+(this.player.level-1)*2+this.player.weapon*3+this.equipmentBonus('weapon'));}
+    defense(){return Math.max(0,1+this.player.shield*2+this.equipmentBonus('shield'));}
     arrowCount(){return this.player.bag.filter(kind=>kind==='arrow').length;}
     inventoryEntries(){
       const entries=[];let arrows;
-      this.player.bag.forEach((kind,index)=>{
+      this.player.bag.forEach((item,index)=>{
+        const kind=itemKind(item);
         if(kind==='arrow'&&arrows){arrows.count++;return;}
         const entry={kind,index,count:1};entries.push(entry);if(kind==='arrow')arrows=entry;
       });
-      return entries.sort((a,b)=>ITEM_ORDER.indexOf(a.kind)-ITEM_ORDER.indexOf(b.kind)||a.index-b.index);
+      const order=entry=>SCROLLS.includes(entry.kind)&&!this.identification.known.includes(entry.kind)?ITEM_ORDER.indexOf('scroll'):ITEM_ORDER.indexOf(entry.kind);
+      return entries.sort((a,b)=>order(a)-order(b)||a.index-b.index);
+    }
+    equip(index){
+      if(this.status!=='playing')return false;const p=this.player,item=p.bag[index];if(!validEquipment(item))return false;
+      const old=p.equipment[item.kind];
+      if(old?.cursed){this.say(`${this.itemName(old)}は呪われていて外せない！`,'danger');return false;}
+      if(old)p.bag[index]=old;else p.bag.splice(index,1);
+      p.equipment[item.kind]=item;p[item.kind]=item.rank;item.identified=true;
+      this.say(`${this.itemName(item)}を装備した。`,item.cursed?'danger':'good');this.finishTurn();return true;
+    }
+    unequip(kind){
+      if(this.status!=='playing'||!Object.hasOwn(EQUIPMENT_NAMES,kind))return false;
+      const p=this.player,item=p.equipment[kind];if(!item)return false;
+      if(item.cursed){this.say(`${this.itemName(item)}は呪われていて外せない！`,'danger');return false;}
+      if(this.inventoryEntries().length>=16){this.say('持ち物がいっぱい。装備を外すには1枠空けよう。');return false;}
+      p.bag.push(item);p.equipment[kind]=null;p[kind]=0;this.say(`${this.itemName(item)}を外した。`);this.finishTurn();return true;
+    }
+    dropEquipment(index){
+      const p=this.player,item=p.bag[index];if(this.status!=='playing'||!validEquipment(item))return false;
+      if(this.items.some(i=>i.x===p.x&&i.y===p.y)||this.onStairs()){this.say('足元には置けない。空いている床へ移動しよう。');return false;}
+      this.items.push({...item,x:p.x,y:p.y,amount:1,discovered:true});p.bag.splice(index,1);this.say(`${this.itemName(item)}を置いた。`);this.finishTurn();return true;
     }
     equipArrow(){
       if(this.status!=='playing'||!this.arrowCount())return false;
@@ -186,10 +250,15 @@
       const rewardRooms=deadEnds.filter(r=>r!==houseRoom),ordinaryRooms=otherRooms.filter(r=>r!==houseRoom);
       const addItem=(kind,rooms=this.rooms,bias=true)=>{
         const preferred=bias?rewardRooms.filter(r=>rooms.includes(r)):[],pool=preferred.length&&this.random()<.65?preferred:rooms;
-        const pos=emptySpot(pool);if(pos)this.items.push({...pos,kind,amount:kind==='gold'?this.int(20,65)*this.floor:kind==='arrow'?this.int(1,10):1});
+        const pos=emptySpot(pool);if(pos){
+          const tier=Math.floor((this.floor+(kind==='weapon'?1:0))/3);
+          const equipment=Object.hasOwn(EQUIPMENT_NAMES,kind)?{rank:Math.min(3,tier),bonus:Math.max(0,tier-3)*(kind==='weapon'?3:2)+this.int(-1,3),cursed:this.random()<1/8,identified:false}:{};
+          this.items.push({...pos,kind,...equipment,amount:kind==='gold'?this.int(20,65)*this.floor:kind==='arrow'?this.int(1,10):1});
+        }
       };
       // Each floor guarantees food and healing as well as randomly placed supplies.
       [...Array(hard?2:3).fill('bread'),'potion','potion','gold','gold','gold','arrow',this.random()<.5?'map':'scroll'].forEach(kind=>addItem(kind));
+      addItem(SCROLLS[this.int(0,SCROLLS.length-1)]);
       if(this.floor%3===2)addItem('weapon',otherRooms);
       if(this.floor%3===0)addItem('shield',otherRooms);
       if(houseRoom){addItem('gold',[houseRoom],false);addItem('gold',[houseRoom],false);addItem('scroll',[houseRoom],false);}
@@ -231,10 +300,30 @@
     attack(){if(this.status!=='playing')return false;const p=this.player,[dx,dy]=p.facing,e=this.canStep(p.x,p.y,dx,dy)?this.enemyAt(p.x+dx,p.y+dy):null;if(e)this.hit(e,this.attackPower()+this.int(-1,2));else{this.say('剣を振った。目の前に敵はいない。');this.effect('swing',p.x+dx,p.y+dy,0);}this.finishTurn();return true;}
     wait(){if(this.status!=='playing')return false;this.finishTurn();return true;}
     hit(enemy,damage,kind='physical'){const m=MONSTERS[enemy.species];damage=Math.max(1,damage-(kind==='physical'?(m?.armor||0):0));if(m?.trait==='mimic')enemy.revealed=true;enemy.hp-=damage;if(m?.trait==='blink'&&enemy.hp>0)enemy.blinkPending=true;enemy.awake=true;this.say(`${enemy.name}に${damage}ダメージ。`);this.effect('hit',enemy.x,enemy.y,damage);if(enemy.hp<=0){this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`,'good');this.player.exp+=enemy.exp;this.player.gold+=this.int(3,12)*this.floor;this.effect('kill',enemy.x,enemy.y,0);while(this.player.exp>=this.player.nextExp){this.player.exp-=this.player.nextExp;this.player.level++;this.player.nextExp=Math.floor(this.player.nextExp*1.35)+3;this.player.maxHp+=6;this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.say(`レベル${this.player.level}になった！ 体力と攻撃力が上がった。`,'good');this.effect('level',this.player.x,this.player.y,this.player.level);}}}
-    collect(){const p=this.player;const item=this.items.find(i=>i.x===p.x&&i.y===p.y);if(!item)return;if(item.kind==='gold'){p.gold+=item.amount;this.say(`${item.amount}Gを拾った。`,'good');}else if(item.kind==='weapon'){p.weapon++;this.say(`${this.weaponName()}を手に入れ、装備した。`,'good');}else if(item.kind==='shield'){p.shield++;this.say(`${this.shieldName()}を手に入れ、装備した。`,'good');}else{const stacks=item.kind==='arrow'&&this.arrowCount()>0;if(this.inventoryEntries().length>=16&&!stacks){this.say('持ち物がいっぱい。アイテムを使って空きを作ろう。');return;}const amount=item.kind==='arrow'&&Number.isInteger(item.amount)?Math.max(1,Math.min(10,item.amount)):1;p.bag.push(...Array(amount).fill(item.kind));this.say(`${ITEMS[item.kind].name}を${item.kind==='arrow'?`${amount}本`:''}拾った。`,'good');}this.effect('pickup',p.x,p.y,item.kind,this.log[0].text);this.items.splice(this.items.indexOf(item),1);}
+    collect(){
+      const p=this.player,item=this.items.find(i=>i.x===p.x&&i.y===p.y);if(!item)return;
+      if(item.kind==='gold'){p.gold+=item.amount;this.say(`${item.amount}Gを拾った。`,'good');}
+      else{
+        const stacks=item.kind==='arrow'&&this.arrowCount()>0;
+        if(this.inventoryEntries().length>=16&&!stacks){this.say('持ち物がいっぱい。アイテムを使うか、未装備の剣・盾を置いて空きを作ろう。');return;}
+        const amount=item.kind==='arrow'&&Number.isInteger(item.amount)?Math.max(1,Math.min(10,item.amount)):1;
+        const value=isEquipment(item)?{kind:item.kind,rank:item.rank,bonus:item.bonus,cursed:item.cursed,identified:item.identified}:item.kind;
+        p.bag.push(...Array(amount).fill(value));this.say(`${this.itemName(value)}を${item.kind==='arrow'?`${amount}本`:''}拾った。`,'good');
+      }
+      this.effect('pickup',p.x,p.y,item.kind,this.log[0].text);this.items.splice(this.items.indexOf(item),1);
+    }
     triggerTrap(){const p=this.player,t=this.traps.find(t=>t.x===p.x&&t.y===p.y);if(!t)return;t.found=true;const d=this.int(2,5);p.hp-=d;this.say(`足元にトゲの罠！ ${d}ダメージ。`,'danger');this.effect('damage',p.x,p.y,d);}
-    use(index){
-      if(this.status!=='playing')return false;const p=this.player,kind=p.bag[index];if(!ITEMS[kind])return false;
+    scrollNeedsTarget(index){return this.player.bag[index]==='identify';}
+    use(index,target){
+      if(this.status!=='playing'||!Number.isInteger(index))return false;const p=this.player,kind=itemKind(p.bag[index]);if(!ITEMS[kind])return false;
+      if(isEquipment(p.bag[index]))return this.equip(index);
+      if(kind==='identify'&&(target===index||!ITEMS[itemKind(this.targetItem(target))]))return false;
+      if(SCROLLS.includes(kind)&&!this.identification.known.includes(kind)){const appearance=this.itemName(kind);this.identification.known.push(kind);this.say(`${appearance}は${ITEMS[kind].name}だった！`,'good');}
+      if(kind==='identify')this.identifyItem(target);
+      if(kind==='uncurse'){
+        let count=0;for(const item of Object.values(p.equipment))if(item?.cursed){item.cursed=false;count++;}
+        this.say(count?'装備中の呪いがすべて解けた！':'装備中の品に呪いはなかった。','good');
+      }
       if(kind==='bread'){const before=p.hunger;p.hunger=Math.min(100,p.hunger+50);this.say(`パンを食べた。満腹度 +${p.hunger-before}%`,'good');this.effect('heal',p.x,p.y,'満腹');}
       if(kind==='potion'){const before=p.hp;p.hp=Math.min(p.maxHp,p.hp+25);this.say(`回復草を使った。体力 +${p.hp-before}`,'good');this.effect('heal',p.x,p.y,p.hp-before);}
       if(kind==='scroll'){this.say('雷の巻物を読んだ！');for(const e of this.enemies)if(e.hp>0&&this.visible[this.key(e.x,e.y)])this.hit(e,18,'magic');this.effect('lightning',p.x,p.y,0);}
@@ -306,10 +395,38 @@
     }
     onStairs(){return this.player.x===this.stairs.x&&this.player.y===this.stairs.y;}
     descend(){if(this.status!=='playing'||!this.onStairs()||this.floor>=this.maxFloor())return false;this.floor++;this.turn++;this.generateFloor();this.say(`地下${this.floor}階「${this.floorName()}」へ降りた。`,'good');this.effect('descend',this.player.x,this.player.y,this.floor);return true;}
-    weaponName(){return ['木の剣','銅の剣','鉄の剣','星鉄の剣'][Math.min(3,this.player.weapon)]+(this.player.weapon>3?` +${this.player.weapon-3}`:'');}
-    shieldName(){return ['旅人の盾','銅の盾','鉄の盾','星鉄の盾'][Math.min(3,this.player.shield)]+(this.player.shield>3?` +${this.player.shield-3}`:'');}
+    weaponName(){return this.player.equipment.weapon?this.itemName(this.player.equipment.weapon):'未装備';}
+    shieldName(){return this.player.equipment.shield?this.itemName(this.player.equipment.shield):'未装備';}
+    restoreIdentification(){
+      const p=this.player,legacy=this.identification==null;
+      if(legacy)this.initIdentification(true);
+      const info=this.identification;
+      if(!info||typeof info.appearances!=='object'||!info.appearances||!Array.isArray(info.known)||!info.names||typeof info.names!=='object'||Array.isArray(info.names))return false;
+      if(Object.keys(info.appearances).length!==SCROLLS.length||SCROLLS.some(kind=>!SCROLL_NAMES.includes(info.appearances[kind]))||new Set(Object.values(info.appearances)).size!==SCROLLS.length||info.known.some(kind=>!SCROLLS.includes(kind))||new Set(info.known).size!==info.known.length||Object.entries(info.names).some(([kind,name])=>!SCROLLS.includes(kind)||typeof name!=='string'||name.length>20))return false;
+      if(p.equipment==null){
+        if(!legacy)return false;
+        p.equipment={};
+        for(const kind of Object.keys(EQUIPMENT_NAMES)){
+          const rank=p[kind];if(!Number.isInteger(rank)||rank<0)return false;
+          p.equipment[kind]={kind,rank:Math.min(3,rank),bonus:Math.max(0,rank-3)*(kind==='weapon'?3:2),cursed:false,identified:true};p[kind]=Math.min(3,rank);
+        }
+      }
+      if(typeof p.equipment!=='object'||Array.isArray(p.equipment)||Object.keys(p.equipment).length!==2)return false;
+      for(const kind of Object.keys(EQUIPMENT_NAMES)){
+        const item=p.equipment[kind];
+        if(item!==null&&(!validEquipment(item)||item.kind!==kind||!item.identified)||!Number.isInteger(p[kind])||p[kind]<0||p[kind]>3||p[kind]!== (item?.rank??0))return false;
+      }
+      for(const item of this.items){
+        if(!item||(!Object.hasOwn(ITEMS,item.kind)&&item.kind!=='gold'))return false;
+        if(isEquipment(item)){
+          if(legacy&&!Object.hasOwn(item,'rank'))Object.assign(item,{rank:Math.min(3,Math.floor((this.floor+(item.kind==='weapon'?1:0))/3)),bonus:0,cursed:false,identified:false});
+          if(!validEquipment(item))return false;
+        }
+      }
+      return true;
+    }
     serialize(){const{effects,...state}=this;return JSON.stringify({version:1,state});}
-    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;const dungeon=s?.dungeon??'tutorial';if(!Object.hasOwn(DUNGEONS,dungeon)||(s?.tutorialCleared!=null&&typeof s.tutorialCleared!=='boolean')||(dungeon==='depths'&&s.tutorialCleared!==true))return null;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(k=>!ITEMS[k])||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>DUNGEONS[dungeon].floors||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.dungeon=dungeon;game.tutorialCleared=s.tutorialCleared===true||(dungeon==='tutorial'&&s.status==='won'&&s.floor===10);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.traps=game.traps.filter(t=>!game.isRoomEntrance(t.x,t.y));for(const e of game.enemies){
+    static restore(raw){try{const saved=JSON.parse(raw),s=saved.state;const dungeon=s?.dungeon??'tutorial';if(!Object.hasOwn(DUNGEONS,dungeon)||(s?.tutorialCleared!=null&&typeof s.tutorialCleared!=='boolean')||(dungeon==='depths'&&s.tutorialCleared!==true))return null;if(saved.version!==1||!s||!Array.isArray(s.tiles)||s.tiles.length!==W*H||!Array.isArray(s.seen)||s.seen.length!==W*H||!Array.isArray(s.rooms)||(s.rooms.length<4||s.rooms.length>8)||!Array.isArray(s.enemies)||!Array.isArray(s.items)||!Array.isArray(s.traps)||!Array.isArray(s.log)||!s.stairs||!s.player||!Array.isArray(s.player.bag)||s.player.bag.some(item=>typeof item==='string'?(!Object.hasOwn(ITEMS,item)||Object.hasOwn(EQUIPMENT_NAMES,item)):!validEquipment(item))||(s.player.ammo!=null&&s.player.ammo!=='arrow')||!Number.isInteger(s.floor)||s.floor<1||s.floor>DUNGEONS[dungeon].floors||!Number.isFinite(s.turn)||!Number.isFinite(s.player.hp)||!Number.isFinite(s.player.hunger)||s.player.hunger<0||s.player.hunger>100||!['playing','dead','won'].includes(s.status))return null;if(s.layout!=null&&!Object.hasOwn(LAYOUT_NAMES,s.layout))return null;if(s.monsterHouse!=null&&(!Number.isInteger(s.monsterHouse.room)||s.monsterHouse.room<0||s.monsterHouse.room>=s.rooms.length||typeof s.monsterHouse.triggered!=='boolean'))return null;const game=Object.assign(Object.create(DungeonEngine.prototype),s);game.dungeon=dungeon;game.tutorialCleared=s.tutorialCleared===true||(dungeon==='tutorial'&&s.status==='won'&&s.floor===10);game.layout??=null;game.monsterHouse??=null;if(!game.tile(s.player.x,s.player.y))return null;game.player.ammo=game.arrowCount()?game.player.ammo??null:null;game.traps=game.traps.filter(t=>!game.isRoomEntrance(t.x,t.y));for(const e of game.enemies){
         if(e.species==null){
           if(!Number.isFinite(e.hp)||!Number.isFinite(e.maxHp))return null;
           const tier=monsterTier(game.floor,dungeon);
@@ -321,7 +438,7 @@
         if(e.intent!=null&&((e.intent.kind==='ranged'?MONSTERS[e.species].trait!=='ranged':e.intent.kind==='windup'?MONSTERS[e.species].trait!=='windup':true)||!Number.isInteger(e.intent.x)||!Number.isInteger(e.intent.y)||!game.inside(e.intent.x,e.intent.y)||!game.tile(e.intent.x,e.intent.y)))return null;
         if(e.revealed!=null&&typeof e.revealed!=='boolean'||e.blinkPending!=null&&typeof e.blinkPending!=='boolean')return null;
       }
-      game.effects=[];game.reveal();return game;}catch{return null;}}
+      if(!game.restoreIdentification())return null;game.effects=[];game.reveal();return game;}catch{return null;}}
   }
   Object.assign(root,{DungeonEngine,DungeonData:{W,H,DIRS,ITEMS,FLOOR_NAMES,LAYOUT_NAMES,DUNGEONS,MONSTERS,MONSTER_POOLS,MONSTER_MARKS,monsterTier}});
 })(typeof window!=='undefined'?window:globalThis);

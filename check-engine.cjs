@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 require('./dist/engine.js');
 require('./check-traits.cjs');
+require('./check-identification.cjs');
 const {W,H,DIRS,ITEMS}=DungeonData;
 
 // A species keeps its identity and combat stats across both dungeons and saves.
@@ -395,8 +396,8 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 {
   const game=new DungeonEngine(22),p=game.player;
   for(const kind of [...Object.keys(ITEMS),'gold','weapon','shield']){
-    game.effects=[];game.items=[{x:p.x,y:p.y,kind,amount:42}];game.collect();
-    const text=kind==='gold'?'42Gを拾った。':kind==='weapon'?`${game.weaponName()}を手に入れ、装備した。`:kind==='shield'?`${game.shieldName()}を手に入れ、装備した。`:kind==='arrow'?'木の矢を10本拾った。':`${ITEMS[kind].name}を拾った。`;
+    game.effects=[];const gear=kind==='weapon'||kind==='shield';game.items=[{x:p.x,y:p.y,kind,amount:42,...(gear?{rank:1,bonus:2,cursed:false,identified:false}:{})}];game.collect();
+    const text=kind==='gold'?'42Gを拾った。':gear?`${game.itemName(p.bag.at(-1))}を拾った。`:kind==='arrow'?'木の矢を10本拾った。':`${ITEMS[kind].name}を拾った。`;
     assert.deepEqual(game.effects,[{type:'pickup',x:p.x,y:p.y,value:kind,text}]);
     // Later events in the same turn must not replace the pickup message.
     game.say('足元にトゲの罠！ 3ダメージ。','danger');assert.equal(game.effects[0].text,text);
