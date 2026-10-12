@@ -303,6 +303,29 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   game.move(1,0);assert.equal(game.status,'dead','Fatal trap cannot be reversed by passive regeneration');
 }
 {
+  const game=arena(33),p=game.player;game.enemies=[];game.items=[];
+  const trap={x:p.x+1,y:p.y,found:false};game.traps=[trap];
+  let hp=p.hp;
+  assert(game.move(1,0));assert(trap.found);assert.equal(game.traps.length,1);
+  assert.equal(p.hp,hp-game.effects.at(-1).value);
+  hp=p.hp;const effects=game.effects.length;
+  assert(game.wait());assert.equal(p.hp,hp);assert.equal(game.effects.length,effects,'Waiting on a trap does not trigger it');
+  assert(game.move(-1,0));assert.equal(p.hp,hp);
+  assert(game.move(1,0));assert.equal(game.effects.length,effects+1,'Re-entering a trap triggers it again');
+  assert.equal(p.hp,hp-game.effects.at(-1).value);
+  const saved=JSON.parse(game.serialize());
+  for(const legacy of [false,true]){
+    if(legacy)saved.state.traps[0].spent=true;
+    const restored=DungeonEngine.restore(JSON.stringify(saved));assert(restored);assert(restored.traps[0].found);
+    hp=restored.player.hp;
+    assert(restored.move(-1,0));assert.equal(restored.player.hp,hp);
+    assert(restored.move(1,0));assert.equal(restored.effects.length,1,'Restored traps trigger, including legacy spent traps');
+    assert.equal(restored.player.hp,hp-restored.effects[0].value);
+    assert(restored.move(-1,0));restored.player.hp=1;
+    assert(restored.move(1,0));assert.equal(restored.status,'dead','Re-entering a trap can be fatal');
+  }
+}
+{
   const game=arena(22),p=game.player;
   // A diagonal destination alone is insufficient: both orthogonal sides must be open.
   game.tiles[game.key(p.x+1,p.y)]=0;assert.equal(game.move(1,1),false);assert.equal(game.turn,0);
