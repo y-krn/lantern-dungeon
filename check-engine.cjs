@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 require('./dist/engine.js');
 require('./check-traits.cjs');
 require('./check-identification.cjs');
+require('./check-equipment.cjs');
 const {W,H,DIRS,ITEMS}=DungeonData;
 
 // A species keeps its identity and combat stats across both dungeons and saves.
@@ -381,28 +382,28 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
     assert(!restored.items.some(i=>i.kind==='arrow'));assert.equal(restored.inventoryEntries().filter(i=>i.kind==='arrow').length,1);
   }
   assert.deepEqual([...amounts].sort((a,b)=>a-b),[1,2,3,4,5,6,7,8,9,10]);
-  const game=new DungeonEngine(22),p=game.player;p.bag=Array(15).fill('bread');p.bag.push('arrow');p.ammo='arrow';
+  const game=new DungeonEngine(22),p=game.player;p.bag=Array(17).fill('bread');p.bag.push('arrow');p.ammo='arrow';
   game.items=[{x:p.x,y:p.y,kind:'arrow',amount:10}];game.collect();
-  assert.equal(game.arrowCount(),11);assert.equal(game.inventoryEntries().length,16);assert.equal(p.ammo,'arrow');assert.equal(game.items.length,0);
+  assert.equal(game.arrowCount(),11);assert.equal(game.inventoryEntries().length,18);assert.equal(p.ammo,'arrow');assert.equal(game.items.length,0);
   game.items=[{x:p.x,y:p.y,kind:'arrow'}];game.collect();assert.equal(game.arrowCount(),12);
 }
 {
   const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.traps=[];
-  p.bag=Array(15).fill('bread');p.bag.push('arrow');
-  game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.arrowCount(),2);assert.equal(game.inventoryEntries().length,16);assert.equal(game.items.length,0);
+  p.bag=Array(17).fill('bread');p.bag.push('arrow');
+  game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.arrowCount(),2);assert.equal(game.inventoryEntries().length,18);assert.equal(game.items.length,0);
   game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(p.bag.includes('potion'),false);
-  p.bag=Array(16).fill('bread');game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(game.arrowCount(),0);
+  p.bag=Array(18).fill('bread');game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(game.arrowCount(),0);
 }
 {
   const game=new DungeonEngine(22),p=game.player;
   for(const kind of [...Object.keys(ITEMS),'gold','weapon','shield']){
-    game.effects=[];const gear=kind==='weapon'||kind==='shield';game.items=[{x:p.x,y:p.y,kind,amount:42,...(gear?{rank:1,bonus:2,cursed:false,identified:false}:{})}];game.collect();
+    p.bag=[];game.effects=[];const gear=kind==='weapon'||kind==='shield';game.items=[{x:p.x,y:p.y,kind,amount:42,...(gear?{rank:1,bonus:2,cursed:false,identified:false}:{})}];game.collect();
     const text=kind==='gold'?'42Gを拾った。':gear?`${game.itemName(p.bag.at(-1))}を拾った。`:kind==='arrow'?'木の矢を10本拾った。':`${ITEMS[kind].name}を拾った。`;
     assert.deepEqual(game.effects,[{type:'pickup',x:p.x,y:p.y,value:kind,text}]);
     // Later events in the same turn must not replace the pickup message.
     game.say('足元にトゲの罠！ 3ダメージ。','danger');assert.equal(game.effects[0].text,text);
   }
-  p.bag=Array(16).fill('bread');game.effects=[];game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();
+  p.bag=Array(18).fill('bread');game.effects=[];game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();
   assert.equal(game.effects.length,0);assert.equal(game.items.length,1);
 }
 {
@@ -534,7 +535,7 @@ for(let seed=1;seed<=100;seed++){
     for(const hazard of [...game.enemies,...game.traps])assert.notEqual(game.roomAt(hazard.x,hazard.y),game.roomAt(game.player.x,game.player.y));
     assert.equal(game.items.filter(i=>i.kind==='bread').length,2);
     assert.equal(game.items.filter(i=>i.kind==='potion').length,2);
-    assert.equal(game.items.some(i=>i.kind==='weapon'),floor%3===2);assert.equal(game.items.some(i=>i.kind==='shield'),floor%3===0);
+    for(const slot of ['weapon','shield'])assert(game.items.filter(i=>i.kind===slot).length<=1);
     assert.equal(game.enemies.length,6+Math.floor(floor*.75)+(floor===30?1:0));
     assert.equal(game.traps.length,Math.min(floor+2,8));assert(game.traps.every(t=>!game.isRoomEntrance(t.x,t.y)));
     const enemies=game.enemies.filter(e=>e.type!=='guardian');

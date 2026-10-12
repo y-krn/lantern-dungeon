@@ -64,15 +64,16 @@ function quiet(seed=42,dungeon='depths'){
   assert.equal(game.use(0),false);assert.equal(game.use(0,0),false);assert.equal(game.serialize(),saved);
   assert(game.use(0,1));assert.deepEqual(p.bag,['bread']);
 }
-// Equipping a bag item swaps at its original index, even when all 16 slots are full.
+// Equipped items occupy the same 20 slots; swaps and unequips preserve the count.
 {
-  const game=quiet(),p=game.player,item=gear();p.bag=[...Array(15).fill('bread'),item];
-  assert.equal(game.unequip('weapon'),false);assert.equal(game.turn,0);assert(game.equip(15));
-  assert.equal(game.inventoryEntries().length,16);assert.equal(p.bag[15].rank,0);
-  assert(game.dropEquipment(15));assert.equal(game.inventoryEntries().length,15);
+  const game=quiet(),p=game.player,item=gear();p.bag=[...Array(17).fill('bread'),item];
+  assert.equal(game.inventoryCount(),20);assert(game.equip(17));assert.equal(game.inventoryCount(),20);
+  assert.equal(p.bag[17].rank,0);assert(game.unequip('weapon'));assert.equal(game.inventoryCount(),20);
+  assert.equal(p.bag.length,19);assert(game.equip(18));assert.equal(game.inventoryCount(),20);
+  assert(game.dropEquipment(17));assert.equal(game.inventoryCount(),19);
   const dropped=game.items[0];assert.equal(dropped.kind,'weapon');assert.equal(dropped.rank,0);
-  assert(game.unequip('weapon'));assert.equal(game.inventoryEntries().length,16);
-  game.collect();assert.equal(game.items.length,1);p.bag.splice(0,1);game.collect();assert.equal(game.items.length,0);
+  assert(game.unequip('weapon'));assert.equal(game.inventoryCount(),19);
+  game.collect();assert.equal(game.items.length,0);assert.equal(game.inventoryCount(),20);
   const raw=game.serialize();assert.equal(DungeonEngine.restore(raw).serialize(),raw);
 }
 // Legacy strength and known consumables survive migration without inventing curses.
