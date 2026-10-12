@@ -4,10 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#15151f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="灯りの迷宮">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="description" content="小さな商人、大きな冒険。チュートリアル10階をクリアして、高難度の30階迷宮に挑むターン制ローグライク。インストール不要、ブラウザで遊べます。">
   <title>灯りの迷宮 — 小さな商人の大冒険</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2321222f'/%3E%3Cpath d='M12 9h8v4h3v13H9V13h3z' fill='%23edba72'/%3E%3Cpath d='M13 14h6v9h-6z' fill='%23fff1ad'/%3E%3Cpath d='M13 9V5h6v4' fill='none' stroke='%23edba72' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <script defer src="pwa.js"></script>
   <script defer src="data.js"></script>
   <script defer src="world.js"></script>
   <script defer src="enemies.js"></script>
@@ -45,6 +51,10 @@
     </section>
     <section class="below-game"><div class="keyboard-guide"><span class="key-set"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><div><strong>矢印キー / WASD で移動</strong><span>Shift＋方向キーで向きだけ変更。敵にぶつかると攻撃。</span></div></div><div class="secondary-actions"><button id="new-game-button">↻ ダンジョン選択</button><span class="desktop-only">ヘッドホンで、もう少しだけ迷宮へ。</span></div></section>
 
+    <section id="pwa-panel" class="pwa-panel" aria-label="ホーム画面とオフライン" hidden>
+      <div class="pwa-state"><p id="pwa-status" role="status">オフライン用の準備中です。</p><button id="pwa-update" class="header-button" hidden>更新して再開</button></div>
+      <details id="pwa-install"><summary>ホーム画面で遊ぶ</summary><p>iPhone・iPadではブラウザの共有メニューから「ホーム画面に追加」を選び、「Webアプリとして開く」をオンにして追加してください。初回はオンラインで開き、「オフラインで遊べます」の表示を確認してください。</p><p>ブラウザとホーム画面アプリの保存データは別になる場合があります。端末間の同期はありません。ブラウザのデータ削除やOSによる保存領域の整理で、冒険とオフライン用データが消える場合があります。</p></details>
+    </section>
     <footer><span class="footer-mark">✦</span>灯りがあれば、冒険はつづく。<span class="footer-meta">チュートリアル10階 / 深淵30階・ターン制ローグライク</span></footer>
   </main>
   <dialog id="modal"><div id="modal-content"></div></dialog>

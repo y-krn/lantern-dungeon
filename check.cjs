@@ -9,3 +9,4 @@ for (const file of fs.readdirSync(path.join(__dirname, 'dist')).filter(file => f
 }
 require('./check-modules.cjs');
 require('./check-engine.cjs');
+require('./check-pwa.cjs');

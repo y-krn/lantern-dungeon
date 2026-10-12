@@ -88,3 +88,13 @@
 .dungeon-choice-description{display:block;font-size:12px;line-height:1.8;color:#c1b8c8;margin-top:9px}
 
 .item-card>.item-actions{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}.item-card strong{overflow-wrap:anywhere}#item-name-form{display:grid;gap:12px;margin:20px 0}#item-name-form label{font-size:12px;color:var(--gold)}#item-name{width:100%;font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px}#item-name:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+[hidden]{display:none!important}
+body{padding-bottom:env(safe-area-inset-bottom)}
+.pwa-panel{font-size:11px;line-height:1.8;color:var(--muted);padding:12px 0;border-top:1px solid var(--border)}
+.pwa-state{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px}.pwa-state p{margin:0}.pwa-state button{min-height:44px}
+.pwa-panel summary{min-height:44px;cursor:pointer;padding:12px 0;color:var(--gold)}.pwa-panel p{max-width:65em}
+dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+@media(max-width:1100px){.site-header{padding-left:max(28px,env(safe-area-inset-left));padding-right:max(28px,env(safe-area-inset-right))}main{padding-left:max(28px,env(safe-area-inset-left));padding-right:max(28px,env(safe-area-inset-right))}}
+@media(max-width:800px){.site-header{padding-top:calc(6px + env(safe-area-inset-top));padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}main{padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}}
+@media(display-mode:standalone) and (max-width:800px) and (orientation:portrait){.control-deck{padding-bottom:calc(12px + env(safe-area-inset-bottom))}}

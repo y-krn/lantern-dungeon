@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 require('./dist/engine.js');
 const html = fs.readFileSync(path.join(__dirname, 'dist/index.html'), 'utf8');
-const scripts = [...html.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]);
+const scripts = [...html.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]).filter(file => file !== 'pwa.js');
 assert.equal(scripts.at(-1), 'game.js', 'The UI starts after its dependencies');
 const frames = [];
 const browser = vm.createContext({requestAnimationFrame: callback => frames.push(callback)});
