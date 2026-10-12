@@ -20,6 +20,7 @@ const caches = {
         for (const request of requests) {
           assert.equal(request.cache, 'reload');
           assert.equal(request.redirect, 'error', 'Authentication redirects cannot enter the app cache');
+          assert.notEqual(request.url, scope + 'index.html', 'Precache the canonical directory URL to avoid static-host redirects');
           if (failInstall) throw new Error('Download failed');
           entries.set(request.url, new Response(request.url));
         }
@@ -115,6 +116,7 @@ async function response(url, mode = 'cors', method = 'GET') {
   assert(stores.has('lantern-dungeon:https://example.test/other/:old'));
   assert.equal(await (await response(scope + '?from=homescreen', 'navigate')).text(), scope);
   assert.equal(await (await response(scope + 'index.html?resume=1', 'navigate')).text(), scope);
+  assert.equal(await (await response(scope + 'index.html')).text(), scope);
   for (const url of config.ASSETS) assert.equal(await (await response(url)).text(), url);
   assert.equal(fetched, 0, 'Every game dependency is usable offline');
   for (const [url, mode, method] of [

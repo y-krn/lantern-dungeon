@@ -1,10 +1,10 @@
 'use strict';
 
-const VERSION = '17696982eca010fc';
+const VERSION = 'e7c4893f248c7f54';
 const PREFIX = `lantern-dungeon:${self.registration.scope}:`;
 const CACHE = PREFIX + VERSION;
 const ASSETS = [
-  './', 'index.html', 'style.css', 'pwa.js', 'manifest.webmanifest',
+  './', 'style.css', 'pwa.js', 'manifest.webmanifest',
   'data.js', 'world.js', 'enemies.js', 'save.js', 'engine.js', 'renderer.js', 'game.js',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ].map(path => new URL(path, self.registration.scope).href);
@@ -40,9 +40,10 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   url.search = '';
   // Never store account pages, external fonts, or unrelated same-origin resources.
-  if (!ASSETS.includes(url.href)) return;
-  if (event.request.mode === 'navigate' && !ASSETS.slice(0, 2).includes(url.href)) return;
-  const key = event.request.mode === 'navigate' ? ASSETS[0] : url.href;
+  // Static hosts redirect index.html to the directory URL; cache only the canonical shell.
+  const key = url.href === new URL('index.html', self.registration.scope).href ? ASSETS[0] : url.href;
+  if (!ASSETS.includes(key)) return;
+  if (event.request.mode === 'navigate' && key !== ASSETS[0]) return;
   event.respondWith((async () => {
     const cached = await (await caches.open(CACHE)).match(key);
     return cached || fetch(event.request);
