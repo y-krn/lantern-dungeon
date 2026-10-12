@@ -45,6 +45,48 @@ function reachable(game,start=game.player){
   return seen;
 }
 
+{
+  const game=new DungeonEngine(42),p=game.player;
+  game.tiles.fill(0);game.visible.fill(false);game.items=[];game.traps=[];game.monsterHouse=null;
+  game.rooms[0]={x:2,y:2,w:3,h:3,cx:3,cy:3};
+  game.rooms[1]={x:25,y:10,w:3,h:3,cx:26,cy:11};
+  for(const r of game.rooms.slice(0,2))for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)game.tiles[game.key(x,y)]=1;
+  for(let x=5;x<=26;x++)game.tiles[game.key(x,3)]=1;
+  for(let y=3;y<10;y++)game.tiles[game.key(26,y)]=1;
+  p.x=3;p.y=3;
+  const enemy={x:26,y:11,id:1,type:'slime',name:'苔スライム',hp:30,maxHp:30,attack:3,exp:1,awake:true};
+  game.enemies=[enemy];
+  // Chase out of a room, around a bend, and into another room over 15 steps away.
+  let crossedCorridor=false,turned=false;
+  for(let turn=0;turn<40&&Math.max(Math.abs(enemy.x-p.x),Math.abs(enemy.y-p.y))>1;turn++){
+    const before=[enemy.x,enemy.y];game.wait();
+    assert(game.canStep(...before,enemy.x-before[0],enemy.y-before[1]));
+    assert.notDeepEqual([enemy.x,enemy.y],before,'Long corridor pursuit must not stall');
+    crossedCorridor||=!game.roomAt(enemy.x,enemy.y);turned||=enemy.y===3&&enemy.x<26;
+  }
+  assert(crossedCorridor&&turned);assert.equal(Math.max(Math.abs(enemy.x-p.x),Math.abs(enemy.y-p.y)),1);
+  const hp=p.hp,position=[enemy.x,enemy.y];game.wait();assert(p.hp<hp);assert.deepEqual([enemy.x,enemy.y],position);
+
+  // Unalerted patrols move every turn and keep going around corridor corners.
+  enemy.x=20;enemy.y=3;enemy.awake=false;enemy.direction=[1,0];game.visible.fill(false);
+  for(let x=21;x<=26;x++){game.enemyTurn();assert.deepEqual([enemy.x,enemy.y],[x,3]);}
+  for(let y=4;y<=10;y++){game.enemyTurn();assert.deepEqual([enemy.x,enemy.y],[26,y]);}
+  assert.equal(enemy.awake,false);assert.equal(game.roomAt(enemy.x,enemy.y),game.rooms[1]);
+  const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.deepEqual(restored.enemies[0].direction,[0,1]);
+
+  // Patrols turn back at dead ends and still move when no path reaches the player.
+  for(let x=10;x<=14;x++)game.tiles[game.key(x,20)]=1;
+  enemy.x=14;enemy.y=20;enemy.direction=[1,0];enemy.awake=true;
+  game.enemyTurn();assert.deepEqual([enemy.x,enemy.y],[13,20]);assert.deepEqual(enemy.direction,[-1,0]);
+  const blocker={...enemy,id:2,x:12};game.enemies.push(blocker);
+  game.enemyTurn();assert.deepEqual([enemy.x,enemy.y],[14,20]);assert.notDeepEqual([enemy.x,enemy.y],[blocker.x,blocker.y]);
+  // A diagonal target across closed corners permits neither movement nor attack.
+  game.tiles.fill(0);game.tiles[game.key(14,20)]=1;game.tiles[game.key(13,21)]=1;
+  game.enemies=[enemy];p.x=13;p.y=21;const cornerHp=p.hp;
+  game.enemyTurn();assert.equal(p.hp,cornerHp);assert.deepEqual([enemy.x,enemy.y],[14,20]);
+}
+console.log('PASS: monsters patrol and chase through long bent corridors; room entry/exit, dead ends, blocked paths, corners, adjacent attacks and saved direction checked.');
+
 function roomAt(game,p){return game.rooms.find(r=>p.x>=r.x&&p.y>=r.y&&p.x<r.x+r.w&&p.y<r.y+r.h);}
 function entranceCells(game){
   const entrances=new Set();

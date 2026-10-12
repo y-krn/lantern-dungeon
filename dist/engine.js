@@ -212,13 +212,15 @@
       const p=this.player;
       // One breadth-first distance field per turn keeps chasing fair and avoids wall clipping.
       const distance=Array(W*H).fill(Infinity),queue=[[p.x,p.y]];distance[this.key(p.x,p.y)]=0;
-      for(let head=0;head<queue.length;head++){const[x,y]=queue[head],d=distance[this.key(x,y)];if(d>=15)continue;for(const[dx,dy]of DIRS){if(!this.canStep(x,y,dx,dy))continue;const nx=x+dx,ny=y+dy,k=this.key(nx,ny);if(distance[k]!==Infinity)continue;distance[k]=d+1;queue.push([nx,ny]);}}
+      for(let head=0;head<queue.length;head++){const[x,y]=queue[head],d=distance[this.key(x,y)];for(const[dx,dy]of DIRS){if(!this.canStep(x,y,dx,dy))continue;const nx=x+dx,ny=y+dy,k=this.key(nx,ny);if(distance[k]!==Infinity)continue;distance[k]=d+1;queue.push([nx,ny]);}}
       for(const e of this.enemies){if(e.hp<=0||(e.house&&!e.awake&&!this.monsterHouse?.triggered))continue;const dist=Math.max(Math.abs(e.x-p.x),Math.abs(e.y-p.y));if(dist<=7&&this.visible[this.key(e.x,e.y)])e.awake=true;
         if(dist===1&&this.canStep(e.x,e.y,p.x-e.x,p.y-e.y)){const d=Math.max(1,e.attack-this.defense()+this.int(-1,1));p.hp-=d;this.say(`${e.name}の攻撃。${d}ダメージ。`,'danger');this.effect('damage',p.x,p.y,d);if(p.hp<=0)break;continue;}
-        if(!e.awake&&this.random()<.8)continue;
-        let candidates=DIRS.filter(([dx,dy])=>this.canStep(e.x,e.y,dx,dy)&&!(e.x+dx===p.x&&e.y+dy===p.y)&&!this.enemyAt(e.x+dx,e.y+dy));
-        if(e.awake)candidates=candidates.filter(([dx,dy])=>distance[this.key(e.x+dx,e.y+dy)]<distance[this.key(e.x,e.y)]).sort((a,b)=>distance[this.key(e.x+a[0],e.y+a[1])]-distance[this.key(e.x+b[0],e.y+b[1])]);
-        const step=e.awake?candidates[0]:candidates[this.int(0,Math.max(0,candidates.length-1))];if(step){e.x+=step[0];e.y+=step[1];}
+        const candidates=DIRS.filter(([dx,dy])=>this.canStep(e.x,e.y,dx,dy)&&!(e.x+dx===p.x&&e.y+dy===p.y)&&!this.enemyAt(e.x+dx,e.y+dy));
+        const chase=e.awake?candidates.filter(([dx,dy])=>distance[this.key(e.x+dx,e.y+dy)]<distance[this.key(e.x,e.y)]).sort((a,b)=>distance[this.key(e.x+a[0],e.y+a[1])]-distance[this.key(e.x+b[0],e.y+b[1])])[0]:null;
+        // Keep roaming through bends; reverse only when there is no other legal step.
+        const forward=candidates.filter(([dx,dy])=>!e.direction||dx!==-e.direction[0]||dy!==-e.direction[1]);
+        const wander=forward.length?forward:candidates,step=chase||wander[this.int(0,Math.max(0,wander.length-1))];
+        if(step){e.x+=step[0];e.y+=step[1];e.direction=step;}
       }
     }
     onStairs(){return this.player.x===this.stairs.x&&this.player.y===this.stairs.y;}
