@@ -32,9 +32,38 @@
     jadeGhost:{type:'ghost',tier:5,name:'翡翠の亡霊',hp:57,attack:23,exp:18,color:'翡翠色',colors:['#286961','#56b89a','#b2f1cf']},
     abyssGhost:{type:'ghost',tier:6,name:'深淵の亡霊',hp:71,attack:28,exp:22,color:'銀紫色',colors:['#53406d','#a494cc','#e7d9ff']},
     starGuardian:{type:'guardian',tier:4,name:'星の番人',hp:65,attack:14,exp:30,color:'金色',colors:['#76563c','#b99a58','#ffe7a6']},
-    abyssGuardian:{type:'guardian',tier:6,name:'深淵の番人',hp:180,attack:34,exp:100,color:'青紫色',colors:['#353e75','#7f8de0','#ccecff']}
+    abyssGuardian:{type:'guardian',tier:6,name:'深淵の番人',hp:180,attack:34,exp:100,color:'青紫色',colors:['#353e75','#7f8de0','#ccecff']},
+    ironBeetle:{type:'beetle',tier:1,name:'鉄殻甲虫',hp:18,attack:5,exp:7,color:'鉄灰色',colors:['#3d4b59','#7f97a2','#c7dde0']},
+    cobaltBeetle:{type:'beetle',tier:4,name:'蒼鋼甲虫',hp:49,attack:16,exp:16,color:'鋼青色',colors:['#284a70','#528fcd','#b4e5ff']},
+    thornPlant:{type:'plant',tier:2,name:'棘吐き草',hp:20,attack:8,exp:10,color:'若草色',colors:['#3b5e37','#80a855','#dcad81']},
+    moonPlant:{type:'plant',tier:5,name:'月光花',hp:48,attack:20,exp:19,color:'月白色',colors:['#4c6083','#9cadce','#f5efcb']},
+    coinMimic:{type:'mimic',tier:1,name:'金貨ミミック',hp:20,attack:8,exp:10,color:'金色',colors:['#77552d','#d2a457','#ffdf91']},
+    starMimic:{type:'mimic',tier:5,name:'星貨ミミック',hp:64,attack:24,exp:25,color:'白金色',colors:['#647282','#afc9d2','#f4f3d5']},
+    lanternMoth:{type:'moth',tier:1,name:'灯喰い蛾',hp:12,attack:4,exp:6,color:'橙色',colors:['#775045','#dc9860','#ffe2a3']},
+    eclipseMoth:{type:'moth',tier:4,name:'月蝕蛾',hp:38,attack:15,exp:17,color:'藍紫色',colors:['#433969','#9c85c9','#dce1ff']},
+    stoneGolem:{type:'golem',tier:2,name:'石拳ゴーレム',hp:34,attack:14,exp:14,color:'石灰色',colors:['#515852','#909d8a','#d5ddbd']},
+    obsidianGolem:{type:'golem',tier:6,name:'黒曜ゴーレム',hp:86,attack:32,exp:30,color:'黒紫色',colors:['#37364d','#77718d','#c8bce5']}
   };
-  const MONSTER_POOLS=[['mossSlime'],['amberSlime','caveBat'],['emberBat','lanternGhost'],['frostBat','frostGhost'],['thunderBat','goldGhost'],['jadeBat','jadeGhost'],['obsidianBat','abyssGhost']];
+  Object.assign(MONSTERS.mossSlime,{trait:'slow',speed:1,cadence:2,feature:'2ターンに1歩進みます。隣接中は毎ターン攻撃します。',counter:'距離を取って矢で攻撃。追いかけられても離れやすい相手です。'});
+  Object.assign(MONSTERS.amberSlime,{trait:'regen',regen:1,feature:'毎ターンHPを1回復します。',counter:'攻撃を続け、回復する隙を与えずに倒しましょう。'});
+  for(const key of ['caveBat','emberBat','obsidianBat'])Object.assign(MONSTERS[key],{trait:'fast',speed:2,feature:'1ターンに最大2歩接近します。移動したターンは攻撃しません。',counter:'早めに矢で迎撃。距離2でも次の行動で隣接します。'});
+  for(const [key,range]of [['frostBat',3],['thunderBat',4],['lanternGhost',3],['frostGhost',4],['abyssGuardian',5]])Object.assign(MONSTERS[key],{trait:'ranged',range,feature:`直線${range}マス以内の1マスを狙い、次のターンに遠距離攻撃します。`,counter:'狙われたマスから移動。壁や別の敵でも射線を遮れます。'});
+  for(const [key,hunger]of [['jadeBat',3],['jadeGhost',4],['lanternMoth',3],['eclipseMoth',5]])Object.assign(MONSTERS[key],{trait:'hunger',hunger,feature:`近接攻撃が当たると、体力に加えて満腹度を${hunger}減らします。`,counter:'矢で先に倒すか、パンを温存して接近戦を短くしましょう。'});
+  Object.assign(MONSTERS.goldGhost,{trait:'regen',regen:3,feature:'毎ターンHPを3回復します。',counter:'矢と剣を組み合わせ、短いターンで倒しましょう。'});
+  Object.assign(MONSTERS.abyssGhost,{trait:'blink',feature:'攻撃を受けると、次の行動で同じ部屋の3マス以内へ転移します。転移中は攻撃しません。',counter:'転移先を確認して矢で追撃。通路では転移できません。'});
+  for(const key of ['ironBeetle','cobaltBeetle']){const armor=key==='ironBeetle'?2:4;Object.assign(MONSTERS[key],{trait:'armor',armor,feature:`剣と矢のダメージを${armor}軽減します。受けるダメージは最低1です。`,counter:'雷の巻物は殻の軽減を無視できます。'});}
+  for(const key of ['thornPlant','moonPlant']){const range=key==='thornPlant'?4:5;Object.assign(MONSTERS[key],{trait:'ranged',stationary:true,range,feature:`移動せず、直線${range}マス以内の1マスを狙って次のターンに攻撃します。`,counter:'射線を外して近づくか、予告に合わせて横へ移動しましょう。'});}
+  for(const key of ['coinMimic','starMimic'])Object.assign(MONSTERS[key],{trait:'mimic',feature:'金貨の山に化けています。隣接すると正体を現し、そのターンは攻撃しません。攻撃されると即座に正体を現します。',counter:'正体を見たら距離を取り、矢で迎撃。反撃前の1ターンを使いましょう。'});
+  for(const key of ['starGuardian','stoneGolem','obsidianGolem'])Object.assign(MONSTERS[key],{trait:'windup',cadence:key==='starGuardian'?1:2,armor:key==='obsidianGolem'?4:0,feature:`隣の1マスを狙い、次のターンに強打します。${key==='starGuardian'?'': '移動は2ターンに1歩です。'}${key==='obsidianGolem'?'剣と矢のダメージを4軽減します。':''}`,counter:'予告のマスから移動し、空振りの隙に攻撃しましょう。'});
+  const MONSTER_POOLS=[
+    ['mossSlime'],
+    ['amberSlime','caveBat','ironBeetle','coinMimic','lanternMoth'],
+    ['emberBat','lanternGhost','ironBeetle','coinMimic','lanternMoth','thornPlant','stoneGolem'],
+    ['frostBat','frostGhost','ironBeetle','coinMimic','lanternMoth','thornPlant','stoneGolem'],
+    ['thunderBat','goldGhost','cobaltBeetle','eclipseMoth','stoneGolem','coinMimic'],
+    ['jadeBat','jadeGhost','cobaltBeetle','eclipseMoth','moonPlant','starMimic'],
+    ['obsidianBat','abyssGhost','cobaltBeetle','eclipseMoth','moonPlant','starMimic','obsidianGolem']
+  ];
   const MONSTER_MARKS=['無印','横線','菱形','山形','十字','王冠','星形'];
   function monsterTier(floor,dungeon){const depth=floor+(dungeon==='depths'?2:0);return depth<3?0:depth<6?1:depth<11?2:depth<16?3:depth<21?4:depth<26?5:6;}
   function monsterStats(species){const m=MONSTERS[species];return{species,type:m.type,name:m.name,maxHp:m.hp,attack:m.attack,exp:m.exp};}
@@ -168,7 +197,7 @@
       for(let i=0;i<count;i++){
         const pos=i<houseSpots.length?houseSpots[i]:emptySpot(ordinaryRooms);if(!pos)continue;
         const tier=monsterTier(this.floor,this.dungeon),pool=MONSTER_POOLS[tier];
-        const species=tier===0?pool[0]:tier===1?(this.random()<.45?pool[1]:pool[0]):(this.random()<.5?pool[1]:pool[0]);
+        const species=tier===0?pool[0]:pool[this.int(0,pool.length-1)];
         this.enemies.push({...pos,id:i,...monsterStats(species),hp:MONSTERS[species].hp,awake:false,house:i<houseSpots.length});
       }
       for(let i=0;i<Math.min(this.floor+(hard?2:0),hard?8:5);i++){const pos=emptySpot(ordinaryRooms,true);if(pos)this.traps.push({...pos,found:false,spent:false});}
@@ -201,14 +230,14 @@
     }
     attack(){if(this.status!=='playing')return false;const p=this.player,[dx,dy]=p.facing,e=this.canStep(p.x,p.y,dx,dy)?this.enemyAt(p.x+dx,p.y+dy):null;if(e)this.hit(e,this.attackPower()+this.int(-1,2));else{this.say('剣を振った。目の前に敵はいない。');this.effect('swing',p.x+dx,p.y+dy,0);}this.finishTurn();return true;}
     wait(){if(this.status!=='playing')return false;this.finishTurn();return true;}
-    hit(enemy,damage){enemy.hp-=damage;enemy.awake=true;this.say(`${enemy.name}に${damage}ダメージ。`);this.effect('hit',enemy.x,enemy.y,damage);if(enemy.hp<=0){this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`,'good');this.player.exp+=enemy.exp;this.player.gold+=this.int(3,12)*this.floor;this.effect('kill',enemy.x,enemy.y,0);while(this.player.exp>=this.player.nextExp){this.player.exp-=this.player.nextExp;this.player.level++;this.player.nextExp=Math.floor(this.player.nextExp*1.35)+3;this.player.maxHp+=6;this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.say(`レベル${this.player.level}になった！ 体力と攻撃力が上がった。`,'good');this.effect('level',this.player.x,this.player.y,this.player.level);}}}
+    hit(enemy,damage,kind='physical'){const m=MONSTERS[enemy.species];damage=Math.max(1,damage-(kind==='physical'?(m?.armor||0):0));if(m?.trait==='mimic')enemy.revealed=true;enemy.hp-=damage;if(m?.trait==='blink'&&enemy.hp>0)enemy.blinkPending=true;enemy.awake=true;this.say(`${enemy.name}に${damage}ダメージ。`);this.effect('hit',enemy.x,enemy.y,damage);if(enemy.hp<=0){this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`,'good');this.player.exp+=enemy.exp;this.player.gold+=this.int(3,12)*this.floor;this.effect('kill',enemy.x,enemy.y,0);while(this.player.exp>=this.player.nextExp){this.player.exp-=this.player.nextExp;this.player.level++;this.player.nextExp=Math.floor(this.player.nextExp*1.35)+3;this.player.maxHp+=6;this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.say(`レベル${this.player.level}になった！ 体力と攻撃力が上がった。`,'good');this.effect('level',this.player.x,this.player.y,this.player.level);}}}
     collect(){const p=this.player;const item=this.items.find(i=>i.x===p.x&&i.y===p.y);if(!item)return;if(item.kind==='gold'){p.gold+=item.amount;this.say(`${item.amount}Gを拾った。`,'good');}else if(item.kind==='weapon'){p.weapon++;this.say(`${this.weaponName()}を手に入れ、装備した。`,'good');}else if(item.kind==='shield'){p.shield++;this.say(`${this.shieldName()}を手に入れ、装備した。`,'good');}else{const stacks=item.kind==='arrow'&&this.arrowCount()>0;if(this.inventoryEntries().length>=16&&!stacks){this.say('持ち物がいっぱい。アイテムを使って空きを作ろう。');return;}p.bag.push(item.kind);this.say(`${ITEMS[item.kind].name}を拾った。`,'good');}this.effect('pickup',p.x,p.y,item.kind,this.log[0].text);this.items.splice(this.items.indexOf(item),1);}
     triggerTrap(){const p=this.player,t=this.traps.find(t=>t.x===p.x&&t.y===p.y&&!t.spent);if(!t)return;t.found=true;t.spent=true;const d=this.int(2,5);p.hp-=d;this.say(`足元にトゲの罠！ ${d}ダメージ。`,'danger');this.effect('damage',p.x,p.y,d);}
     use(index){
       if(this.status!=='playing')return false;const p=this.player,kind=p.bag[index];if(!ITEMS[kind])return false;
       if(kind==='bread'){const before=p.hunger;p.hunger=Math.min(100,p.hunger+50);this.say(`パンを食べた。満腹度 +${p.hunger-before}%`,'good');this.effect('heal',p.x,p.y,'満腹');}
       if(kind==='potion'){const before=p.hp;p.hp=Math.min(p.maxHp,p.hp+25);this.say(`回復草を使った。体力 +${p.hp-before}`,'good');this.effect('heal',p.x,p.y,p.hp-before);}
-      if(kind==='scroll'){this.say('雷の巻物を読んだ！');for(const e of this.enemies)if(e.hp>0&&this.visible[this.key(e.x,e.y)])this.hit(e,18);this.effect('lightning',p.x,p.y,0);}
+      if(kind==='scroll'){this.say('雷の巻物を読んだ！');for(const e of this.enemies)if(e.hp>0&&this.visible[this.key(e.x,e.y)])this.hit(e,18,'magic');this.effect('lightning',p.x,p.y,0);}
       if(kind==='map'){this.seen.fill(true);this.say('迷宮の地図が浮かび上がった。階段はミニマップの水色の印。','good');this.effect('map',p.x,p.y,0);}
       if(kind==='arrow'){const[dx,dy]=p.facing;let x=p.x,y=p.y,hit=false;for(let i=0;i<10;i++){if(!this.canStep(x,y,dx,dy))break;x+=dx;y+=dy;const e=this.enemyAt(x,y);if(e){this.hit(e,12);hit=true;break;}}if(!hit)this.say('木の矢を放った。敵には当たらなかった。');this.effect('arrow',x,y,0);}
       p.bag.splice(index,1);if(kind==='arrow'&&!this.arrowCount())p.ammo=null;this.finishTurn();return true;
@@ -229,19 +258,50 @@
         if(this.enemies.some(e=>e.type==='guardian'&&e.hp>0))this.say(`${this.dungeonInfo().guardian}がランタンを守っている。番人を倒してから手に入れよう。`);else{this.status='won';if(this.dungeon==='tutorial')this.tutorialCleared=true;this.say(`${this.dungeonInfo().treasure}を手に入れた！ ${this.dungeon==='tutorial'?'チュートリアル完了。「深淵の迷宮」が解放された。':'30階の深淵を踏破した！'}`,'good');this.effect('won',this.player.x,this.player.y,0);}
       }
     }
+    clearShot(from,to,range){
+      const dx=to.x-from.x,dy=to.y-from.y,dist=Math.max(Math.abs(dx),Math.abs(dy));
+      if(!dist||dist>range||(dx&&dy&&Math.abs(dx)!==Math.abs(dy)))return false;
+      let x=from.x,y=from.y;const sx=Math.sign(dx),sy=Math.sign(dy);
+      for(let i=0;i<dist;i++){if(!this.canStep(x,y,sx,sy))return false;x+=sx;y+=sy;if(this.enemyAt(x,y))return false;}
+      return true;
+    }
+    enemyHit(e){
+      const p=this.player,m=MONSTERS[e.species],d=Math.max(1,e.attack-this.defense()+this.int(-1,1));
+      p.hp-=d;const loss=m?.hunger?Math.min(p.hunger,m.hunger):0;p.hunger-=loss;
+      this.say(`${e.name}の攻撃。${d}ダメージ。${loss?` 満腹度 −${loss}。`:''}`,'danger');this.effect('damage',p.x,p.y,d);
+    }
     enemyTurn(){
       const p=this.player;
-      // One breadth-first distance field per turn keeps chasing fair and avoids wall clipping.
       const distance=Array(W*H).fill(Infinity),queue=[[p.x,p.y]];distance[this.key(p.x,p.y)]=0;
       for(let head=0;head<queue.length;head++){const[x,y]=queue[head],d=distance[this.key(x,y)];for(const[dx,dy]of DIRS){if(!this.canStep(x,y,dx,dy))continue;const nx=x+dx,ny=y+dy,k=this.key(nx,ny);if(distance[k]!==Infinity)continue;distance[k]=d+1;queue.push([nx,ny]);}}
-      for(const e of this.enemies){if(e.hp<=0||(e.house&&!e.awake&&!this.monsterHouse?.triggered))continue;const dist=Math.max(Math.abs(e.x-p.x),Math.abs(e.y-p.y));if(dist<=7&&this.visible[this.key(e.x,e.y)])e.awake=true;
-        if(dist===1&&this.canStep(e.x,e.y,p.x-e.x,p.y-e.y)){const d=Math.max(1,e.attack-this.defense()+this.int(-1,1));p.hp-=d;this.say(`${e.name}の攻撃。${d}ダメージ。`,'danger');this.effect('damage',p.x,p.y,d);if(p.hp<=0)break;continue;}
-        const candidates=DIRS.filter(([dx,dy])=>this.canStep(e.x,e.y,dx,dy)&&!(e.x+dx===p.x&&e.y+dy===p.y)&&!this.enemyAt(e.x+dx,e.y+dy));
-        const chase=e.awake?candidates.filter(([dx,dy])=>distance[this.key(e.x+dx,e.y+dy)]<distance[this.key(e.x,e.y)]).sort((a,b)=>distance[this.key(e.x+a[0],e.y+a[1])]-distance[this.key(e.x+b[0],e.y+b[1])])[0]:null;
-        // Keep roaming through bends; reverse only when there is no other legal step.
-        const forward=candidates.filter(([dx,dy])=>!e.direction||dx!==-e.direction[0]||dy!==-e.direction[1]);
-        const wander=forward.length?forward:candidates,step=chase||wander[this.int(0,Math.max(0,wander.length-1))];
-        if(step){e.x+=step[0];e.y+=step[1];e.direction=step;}
+      for(const e of this.enemies){
+        if(e.hp<=0||(e.house&&!e.awake&&!this.monsterHouse?.triggered))continue;
+        const m=MONSTERS[e.species]||{},dist=Math.max(Math.abs(e.x-p.x),Math.abs(e.y-p.y)),visible=this.visible[this.key(e.x,e.y)];
+        if(dist<=7&&visible)e.awake=true;
+        if(m.trait==='mimic'&&!e.revealed){if(dist===1&&this.canStep(e.x,e.y,p.x-e.x,p.y-e.y)){e.revealed=true;e.awake=true;this.say(`金貨の山が動いた！ ${e.name}が正体を現した。次の行動で反撃してくる！`,'danger');this.effect('warning',e.x,e.y,0);}continue;}
+        if(m.regen&&e.hp<e.maxHp)e.hp=Math.min(e.maxHp,e.hp+m.regen);
+        if(e.blinkPending){delete e.blinkPending;const room=this.roomAt(e.x,e.y),spots=[];
+          if(room)for(let y=room.y;y<room.y+room.h;y++)for(let x=room.x;x<room.x+room.w;x++){const d=Math.max(Math.abs(x-e.x),Math.abs(y-e.y)),away=Math.max(Math.abs(x-p.x),Math.abs(y-p.y));if(d>0&&d<=3&&away>=2&&this.tile(x,y)&&!this.enemyAt(x,y)&&!(x===this.stairs.x&&y===this.stairs.y)&&!this.items.some(i=>i.x===x&&i.y===y))spots.push({x,y});}
+          if(spots.length){Object.assign(e,spots[this.int(0,spots.length-1)]);if(visible)this.say(`${e.name}が部屋の中へ転移した。`);continue;}
+        }
+        if(e.intent){const aim=e.intent;delete e.intent;
+          if(p.x===aim.x&&p.y===aim.y&&this.clearShot(e,aim,aim.kind==='windup'?1:m.range)){this.enemyHit(e);if(p.hp<=0)break;}
+          else if(visible)this.say(`${e.name}の攻撃は空を切った。`);
+          continue;
+        }
+        const adjacent=dist===1&&this.canStep(e.x,e.y,p.x-e.x,p.y-e.y);
+        const shooting=m.trait==='ranged'&&e.awake&&visible&&this.clearShot(e,p,m.range);
+        if((m.trait==='windup'&&adjacent)||shooting){e.intent={x:p.x,y:p.y,kind:shooting?'ranged':'windup'};this.say(`${e.name}が${shooting?'射撃':'強打'}の構え！ 狙われたマスから移動しよう。`,'danger');this.effect('warning',p.x,p.y,0);continue;}
+        if(adjacent){this.enemyHit(e);if(p.hp<=0)break;continue;}
+        if(m.stationary||(m.cadence&&this.turn%m.cadence!==0))continue;
+        for(let stepIndex=0;stepIndex<(e.awake?(m.speed||1):1);stepIndex++){
+          if(Math.max(Math.abs(e.x-p.x),Math.abs(e.y-p.y))===1&&this.canStep(e.x,e.y,p.x-e.x,p.y-e.y))break;
+          const candidates=DIRS.filter(([dx,dy])=>this.canStep(e.x,e.y,dx,dy)&&!(e.x+dx===p.x&&e.y+dy===p.y)&&!this.enemyAt(e.x+dx,e.y+dy));
+          const chase=e.awake?candidates.filter(([dx,dy])=>distance[this.key(e.x+dx,e.y+dy)]<distance[this.key(e.x,e.y)]).sort((a,b)=>distance[this.key(e.x+a[0],e.y+a[1])]-distance[this.key(e.x+b[0],e.y+b[1])])[0]:null;
+          const forward=candidates.filter(([dx,dy])=>!e.direction||dx!==-e.direction[0]||dy!==-e.direction[1]);
+          const wander=forward.length?forward:candidates,step=chase||wander[this.int(0,Math.max(0,wander.length-1))];
+          if(step){e.x+=step[0];e.y+=step[1];e.direction=step;}else break;
+        }
       }
     }
     onStairs(){return this.player.x===this.stairs.x&&this.player.y===this.stairs.y;}
@@ -258,6 +318,8 @@
           const damage=Math.max(0,e.maxHp-e.hp),alive=e.hp>0;
           Object.assign(e,monsterStats(e.species));e.hp=alive?Math.max(1,e.maxHp-damage):e.hp;
         }else if(!Object.hasOwn(MONSTERS,e.species)||e.type!==MONSTERS[e.species].type||e.name!==MONSTERS[e.species].name||e.maxHp!==MONSTERS[e.species].hp||e.attack!==MONSTERS[e.species].attack||e.exp!==MONSTERS[e.species].exp||!Number.isFinite(e.hp)||e.hp>e.maxHp)return null;
+        if(e.intent!=null&&((e.intent.kind==='ranged'?MONSTERS[e.species].trait!=='ranged':e.intent.kind==='windup'?MONSTERS[e.species].trait!=='windup':true)||!Number.isInteger(e.intent.x)||!Number.isInteger(e.intent.y)||!game.inside(e.intent.x,e.intent.y)||!game.tile(e.intent.x,e.intent.y)))return null;
+        if(e.revealed!=null&&typeof e.revealed!=='boolean'||e.blinkPending!=null&&typeof e.blinkPending!=='boolean')return null;
       }
       game.effects=[];game.reveal();return game;}catch{return null;}}
   }

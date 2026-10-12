@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 require('./dist/engine.js');
+require('./check-traits.cjs');
 const {W,H,DIRS,ITEMS}=DungeonData;
 
 // A species keeps its identity and combat stats across both dungeons and saves.
@@ -32,7 +33,7 @@ const {W,H,DIRS,ITEMS}=DungeonData;
     legacy.hp=1;assert.equal(DungeonEngine.restore(JSON.stringify(saved)).enemies[0].hp,1);
     legacy.species='unknown';assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);
   }
-  console.log('PASS: all 15 species encountered in 4,000 floors; same-name stats fixed across dungeons; exact save round-trip and damaged/dead legacy migration checked.');
+  console.log('PASS: all 25 species encountered in 4,000 floors; same-name stats fixed across dungeons; exact save round-trip and damaged/dead legacy migration checked.');
 }
 
 {
@@ -397,7 +398,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   const source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
   const draw=source.slice(source.indexOf('  function drawMinimap()'),source.indexOf('  function toggleMinimap()'));
   const calls=[],mini={fillStyle:'',fillRect(...args){calls.push({color:this.fillStyle,args});}};
-  function markers(){calls.length=0;vm.runInNewContext(draw+'drawMinimap();',{mini,engine:game,W,H});return calls.filter(c=>['#d08288','#ffc857'].includes(c.color));}
+  function markers(){calls.length=0;vm.runInNewContext(draw+'drawMinimap();',{mini,engine:game,W,H,MONSTERS:DungeonData.MONSTERS});return calls.filter(c=>['#d08288','#ffc857'].includes(c.color));}
   assert.equal(markers().length,4);
   const stairsIndex=calls.findIndex(c=>c.color==='#5ca9ff');
   assert(stairsIndex>0);assert.equal(calls[stairsIndex-1].color,'#131c20');
@@ -494,7 +495,7 @@ for(let seed=1;seed<=100;seed++){
     assert.equal(game.enemies.length,6+Math.floor(floor*.75)+(floor===30?1:0));
     assert.equal(game.traps.length,Math.min(floor+2,8));assert(game.traps.every(t=>!game.isRoomEntrance(t.x,t.y)));
     const enemies=game.enemies.filter(e=>e.type!=='guardian');
-    for(const e of enemies){const bonus=e.type==='ghost'?4:e.type==='bat'?2:0;assert.equal(e.maxHp,10+floor*2+bonus);assert.equal(e.attack,3+Math.ceil(floor*.8)+bonus/2);}
+    for(const e of enemies){const m=DungeonData.MONSTERS[e.species];assert.equal(e.maxHp,m.hp);assert.equal(e.attack,m.attack);assert(DungeonData.MONSTER_POOLS[DungeonData.monsterTier(floor,'depths')].includes(e.species));}
     assert.equal(game.enemies.some(e=>e.type==='guardian'),floor===30);
     if(floor===30||floor===11){const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.equal(restored.floor,floor);assert.deepEqual(restored.enemies,game.enemies);}
   }
