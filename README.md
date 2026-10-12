@@ -12,6 +12,31 @@ python3 -m http.server 4173 --directory dist
 
 `dist/index.html` を直接開くこともできます。保存の利用可否はブラウザの設定によります。保存できない場合は画面に表示されます。
 
+## Cloudflareへの公開と自動デプロイ
+
+Cloudflare Workers Static Assetsで`dist/`を配信します。Workerコードやゲームのビルドは不要です。`wrangler.jsonc`に公開名・配信ディレクトリ・公開前の検証コマンドを定義しています。
+
+CloudflareダッシュボードでWorkersのGit連携を設定し、GitHubの`y-krn/lantern-dungeon`を選択します。設定は次のとおりです。
+
+- Worker名：`lantern-dungeon`（`wrangler.jsonc`の`name`と一致させます）。
+- 本番ブランチ：`main`。
+- Root directory：リポジトリ直下（`/`）。`dist`を指定しないでください。
+- Build command：`node check.cjs`。
+- Deploy command：`npx --yes wrangler@4.149.0 deploy`。
+- Preview command：`npx --yes wrangler@4.149.0 preview`（ブランチのPreview buildsを有効にした場合）。
+
+Wrangler 4.149.0にはNode.js 22以降が必要です。Wranglerのバージョンは公開コマンドで固定しています。Workers BuildsはWranglerの`build.command`を使わないため、ダッシュボードにも`node check.cjs`を設定してください。検証に失敗したビルドは公開されません。接続後は`main`へのpushで本番を更新し、Preview buildsを有効にすると他のブランチも確認用URLへ公開できます。
+
+ローカルで公開設定を検証する場合は次を実行します。ゲーム検証も自動実行され、Cloudflareへのアップロードは行いません。
+
+```sh
+npx --yes wrangler@4.149.0 deploy --dry-run
+```
+
+本番URLはWorkersのデプロイ結果に表示されます。ドメインを変更すると既存の`localStorage`セーブやダンジョン解放状態は新サイトへ引き継がれません。端末間同期もありません。継続利用する本番URLを固定してください。Cloudflareへの切替でSitesの設定や既存の保存データは削除されません。
+
+公式資料：[Static Assets](https://developers.cloudflare.com/workers/static-assets/)、[Workers Buildsの設定](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)。
+
 ## 操作と目的
 
 - 矢印キー / WASD：移動。敵へ移動すると攻撃。
@@ -124,6 +149,7 @@ node check.cjs
 - `dist/game.js`：画面更新、操作、ダイアログ、効果音、自動保存。
 - `check.cjs`：依存ライブラリ不要の一括検証。
 - `.openai/hosting.json`：Sitesの配置先と静的配信設定。
+- `wrangler.jsonc`：Cloudflare Workersの静的配信と公開前の検証設定。
 
 ゲーム中の読み取り専用スナップショットは `window.lanternGame.snapshot()` から取得できます。
 
