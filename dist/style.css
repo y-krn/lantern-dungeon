@@ -86,3 +86,5 @@
 .dungeon-choice-heading>span{font-size:11px;font-weight:400}
 .dungeon-choice:disabled .dungeon-choice-heading{color:var(--muted)}
 .dungeon-choice-description{display:block;font-size:12px;line-height:1.8;color:#c1b8c8;margin-top:9px}
+
+.item-card>.item-actions{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}.item-card strong{overflow-wrap:anywhere}#item-name-form{display:grid;gap:12px;margin:20px 0}#item-name-form label{font-size:12px;color:var(--gold)}#item-name{width:100%;font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px}#item-name:focus-visible{outline:2px solid var(--gold);outline-offset:2px}

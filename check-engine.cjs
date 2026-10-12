@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 require('./dist/engine.js');
 require('./check-traits.cjs');
+require('./check-identification.cjs');
 require('./check-equipment.cjs');
 const {W,H,DIRS,ITEMS}=DungeonData;
 
@@ -304,6 +305,29 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   game.move(1,0);assert.equal(game.status,'dead','Fatal trap cannot be reversed by passive regeneration');
 }
 {
+  const game=arena(33),p=game.player;game.enemies=[];game.items=[];
+  const trap={x:p.x+1,y:p.y,found:false};game.traps=[trap];
+  let hp=p.hp;
+  assert(game.move(1,0));assert(trap.found);assert.equal(game.traps.length,1);
+  assert.equal(p.hp,hp-game.effects.at(-1).value);
+  hp=p.hp;const effects=game.effects.length;
+  assert(game.wait());assert.equal(p.hp,hp);assert.equal(game.effects.length,effects,'Waiting on a trap does not trigger it');
+  assert(game.move(-1,0));assert.equal(p.hp,hp);
+  assert(game.move(1,0));assert.equal(game.effects.length,effects+1,'Re-entering a trap triggers it again');
+  assert.equal(p.hp,hp-game.effects.at(-1).value);
+  const saved=JSON.parse(game.serialize());
+  for(const legacy of [false,true]){
+    if(legacy)saved.state.traps[0].spent=true;
+    const restored=DungeonEngine.restore(JSON.stringify(saved));assert(restored);assert(restored.traps[0].found);
+    hp=restored.player.hp;
+    assert(restored.move(-1,0));assert.equal(restored.player.hp,hp);
+    assert(restored.move(1,0));assert.equal(restored.effects.length,1,'Restored traps trigger, including legacy spent traps');
+    assert.equal(restored.player.hp,hp-restored.effects[0].value);
+    assert(restored.move(-1,0));restored.player.hp=1;
+    assert(restored.move(1,0));assert.equal(restored.status,'dead','Re-entering a trap can be fatal');
+  }
+}
+{
   const game=arena(22),p=game.player;
   // A diagonal destination alone is insufficient: both orthogonal sides must be open.
   game.tiles[game.key(p.x+1,p.y)]=0;assert.equal(game.move(1,1),false);assert.equal(game.turn,0);
@@ -316,7 +340,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   p.bag=['potion','arrow','bread','arrow','potion','arrow'];
   assert.deepEqual(game.inventoryEntries(),[{kind:'bread',index:2,count:1},{kind:'potion',index:0,count:1},{kind:'potion',index:4,count:1},{kind:'arrow',index:1,count:3}]);
   assert.equal(game.shoot(),false);assert.equal(game.turn,0);
-  assert(game.equipArrow());assert.equal(p.ammo,'arrow');assert.equal(game.arrowCount(),3);assert.equal(game.turn,1);assert.deepEqual(p.weapon,{kind:'woodSword',bonus:0});assert.deepEqual(p.shield,{kind:'travelerShield',bonus:0});
+  assert(game.equipArrow());assert.equal(p.ammo,'arrow');assert.equal(game.arrowCount(),3);assert.equal(game.turn,1);assert.equal(p.weapon,0);assert.equal(p.shield,0);
   const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.deepEqual(restored.player,p);assert.equal(restored.arrowCount(),3);
   assert(game.equipArrow());assert.equal(p.ammo,null);assert.equal(game.arrowCount(),3);assert.equal(game.shoot(),false);
   assert(game.equipArrow());p.facing=[1,0];
@@ -372,9 +396,9 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 }
 {
   const game=new DungeonEngine(22),p=game.player;
-  for(const kind of [...Object.keys(ITEMS),'gold']){
-    p.bag=[];game.effects=[];game.items=[{x:p.x,y:p.y,kind,amount:42}];game.collect();
-    const text=kind==='gold'?'42Gを拾った。':kind==='arrow'?'木の矢を10本拾った。':`${ITEMS[kind].name}を拾った。${DungeonData.EQUIPMENT[kind]?'持ち物から装備できます。':''}`;
+  for(const kind of [...Object.keys(ITEMS),'gold','weapon','shield']){
+    p.bag=[];game.effects=[];const gear=kind==='weapon'||kind==='shield';game.items=[{x:p.x,y:p.y,kind,amount:42,...(gear?{rank:1,bonus:2,cursed:false,identified:false}:{})}];game.collect();
+    const text=kind==='gold'?'42Gを拾った。':gear?`${game.itemName(p.bag.at(-1))}を拾った。`:kind==='arrow'?'木の矢を10本拾った。':`${ITEMS[kind].name}を拾った。`;
     assert.deepEqual(game.effects,[{type:'pickup',x:p.x,y:p.y,value:kind,text}]);
     // Later events in the same turn must not replace the pickup message.
     game.say('足元にトゲの罠！ 3ダメージ。','danger');assert.equal(game.effects[0].text,text);
@@ -495,7 +519,7 @@ console.log(`PASS: layouts ${JSON.stringify(layouts)}, no consecutive repeats; d
   invalid.state.dungeon='unknown';assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
   invalid.state.dungeon='depths';invalid.state.tutorialCleared=false;assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
   invalid.state.tutorialCleared='true';assert.equal(DungeonEngine.restore(JSON.stringify(invalid)),null);
-  const retry=new DungeonEngine(9,'depths',true);assert.equal(retry.floor,1);assert.equal(retry.player.level,1);assert.equal(retry.player.gold,0);assert.deepEqual(retry.player.weapon,{kind:'woodSword',bonus:0});
+  const retry=new DungeonEngine(9,'depths',true);assert.equal(retry.floor,1);assert.equal(retry.player.level,1);assert.equal(retry.player.gold,0);assert.equal(retry.player.weapon,0);
 }
 for(let seed=1;seed<=100;seed++){
   const game=new DungeonEngine(seed,'depths',true);
@@ -511,7 +535,7 @@ for(let seed=1;seed<=100;seed++){
     for(const hazard of [...game.enemies,...game.traps])assert.notEqual(game.roomAt(hazard.x,hazard.y),game.roomAt(game.player.x,game.player.y));
     assert.equal(game.items.filter(i=>i.kind==='bread').length,2);
     assert.equal(game.items.filter(i=>i.kind==='potion').length,2);
-    for(const slot of ['weapon','shield'])assert(game.items.filter(i=>DungeonData.EQUIPMENT[i.kind]?.slot===slot).length<=1);
+    for(const slot of ['weapon','shield'])assert(game.items.filter(i=>i.kind===slot).length<=1);
     assert.equal(game.enemies.length,6+Math.floor(floor*.75)+(floor===30?1:0));
     assert.equal(game.traps.length,Math.min(floor+2,8));assert(game.traps.every(t=>!game.isRoomEntrance(t.x,t.y)));
     const enemies=game.enemies.filter(e=>e.type!=='guardian');
