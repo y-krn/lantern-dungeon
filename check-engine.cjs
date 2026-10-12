@@ -22,7 +22,10 @@ const {W,H,DIRS,ITEMS}=DungeonData;
   assert.deepEqual([...encountered].sort(),Object.keys(MONSTERS).sort());
   for(const dungeon of ['tutorial','depths']){
     const game=new DungeonEngine(71,dungeon,true);game.floor=dungeon==='tutorial'?5:30;game.generateFloor();
-    const saved=JSON.parse(game.serialize()),legacy=saved.state.enemies[0];
+    const saved=JSON.parse(game.serialize()),legacyIndex=saved.state.enemies.findIndex(e=>e.type==='bat');assert(legacyIndex>=0);
+    // Use a legacy enemy family explicitly; new random rolls may change the first modern species.
+    [saved.state.enemies[0],saved.state.enemies[legacyIndex]]=[saved.state.enemies[legacyIndex],saved.state.enemies[0]];
+    const legacy=saved.state.enemies[0];
     const species=legacy.species;delete legacy.species;
     legacy.name=legacy.type==='slime'?'苔スライム':legacy.type==='bat'?'洞窟コウモリ':'灯りの亡霊';
     legacy.maxHp+=4;legacy.hp=legacy.maxHp-5;legacy.attack+=2;
@@ -344,6 +347,22 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   p.bag=[];assert.deepEqual(game.inventoryEntries(),[]);
 }
 {
+  const amounts=new Set();
+  for(const dungeon of ['tutorial','depths'])for(let seed=1;seed<=100;seed++){
+    const game=new DungeonEngine(seed,dungeon,true),arrow=game.items.find(i=>i.kind==='arrow');
+    assert(arrow);assert(Number.isInteger(arrow.amount)&&arrow.amount>=1&&arrow.amount<=10);amounts.add(arrow.amount);
+    const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.deepEqual(restored.items,game.items);
+    const p=restored.player,before=restored.arrowCount();p.x=arrow.x;p.y=arrow.y;restored.collect();
+    assert.equal(restored.arrowCount(),before+arrow.amount);assert.equal(restored.log[0].text,`木の矢を${arrow.amount}本拾った。`);
+    assert(!restored.items.some(i=>i.kind==='arrow'));assert.equal(restored.inventoryEntries().filter(i=>i.kind==='arrow').length,1);
+  }
+  assert.deepEqual([...amounts].sort((a,b)=>a-b),[1,2,3,4,5,6,7,8,9,10]);
+  const game=new DungeonEngine(22),p=game.player;p.bag=Array(15).fill('bread');p.bag.push('arrow');p.ammo='arrow';
+  game.items=[{x:p.x,y:p.y,kind:'arrow',amount:10}];game.collect();
+  assert.equal(game.arrowCount(),11);assert.equal(game.inventoryEntries().length,16);assert.equal(p.ammo,'arrow');assert.equal(game.items.length,0);
+  game.items=[{x:p.x,y:p.y,kind:'arrow'}];game.collect();assert.equal(game.arrowCount(),12);
+}
+{
   const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.traps=[];
   p.bag=Array(15).fill('bread');p.bag.push('arrow');
   game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.arrowCount(),2);assert.equal(game.inventoryEntries().length,16);assert.equal(game.items.length,0);
@@ -354,7 +373,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   const game=new DungeonEngine(22),p=game.player;
   for(const kind of [...Object.keys(ITEMS),'gold','weapon','shield']){
     game.effects=[];game.items=[{x:p.x,y:p.y,kind,amount:42}];game.collect();
-    const text=kind==='gold'?'42Gを拾った。':kind==='weapon'?`${game.weaponName()}を手に入れ、装備した。`:kind==='shield'?`${game.shieldName()}を手に入れ、装備した。`:`${ITEMS[kind].name}を拾った。`;
+    const text=kind==='gold'?'42Gを拾った。':kind==='weapon'?`${game.weaponName()}を手に入れ、装備した。`:kind==='shield'?`${game.shieldName()}を手に入れ、装備した。`:kind==='arrow'?'木の矢を10本拾った。':`${ITEMS[kind].name}を拾った。`;
     assert.deepEqual(game.effects,[{type:'pickup',x:p.x,y:p.y,value:kind,text}]);
     // Later events in the same turn must not replace the pickup message.
     game.say('足元にトゲの罠！ 3ダメージ。','danger');assert.equal(game.effects[0].text,text);
