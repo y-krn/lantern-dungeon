@@ -47,7 +47,7 @@ for(const species of ['coinMimic','starMimic']){
   const h=arena(species);h.hit(h.enemies[0],1);assert.equal(h.enemies[0].revealed,true,'Attacking reveals immediately');
 }
 for(const species of ['jadeBat','jadeGhost','lanternMoth','eclipseMoth']){
-  const g=arena(species,6);g.player.shield=100;g.enemyTurn();assert.equal(g.player.hp,99);assert.equal(g.player.hunger,100-MONSTERS[species].hunger);
+  const g=arena(species,6);g.player.shield={kind:'starShield',bonus:194};g.enemyTurn();assert.equal(g.player.hp,99);assert.equal(g.player.hunger,100-MONSTERS[species].hunger);
   g.player.hunger=2;g.enemyTurn();assert.equal(g.player.hunger,0);g.enemyTurn();assert.equal(g.player.hunger,0);
 }
 for(const species of ['amberSlime','goldGhost']){
