@@ -322,8 +322,11 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   const source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
   const draw=source.slice(source.indexOf('  function drawMinimap()'),source.indexOf('  function toggleMinimap()'));
   const calls=[],mini={fillStyle:'',fillRect(...args){calls.push({color:this.fillStyle,args});}};
-  function markers(){calls.length=0;vm.runInNewContext(draw+'drawMinimap();',{mini,engine:game,W,H});return calls.filter(c=>['#d08288','#93bde9'].includes(c.color));}
+  function markers(){calls.length=0;vm.runInNewContext(draw+'drawMinimap();',{mini,engine:game,W,H});return calls.filter(c=>['#d08288','#ffc857'].includes(c.color));}
   assert.equal(markers().length,4);
+  const stairsIndex=calls.findIndex(c=>c.color==='#5ca9ff');
+  assert(stairsIndex>0);assert.equal(calls[stairsIndex-1].color,'#131c20');
+  assert.deepEqual(calls[stairsIndex-1].args,[calls[stairsIndex].args[0]-1,calls[stairsIndex].args[1]-1,6,6]);
   assert(markers().some(c=>c.color==='#d08288'&&c.args[0]===lastSeen.x*144/W));
   game.enemies.push({x:far.cx,y:far.cy,hp:5});game.items.push({x:far.cx,y:far.cy,kind:'gold'});
   assert.equal(markers().length,4,'Undiscovered entities stay hidden even on revealed terrain');

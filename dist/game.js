@@ -95,9 +95,9 @@
   function drawMinimap(){
     mini.fillStyle='#131c20';mini.fillRect(0,0,144,96);const sx=144/W,sy=96/H;
     for(let y=0;y<H;y++)for(let x=0;x<W;x++){const k=y*W+x;if(engine.seen[k]&&engine.tiles[k]){mini.fillStyle=engine.visible[k]?'#a6b192':'#4a6154';mini.fillRect(x*sx,y*sy,Math.ceil(sx),Math.ceil(sy));}}
-    for(const item of engine.items)if(item.discovered){mini.fillStyle='#93bde9';mini.fillRect(item.x*sx,item.y*sy,3,3);}
+    for(const item of engine.items)if(item.discovered){mini.fillStyle='#ffc857';mini.fillRect(item.x*sx,item.y*sy,3,3);}
     for(const e of engine.enemies)if(e.hp>0&&e.lastSeen){mini.fillStyle='#d08288';mini.fillRect(e.lastSeen.x*sx,e.lastSeen.y*sy,3,3);}
-    if(engine.seen[engine.key(engine.stairs.x,engine.stairs.y)]){mini.fillStyle='#88d5c2';mini.fillRect(engine.stairs.x*sx,engine.stairs.y*sy,4,4);}
+    if(engine.seen[engine.key(engine.stairs.x,engine.stairs.y)]){mini.fillStyle='#131c20';mini.fillRect(engine.stairs.x*sx-1,engine.stairs.y*sy-1,6,6);mini.fillStyle='#5ca9ff';mini.fillRect(engine.stairs.x*sx,engine.stairs.y*sy,4,4);}
     mini.fillStyle='#ffe2a1';mini.fillRect(engine.player.x*sx,engine.player.y*sy,4,4);
   }
   function toggleMinimap(){minimapVisible=!minimapVisible;$('minimap-content').hidden=!minimapVisible;$('minimap-toggle').setAttribute('aria-expanded',String(minimapVisible));}
