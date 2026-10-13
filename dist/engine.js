@@ -552,7 +552,7 @@
         const stacks = item.kind === "arrow" && this.arrowCount() > 0;
         if (this.inventoryCount() >= INVENTORY_CAPACITY && !stacks) {
           this.say(
-            `持ち物がいっぱい。足元に${this.itemName(item)}がある。アイテムを使うか、空いている床に置くか、持ち物から足元のアイテムと交換しよう。`,
+            `持ち物がいっぱい。足元に${this.itemName(item)}がある。持ち物から足元のアイテムを${isEquipment(item) ? "交換しよう" : "使うか交換しよう"}。空いている床に置いて枠を空けることもできる。`,
           );
           return;
         }
@@ -590,13 +590,23 @@
       this.effect("damage", p.x, p.y, d);
     }
     scrollNeedsTarget(index) {
+      if (index === "ground")
+        return this.items.some((item) => item.x === this.player.x && item.y === this.player.y && item.kind === "identify");
       return this.player.bag[index] === "identify";
     }
+    useGround(target) {
+      return this.use("ground", target);
+    }
     use(index, target) {
-      if (this.status !== "playing" || !Number.isInteger(index)) return false;
+      const fromGround = index === "ground";
+      if (this.status !== "playing" || (!fromGround && !Number.isInteger(index))) return false;
       const p = this.player,
-        kind = itemKind(p.bag[index]);
+        item = fromGround
+          ? this.items.find((value) => value.x === p.x && value.y === p.y)
+          : p.bag[index],
+        kind = itemKind(item);
       if (!ITEMS[kind]) return false;
+      if (fromGround && isEquipment(item)) return false;
       if (isEquipment(p.bag[index])) return this.equip(index);
       if (
         kind === "identify" &&
@@ -669,8 +679,13 @@
         if (!hit) this.say("木の矢を放った。敵には当たらなかった。");
         this.effect("arrow", x, y, 0);
       }
-      p.bag.splice(index, 1);
-      if (kind === "arrow" && !this.arrowCount()) p.ammo = null;
+      if (fromGround) {
+        if (kind === "arrow" && item.amount > 1) item.amount--;
+        else this.items.splice(this.items.indexOf(item), 1);
+      } else {
+        p.bag.splice(index, 1);
+        if (kind === "arrow" && !this.arrowCount()) p.ammo = null;
+      }
       this.finishTurn();
       return true;
     }

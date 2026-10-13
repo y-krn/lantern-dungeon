@@ -10,6 +10,11 @@
   } = DungeonData;
   const $ = (id) => document.getElementById(id);
   $("game-viewport").after($("location-hint").closest(".canvas-caption"));
+  const groundUseButton = document.createElement("button");
+  groundUseButton.id = "ground-use-button";
+  groundUseButton.className = "ground-use-button";
+  groundUseButton.hidden = true;
+  $("location-hint").after(groundUseButton);
   const portraitUI = matchMedia("(max-width:600px) and (orientation:portrait)").matches;
   const pwaPanel = $("pwa-panel");
   const canvas = $("game");
@@ -243,6 +248,11 @@
                         ? "灯りの届く先へ、進んでみよう。"
                         : "あせらず、一歩ずつ。";
     const ground = engine.items.find((item) => item.x === p.x && item.y === p.y);
+    groundUseButton.hidden = engine.status !== "playing" || !ground || !ITEMS[ground.kind] || ["weapon", "shield"].includes(ground.kind);
+    if (!groundUseButton.hidden) {
+      groundUseButton.textContent = ground.kind === "bread" ? "足元から食べる" : ground.kind === "arrow" ? "足元から矢を放つ" : "足元から使う";
+      groundUseButton.setAttribute("aria-label", `${engine.itemName(ground)}を${ground.kind === "bread" ? "足元から食べる" : ground.kind === "arrow" ? "足元から1本放つ" : "足元から使う"}`);
+    }
     if (ground && engine.status === "playing" && !threat)
       $("location-hint").textContent =
         `足元：${ground.kind === "gold" ? `${ground.amount}G` : engine.itemName(ground)}${engine.inventoryCount() >= INVENTORY_CAPACITY ? " · 持ち物がいっぱい" : ""}`;
@@ -349,6 +359,7 @@
         .sort((a, b) => priority(a) - priority(b));
     const ground = engine.items.find((item) => item.x === p.x && item.y === p.y);
     const canExchange = ground && ITEMS[ground.kind] && !engine.onStairs();
+    const canUseGround = ground && ITEMS[ground.kind] && !["weapon", "shield"].includes(ground.kind);
     const equipment = Object.entries(p.equipment).filter(([, item]) => item);
     const bagRow = (item, buttons, suffix = "", equipped = false) => {
       const kind = typeof item === "string" ? item : item.kind;
@@ -391,7 +402,7 @@
       .join("");
     openModal(
       "bag",
-      `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong><span>品名を選んで操作</span></div>${portraitUI ? `<p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本</p>` : ""}<p class="bag-turn-hint">閲覧・命名は時間が進みません。使用・装備・置く・交換は1ターン。</p>${ground && ITEMS[ground.kind] ? `<p class="bag-ground">足元：${escapeHTML(engine.itemName(ground))}${ground.kind === "arrow" ? ` × ${ground.amount || 1}` : ""}${canExchange ? " — 選んだ品と交換できます。" : " — 階段の上では交換できません。"}</p>` : ""}<div class="bag-list" role="region" aria-label="持ち物一覧" tabindex="0">${equippedCards}${bagCards}${!equipment.length && !entries.length ? '<p class="bag-turn-hint">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備中の武器・盾、予備装備、道具は1個につき1枠。矢は何本でも1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。</p><p>使用・装備・解除・床に置く・足元との交換で1ターン進みます。鑑定の対象選択・命名では時間は進まず、鑑定を実行すると1ターン進みます。</p><p>木の矢を置く・交換する操作は束ごと扱います。装備後${portraitUI ? "「矢を放つ」" : "Rキー"}で発射できます。足元に品がある場所や階段の上には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`,
+      `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong><span>品名を選んで操作</span></div>${portraitUI ? `<p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本</p>` : ""}<p class="bag-turn-hint">閲覧・命名は時間が進みません。使用・装備・置く・交換は1ターン。</p>${ground && ITEMS[ground.kind] ? `<p class="bag-ground">足元：${escapeHTML(engine.itemName(ground))}${ground.kind === "arrow" ? ` × ${ground.amount || 1}` : ""}${canExchange ? " — 選んだ品と交換できます。" : " — 階段の上では交換できません。"}${canUseGround ? `<br><button class="use-button" data-use="ground">${ground.kind === "bread" ? "足元から食べる" : ground.kind === "arrow" ? "足元から矢を放つ" : "足元から使う"}</button>` : ""}</p>` : ""}<div class="bag-list" role="region" aria-label="持ち物一覧" tabindex="0">${equippedCards}${bagCards}${!equipment.length && !entries.length ? '<p class="bag-turn-hint">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備中の武器・盾、予備装備、道具は1個につき1枠。矢は何本でも1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。</p><p>使用・装備・解除・床に置く・足元との交換で1ターン進みます。鑑定の対象選択・命名では時間は進まず、鑑定を実行すると1ターン進みます。</p><p>木の矢を置く・交換する操作は束ごと扱います。装備後${portraitUI ? "「矢を放つ」" : "Rキー"}で発射できます。足元に品がある場所や階段の上には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`,
     );
     const rows = $("modal-content").querySelectorAll(".bag-entry");
     rows.forEach((row) => row.querySelector("summary").addEventListener("click", () => {
@@ -404,7 +415,7 @@
       .querySelectorAll("[data-use]")
       .forEach((b) =>
         b.addEventListener("click", () => {
-          const index = Number(b.dataset.use);
+          const index = b.dataset.use === "ground" ? "ground" : Number(b.dataset.use);
           if (engine.scrollNeedsTarget(index)) {
             showIdentify(index);
             return;
@@ -451,8 +462,16 @@
         b.addEventListener("click", () => showItemName(Number(b.dataset.name))),
       );
   }
-  function showIdentify(index) {
+  function useGroundFromField() {
+    if ($("modal").open || engine.status !== "playing") return;
+    if (engine.scrollNeedsTarget("ground")) showIdentify("ground", false);
+    else act(() => engine.useGround(), true);
+  }
+  function showIdentify(index, returnToBag = true) {
     const p = engine.player,
+      sourceItem = index === "ground"
+        ? engine.items.find((item) => item.x === p.x && item.y === p.y)
+        : p.bag[index],
       targets = [
         ...Object.entries(p.equipment)
           .filter(([, item]) => item)
@@ -464,7 +483,7 @@
       ];
     openModal(
       "identify",
-      `<div class="modal-inner">${modalHeader("鑑定する持ち物")}<p class="modal-description">${escapeHTML(engine.itemName(p.bag[index]))}で持ち物を1つ鑑定します。対象を選ぶと灯札を1枚消費し、1ターン進みます。キャンセルでは灯札もターンも消費しません。</p><div class="item-list">${targets.map(({ target, item }) => itemCard(item, `<button class="use-button" data-target="${target}">鑑定</button>`, typeof target === "string" ? "（装備中）" : "")).join("")}</div><button class="secondary-button" id="identify-cancel">キャンセル</button></div>`,
+      `<div class="modal-inner">${modalHeader("鑑定する持ち物")}<p class="modal-description">${escapeHTML(engine.itemName(sourceItem))}で持ち物を1つ鑑定します。対象を選ぶと灯札を1枚消費し、1ターン進みます。キャンセルでは灯札もターンも消費しません。</p><div class="item-list">${targets.map(({ target, item }) => itemCard(item, `<button class="use-button" data-target="${target}">鑑定</button>`, typeof target === "string" ? "（装備中）" : "")).join("")}</div><button class="secondary-button" id="identify-cancel">キャンセル</button></div>`,
     );
     $("modal-content")
       .querySelectorAll("[data-target]")
@@ -476,7 +495,7 @@
           act(() => engine.use(index, target), true);
         }),
       );
-    $("identify-cancel").addEventListener("click", showBag);
+    $("identify-cancel").addEventListener("click", returnToBag ? showBag : closeModal);
   }
   function showItemName(index) {
     const kind = engine.player.bag[index];
@@ -614,6 +633,7 @@
     act(() => engine.descend(), true),
   );
   $("bag-button").addEventListener("click", showBag);
+  groundUseButton.addEventListener("click", useGroundFromField);
   $("help-button").addEventListener("click", showHelp);
   $("world-button").addEventListener("click", () => {
     openModal("world", `<div class="modal-inner world-modal">${modalHeader("灯りを拾う旅")}<img class="world-cover" src="art/lantern-cover.png" alt="ランタンを掲げるリネと、苔むす遺跡に暮らす魔物たち"><h3>灯りを集める旅人、リネ</h3><p class="modal-description">森のはずれの村から来た旅人。葉飾りの帽子、星の留め具、祖母から譲られたランタンが目印です。「まだ見ぬ灯りを、探しに行こう。」</p><p class="modal-description">迷宮は、かつて灯りを分け合って暮らした人々の遺跡。人が去ったあとも、苔や花、灯りに惹かれる魔物たちが息づいています。奥に眠る星のランタンには、失われた灯りをともす力があるといわれています。</p><button class="secondary-button" id="world-monsters">遺跡の魔物たちを見る</button><button class="primary-button" data-close>リネと探索に戻る</button></div>`);
