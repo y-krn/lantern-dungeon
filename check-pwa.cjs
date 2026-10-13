@@ -55,6 +55,9 @@ if (process.argv.includes('--refresh')) {
 assert.equal(config.VERSION, version, 'Assets changed: run node check-pwa.cjs --refresh before publishing');
 const localAssets = fs.readdirSync(dist).filter(file => /\.(js|css|html|webmanifest)$/.test(file) && file !== 'sw.js');
 for (const file of localAssets) assert(files.includes(file), `Missing offline dependency: ${file}`);
+for (const file of fs.readdirSync(path.join(dist, 'art'))) {
+  assert(files.includes(`art/${file}`), `Missing offline artwork: ${file}`);
+}
 const manifest = JSON.parse(fs.readFileSync(path.join(dist, 'manifest.webmanifest'), 'utf8'));
 for (const key of ['id', 'scope', 'start_url']) assert.equal(new URL(manifest[key], scope).href, scope);
 assert.equal(manifest.display, 'standalone');

@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#15151f">
+  <meta name="theme-color" content="#f5efdf">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="灯りの迷宮">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="description" content="小さな商人、大きな冒険。チュートリアル10階をクリアして、高難度の30階迷宮に挑むターン制ローグライク。インストール不要、ブラウザで遊べます。">
-  <title>灯りの迷宮 — 小さな商人の大冒険</title>
+  <meta name="description" content="灯りを集める旅人リネと、苔むす遺跡の魔物たち。チュートリアル10階をクリアして、高難度の30階迷宮に挑むターン制ローグライク。インストール不要、ブラウザで遊べます。">
+  <title>灯りの迷宮 — 灯りを拾う旅</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2321222f'/%3E%3Cpath d='M12 9h8v4h3v13H9V13h3z' fill='%23edba72'/%3E%3Cpath d='M13 14h6v9h-6z' fill='%23fff1ad'/%3E%3Cpath d='M13 9V5h6v4' fill='none' stroke='%23edba72' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.webmanifest">
@@ -24,14 +24,14 @@
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="./" aria-label="灯りの迷宮 ホーム"><span class="lantern-mark" aria-hidden="true">✦</span><span>灯りの迷宮<span class="brand-sub">小さな商人の大冒険</span></span></a>
-    <nav aria-label="ゲームメニュー"><button id="sound-button" class="icon-button" aria-label="効果音を有効にする" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M11 4 6 8H3v8h3l5 4V4Z"/><path id="sound-waves" d="m16 9 5 6m0-6-5 6"/></svg></button><button id="help-button" class="header-button">遊び方 <span>?</span></button></nav>
+    <a class="brand" href="./" aria-label="灯りの迷宮 ホーム"><canvas id="brand-portrait" width="64" height="64" aria-hidden="true"></canvas><span>灯りの迷宮<span class="brand-sub">灯りを拾う旅</span></span></a>
+    <nav aria-label="ゲームメニュー"><button id="world-button" class="header-button">物語</button><button id="sound-button" class="icon-button" aria-label="効果音を有効にする" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M11 4 6 8H3v8h3l5 4V4Z"/><path id="sound-waves" d="m16 9 5 6m0-6-5 6"/></svg></button><button id="help-button" class="header-button">遊び方 <span>?</span></button></nav>
   </header>
   <main>
-    <section class="intro"><div><p class="chapter-label"><span></span> 一歩からはじまる、不思議な冒険。</p><h1>その先に、<br class="mobile-break">まだ見ぬ宝物。</h1><p class="intro-copy">形を変える迷宮へ、ランタンひとつで。<br>急がなくていい。世界は、あなたの一歩で動き出す。</p></div><div class="quest-tag"><span class="quest-star">✧</span><div><strong id="quest-title">チュートリアル · 灯りの迷宮</strong><span id="quest-goal">地下10階の「星のランタン」を探そう</span></div></div></section>
+    <div hidden><span id="quest-title"></span><span id="quest-goal"></span></div>
     <p id="dungeon-label" class="dungeon-label" aria-live="polite">チュートリアル · 灯りの迷宮（1 / 10階）</p>
     <section class="game-shell" aria-label="迷宮探索ゲーム">
-      <div class="game-topbar"><div class="floor-info"><span class="floor-icon">▱</span><strong id="floor-label">地下 1 階</strong><span id="floor-name">苔むした入口</span></div><div class="run-state"><span class="status-dot"></span><span id="state-label">探索中</span><span class="turn-label"><span id="turn-count">0</span> ターン</span></div></div>
+      <div class="game-topbar"><div class="floor-info"><span class="floor-icon">▱</span><strong id="floor-label">地下 1 階</strong><span id="floor-name">苔むした入口</span></div><div class="run-state"><button id="view-button" class="view-button" aria-pressed="true" aria-label="広域表示に切り替える">近景</button><span class="status-dot"></span><span id="state-label">探索中</span><span class="turn-label"><span id="turn-count">0</span> ターン</span></div></div>
       <div class="game-layout">
         <div class="play-area"><div class="canvas-wrap" id="canvas-wrap">
           <div class="canvas-hud"><div class="player-status"><div class="mobile-vitals"><span class="heart">♥ <span id="mobile-hp">30 / 30</span></span><span class="bread">◒ <span id="mobile-hunger">100%</span></span></div><div id="facing-label" class="facing-label" role="status" aria-live="polite" aria-atomic="true">向き：下</div></div><section class="minimap-panel" aria-label="探索マップ"><button id="minimap-toggle" aria-expanded="true" aria-controls="minimap-content">ミニマップ <span class="map-key">M</span></button><div id="minimap-content"><canvas id="minimap" width="144" height="96" role="img" aria-label="探索済みの迷宮マップ。敵とアイテムは発見済みの位置のみ表示。"></canvas><div class="map-legend"><span class="map-player">自分</span><span class="map-stairs">階段</span><span class="map-enemy">敵</span><span class="map-item">アイテム</span><small>発見済みの位置</small></div></div></section></div>
@@ -43,7 +43,7 @@
     <section class="touch-controls" aria-label="タッチ操作"><div class="direction-pad"><button data-direction="-1,-1" aria-label="左上へ">↖</button><button data-direction="0,-1" aria-label="上へ">↑</button><button data-direction="1,-1" aria-label="右上へ">↗</button><button data-direction="-1,0" aria-label="左へ">←</button><button id="touch-wait" aria-label="足踏み">◷</button><button data-direction="1,0" aria-label="右へ">→</button><button data-direction="-1,1" aria-label="左下へ">↙</button><button data-direction="0,1" aria-label="下へ">↓</button><button data-direction="1,1" aria-label="右下へ">↘</button></div><p>一歩ずつ、気の向くままに。<br><span>斜め移動もできます。</span></p></section>
           </div>
         </div>
-        <aside class="sidebar"><section class="hero-section"><div class="hero-head"><canvas id="portrait" width="48" height="48" aria-hidden="true"></canvas><div><h2>旅する商人</h2><p id="hero-title">駆け出しの探検家</p></div><span class="level-badge">Lv.<strong id="level">1</strong></span></div><div class="vital"><div><span><i class="heart">♥</i> 体力</span><strong><span id="hp">30</span><span class="muted"> / <span id="max-hp">30</span></span></strong></div><div class="meter hp-meter"><div id="hp-bar"></div></div></div><div class="vital"><div><span><i class="bread">◒</i> 満腹度</span><strong><span id="hunger">100</span><span class="muted"> %</span></strong></div><div class="meter hunger-meter"><div id="hunger-bar"></div></div></div><div class="experience"><span>次のレベルまで</span><span id="exp-label">0 / 8</span></div><div class="meter exp-meter"><div id="exp-bar"></div></div><div class="gold-row"><span class="coin">●</span><span>所持金</span><strong><span id="gold">0</span><small> G</small></strong></div></section>
+        <aside class="sidebar"><section class="hero-section"><div class="hero-head"><canvas id="portrait" width="48" height="48" aria-hidden="true"></canvas><div><h2>灯りの旅人 リネ</h2><p id="hero-title">はじまりの灯りを持つ旅人</p></div><span class="level-badge">Lv.<strong id="level">1</strong></span></div><div class="vital"><div><span><i class="heart">♥</i> 体力</span><strong><span id="hp">30</span><span class="muted"> / <span id="max-hp">30</span></span></strong></div><div class="meter hp-meter"><div id="hp-bar"></div></div></div><div class="vital"><div><span><i class="bread">◒</i> 満腹度</span><strong><span id="hunger">100</span><span class="muted"> %</span></strong></div><div class="meter hunger-meter"><div id="hunger-bar"></div></div></div><div class="experience"><span>次のレベルまで</span><span id="exp-label">0 / 8</span></div><div class="meter exp-meter"><div id="exp-bar"></div></div><div class="gold-row"><span class="coin">●</span><span>所持金</span><strong><span id="gold">0</span><small> G</small></strong></div></section>
           <section class="equipment-section"><h3>装備</h3><div class="equipment-row"><span class="equipment-icon sword">⚔</span><div><strong id="weapon-name">木の剣</strong><span>攻撃力 <b id="attack-stat">5</b></span></div></div><div class="equipment-row"><span class="equipment-icon shield">⬡</span><div><strong id="shield-name">旅人の盾</strong><span>防御力 <b id="defense-stat">1</b></span></div></div><div class="equipment-row"><span class="equipment-icon">➶</span><div><strong id="ammo-name">未装備</strong><span>矢の残数 <b id="ammo-count">0</b> 本</span></div></div></section>
           <section class="log-section"><div class="section-heading"><h3>冒険の記録</h3><span>直近の出来事</span></div><ol id="event-log" aria-live="polite" aria-relevant="additions"></ol></section><div class="save-status"><span></span><span id="save-label">冒険は自動で保存されます</span></div>
         </aside>

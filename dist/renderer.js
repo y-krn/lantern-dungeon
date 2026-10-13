@@ -19,6 +19,71 @@
       labels = [],
       frame = 0,
       playerTween = null;
+    let closeView = true;
+    // The painted sheet has uneven gutters; these bounds isolate each complete silhouette.
+    const artFrames = {
+      hero: [48, 12, 206, 300], heroDownRight: [312, 12, 210, 300],
+      heroRight: [575, 8, 224, 304], heroUpRight: [884, 10, 216, 302],
+      heroUp: [44, 312, 206, 296], heroUpLeft: [320, 312, 214, 296],
+      heroLeft: [580, 312, 228, 296], heroDownLeft: [872, 312, 220, 298],
+      slime: [22, 614, 246, 260], bat: [280, 614, 294, 250],
+      ghost: [588, 608, 242, 272], beetle: [856, 620, 262, 256],
+      plant: [20, 880, 248, 254], mimic: [294, 882, 260, 248],
+      moth: [564, 890, 276, 244], golem: [844, 878, 264, 254],
+      guardian: [18, 1134, 264, 252], lantern: [358, 1134, 160, 248],
+    };
+    const baseSpecies = {slime: 'mossSlime', bat: 'caveBat', ghost: 'lanternGhost',
+      beetle: 'cobaltBeetle', plant: 'thornPlant', mimic: 'coinMimic',
+      moth: 'lanternMoth', golem: 'stoneGolem', guardian: 'starGuardian'};
+    const paintedSprites = new Map();
+    const atlas = typeof root.Image === 'function' ? new root.Image() : null;
+    const ready = atlas ? new Promise(resolve => {
+      atlas.onload = () => resolve(true);
+      atlas.onerror = () => resolve(false);
+      atlas.src = 'art/lantern-atlas.png';
+    }) : Promise.resolve(false);
+    function tone(hex) {
+      const [r, g, b] = hex.match(/\w\w/g).map(value => parseInt(value, 16) / 255);
+      const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+      const lightness = (max + min) / 2;
+      return {hue: delta ? ((max === r ? (g - b) / delta : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4) * 60 + 360) % 360 : 0,
+        saturation: delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0};
+    }
+    function paintedSprite(context, type, x, y, scale, alpha, flip, species) {
+      if (!atlas?.complete || !atlas.naturalWidth || !artFrames[type]) return false;
+      const m = MONSTERS[species];
+      if (flip && type.startsWith('hero')) {
+        type = {heroRight: 'heroLeft', heroUpRight: 'heroUpLeft', heroDownRight: 'heroDownLeft'}[type] || type;
+        flip = false;
+      }
+      const key = species || type;
+      if (!paintedSprites.has(key)) {
+        const [sx, sy, width, height] = artFrames[type];
+        const image = document.createElement('canvas');
+        image.width = width; image.height = height;
+        const paint = image.getContext('2d'), base = MONSTERS[baseSpecies[type]];
+        if (m && base && m !== base) {
+          const target = tone(m.colors[1]), original = tone(base.colors[1]);
+          paint.filter = `hue-rotate(${target.hue - original.hue}deg) saturate(${target.saturation / (original.saturation || 1)})`;
+        }
+        paint.drawImage(atlas, sx, sy, width, height, 0, 0, width, height);
+        paintedSprites.set(key, image);
+      }
+      const image = paintedSprites.get(key), hero = type.startsWith('hero');
+      const factor = Math.min(16 * scale / image.width, (hero ? 18 : 16) * scale / image.height);
+      const width = image.width * factor, height = image.height * factor;
+      context.save(); context.globalAlpha = alpha; context.imageSmoothingEnabled = true;
+      if (flip) {context.translate(x + 16 * scale, y); context.scale(-1, 1); x = 0; y = 0;}
+      context.drawImage(image, x + 8 * scale - width / 2, y + (hero ? 18 : 16) * scale - height, width, height);
+      if (m?.tier) {
+        context.fillStyle = '#3c3429';
+        context.fillRect(x + 12 * scale, y, 4.5 * scale, 4 * scale);
+        context.fillStyle = '#ffe9ab';
+        for (const [col, row] of monsterMarks[m.tier])
+          context.fillRect(x + (12.3 + (col - 5) * .65) * scale, y + (.5 + (row - 2) * .65) * scale, .7 * scale, .7 * scale);
+      }
+      context.restore(); return true;
+    }
     const palette = {
       ".": null,
       o: "#302831",
@@ -435,6 +500,7 @@
       flip = false,
       species = null,
     ) {
+      if (paintedSprite(context, type, x, y, scale, alpha, flip, species)) return;
       const m = MONSTERS[species],
         pattern = sprites[type] || sprites.scroll;
       const colors = m
@@ -511,11 +577,11 @@
         unit = tile / 16;
       const colors =
         engine.floor >= 7
-          ? ["#353644", "#383949", "#303341", "#393a46"]
-          : ["#424b3b", "#454e3e", "#3c4638", "#46513f"];
+          ? ["#656c76", "#697080", "#5f6b72", "#707581"]
+          : ["#9ca58a", "#a5aa91", "#99a086", "#aab098"];
       ctx.fillStyle = colors[Math.floor(r * 4)];
       ctx.fillRect(px, py, tile, tile);
-      ctx.fillStyle = engine.floor >= 7 ? "#292d3a" : "#343f31";
+      ctx.fillStyle = engine.floor >= 7 ? "#4e5863" : "#7b856b";
       ctx.fillRect(px, py, tile, unit);
       ctx.fillRect(px, py, unit, tile);
       ctx.fillStyle = "#98aa7b13";
@@ -523,11 +589,11 @@
       ctx.fillRect(px + unit, py + unit, unit, tile - unit * 2);
       const n = hash(x, y, 5);
       if (n < 0.18) {
-        ctx.fillStyle = "#27382f";
+        ctx.fillStyle = "#657856";
         ctx.fillRect(px + unit * 4, py + unit * 9, unit * 5, unit);
         ctx.fillRect(px + unit * 9, py + unit * 10, unit * 3, unit);
       } else if (n < 0.43) {
-        ctx.fillStyle = "#60745275";
+        ctx.fillStyle = "#70805065";
         ctx.fillRect(px + unit * 3, py + unit * 12, unit * 2, unit);
         ctx.fillRect(px + unit * 11, py + unit * 4, unit, unit * 2);
       }
@@ -546,15 +612,15 @@
       const engine = getEngine();
       const s = tile / 16;
       const below = engine.tile(x, y + 1);
-      ctx.fillStyle = engine.floor >= 7 ? "#343645" : "#384639";
+      ctx.fillStyle = engine.floor >= 7 ? "#515e65" : "#728265";
       ctx.fillRect(px, py, tile, tile);
-      ctx.fillStyle = engine.floor >= 7 ? "#595466" : "#596450";
+      ctx.fillStyle = engine.floor >= 7 ? "#8a8e90" : "#b6b89e";
       ctx.fillRect(px + s, py + s, tile - s * 2, s * 5);
       ctx.fillStyle = "#131f2299";
       ctx.fillRect(px, py + s * 7, tile, s);
       ctx.fillRect(px + s * 8, py, s, s * 7);
       ctx.fillRect(px + s * 4, py + s * 8, s, s * 7);
-      ctx.fillStyle = engine.floor >= 7 ? "#484451" : "#465440";
+      ctx.fillStyle = engine.floor >= 7 ? "#65747a" : "#8e9c7a";
       ctx.fillRect(px + s, py + s * 9, s * 3, s * 5);
       ctx.fillRect(px + s * 5, py + s * 9, s * 10, s * 5);
       ctx.fillStyle = "#98a78125";
@@ -566,10 +632,10 @@
         ctx.fillRect(px + s, py + tile - s * 4, tile - s * 2, s * 2);
       }
       if (hash(x, y, 3) < 0.3) {
-        ctx.fillStyle = "#677a4b";
+        ctx.fillStyle = "#5e7844";
         ctx.fillRect(px + s * 2, py + s * 6, s * 5, s);
         ctx.fillRect(px + s * 3, py + s * 7, s, s * 3);
-        ctx.fillStyle = "#82945b";
+        ctx.fillStyle = "#91a766";
         ctx.fillRect(px + s * 2, py + s * 6, s * 2, s);
       }
       if (
@@ -592,6 +658,7 @@
       glow.addColorStop(1, "#eeb35e00");
       ctx.fillStyle = glow;
       ctx.fillRect(x - tile * 3, y - tile * 3, tile * 6, tile * 6);
+      if (paintedSprite(ctx, 'lantern', x - tile / 4, y - tile / 4, s / 2, 1, false, null)) return;
       ctx.fillStyle = "#4c332e";
       ctx.fillRect(x - s, y, s * 2, s * 6);
       ctx.fillStyle = "#a88352";
@@ -642,6 +709,7 @@
       glow.addColorStop(1, "#fadf9400");
       ctx.fillStyle = glow;
       ctx.fillRect(px - tile * 3, py - tile * 3, tile * 7, tile * 7);
+      if (paintedSprite(ctx, 'lantern', px, py, s, 1, false, null)) return;
       ctx.fillStyle = "#e1ae60";
       ctx.fillRect(px + s * 5, py + s * 4, s * 6, s * 9);
       ctx.fillRect(px + s * 6, py + s * 2, s * 4, s * 2);
@@ -872,10 +940,12 @@
           light.addColorStop(1, "#edca8200");
           ctx.fillStyle = light;
           ctx.fillRect(lx - tile * 4, ly - tile * 4, tile * 8, tile * 8);
-          ctx.fillStyle = "#b38954";
-          ctx.fillRect(lx - s, ly - s * 2, s * 3, s * 4);
-          ctx.fillStyle = "#ffde92";
-          ctx.fillRect(lx, ly - s, s, s * 2);
+          if (!atlas?.complete || !atlas.naturalWidth) {
+            ctx.fillStyle = "#b38954";
+            ctx.fillRect(lx - s, ly - s * 2, s * 3, s * 4);
+            ctx.fillStyle = "#ffde92";
+            ctx.fillRect(lx, ly - s, s, s * 2);
+          }
           const [dx, dy] = p.facing,
             length = Math.hypot(dx, dy),
             vx = dx / length,
@@ -993,7 +1063,7 @@
       const rect = viewport.getBoundingClientRect();
       canvas.width = 880;
       canvas.height = Math.round((880 * rect.height) / rect.width);
-      tile = rect.width < 500 ? 48 : 40;
+      tile = closeView ? (rect.width < 500 ? 96 : 64) : (rect.width < 500 ? 48 : 40);
       camera.x = 0;
     }
 
@@ -1062,6 +1132,8 @@
       ];
     }
     return {
+      ready,
+      setCloseView(value) { closeView = value; resize(); },
       sprite,
       drawMinimap,
       resize,
