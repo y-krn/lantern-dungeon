@@ -41,6 +41,49 @@ function arena(){
   assert.equal(DungeonEngine.restore(variantSave.serialize()).serialize(),variantSave.serialize());
 }
 
+// Dropping and exchanging preserve whole arrow stacks and individual gear state.
+for(const kind of ['bread','potion','scroll','map','identify','uncurse','arrow']){
+  const g=arena(),p=g.player;p.bag=kind==='arrow'?Array(27).fill(kind):[kind];
+  if(kind==='arrow')p.ammo='arrow';
+  const count=g.arrowCount();assert(g.drop(0));assert.equal(g.turn,1);assert.equal(p.bag.length,0);
+  assert.equal(p.ammo,null);assert.equal(g.items[0].kind,kind);assert.equal(g.items[0].amount,kind==='arrow'?27:1);
+  const restored=DungeonEngine.restore(g.serialize());assert(restored);restored.collect();
+  assert.equal(restored.arrowCount(),count);assert.equal(restored.player.bag.length,kind==='arrow'?27:1);
+}
+for(const [outgoing,incoming]of [
+  ['bread',{...gear('mirrorShield',-2),cursed:true,identified:false}],
+  [gear('starSword',3),{kind:'identify'}],
+  ['arrow',{kind:'potion'}],
+  ['bread',{kind:'arrow',amount:27}],
+  ['arrow',{kind:'arrow',amount:4}],
+]){
+  const g=arena(),p=g.player;p.bag=[outgoing,...Array(17).fill('bread')];
+  if(outgoing==='arrow'){p.bag.push(...Array(26).fill('arrow'));p.ammo='arrow';}
+  assert.equal(g.inventoryCount(),20);
+  g.items=[{...incoming,x:p.x,y:p.y}];assert(g.drop(0,true));assert.equal(g.turn,1);assert.equal(g.inventoryCount(),20);
+  assert.equal(g.items.length,1);assert.equal(g.items[0].kind,typeof outgoing==='string'?outgoing:outgoing.kind);
+  if(outgoing==='arrow'){
+    assert.equal(g.items[0].amount,27);assert.equal(g.arrowCount(),incoming.kind==='arrow'?4:0);
+    assert.equal(p.ammo,incoming.kind==='arrow'?'arrow':null);
+  }
+  if(incoming.kind==='arrow'&&outgoing!=='arrow')assert.equal(g.arrowCount(),27);
+  if(incoming.variant)assert.deepEqual(p.bag.at(-1),incoming);
+  if(typeof outgoing==='object')for(const key of ['variant','bonus','cursed','identified'])assert.equal(g.items[0][key],outgoing[key]);
+  assert.equal(DungeonEngine.restore(g.serialize()).serialize(),g.serialize());
+}
+{
+  const g=arena(),p=g.player;p.bag=['bread'];
+  for(const index of [-1,1,0.5,NaN])assert.equal(g.drop(index),false);
+  assert.equal(g.drop(0,true),false);
+  g.items=[{x:p.x,y:p.y,kind:'gold',amount:30}];
+  assert.equal(g.drop(0,true),false);assert.equal(g.drop(0),false);
+  assert.deepEqual(p.bag,['bread']);assert.equal(p.gold,0);assert.equal(g.turn,0);
+  g.items=[];g.stairs={x:p.x,y:p.y};assert.equal(g.drop(0),false);
+  g.items=[{x:p.x,y:p.y,kind:'potion'}];assert.equal(g.drop(0,true),false);
+  g.stairs={x:p.x+1,y:p.y};g.status='dead';assert.equal(g.drop(0,true),false);
+  assert.deepEqual(p.bag,['bread']);assert.equal(g.items[0].kind,'potion');assert.equal(g.turn,0);
+}
+
 // Identical RNG states use identical tables at every depth and in both dungeons.
 for(const slot of ['weapon','shield']){
   let baseline;

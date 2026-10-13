@@ -64,4 +64,38 @@ renderer.resize();
 draw();
 renderer.reset({x: game.player.x + .5, y: game.player.y + .5});
 assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48 / 880 * bounds.width, clientY: bounds.height / 2})), [1, 0]);
-console.log('PASS: HTML script order, standalone browser/CommonJS parity, saved-state round trips, renderer engine replacement/read-only state, desktop/mobile pointer coordinates and one animation loop.');
+// Inventory display sorting must preserve the indices used by item actions.
+{
+  const engine = new DungeonEngine(42);
+  engine.enemies = [];engine.items = [];engine.traps = [];engine.monsterHouse = null;
+  const known = {kind:'weapon',variant:'starSword',rank:3,bonus:2,cursed:false,identified:true};
+  const unknown = {kind:'shield',variant:'mirrorShield',rank:0,bonus:-2,cursed:true,identified:false};
+  engine.player.bag = ['bread', known, unknown, 'arrow', 'potion', 'arrow'];
+  const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
+  let markup, buttons;
+  const ui = vm.createContext({engine, ...DungeonData,
+    modalHeader: () => '', closeModal() {}, act: action => action(),
+    openModal: (kind, html) => {
+      markup = html;
+      buttons = [...html.matchAll(/<button[^>]*data-(drop|exchange)="(\d+)"[^>]*>/g)].map(match => ({
+        type: match[1], dataset: {[match[1]]: match[2]},
+        addEventListener(event, listener) {this.click = listener;},
+      }));
+    },
+    $: () => ({querySelectorAll: selector => buttons.filter(button => selector === `[data-${button.type}]`)}),
+  });
+  vm.runInContext(source.slice(source.indexOf('  const escapeHTML'),source.indexOf('  function showIdentify')),ui);
+  const raw = engine.serialize();vm.runInContext('showBag()',ui);assert.equal(engine.serialize(),raw);
+  const names = [...markup.matchAll(/<strong>([^<]+)<\/strong>/g)].map(match => match[1]);
+  assert.deepEqual(names.slice(2),['木の矢 × 2','鏡の盾（未鑑定）','焼きたてパン','回復草','星鉄の剣 +2']);
+  assert.equal(buttons.filter(button => button.type === 'drop').length,5);
+  buttons.find(button => button.type === 'drop' && button.dataset.drop === '0').click();
+  assert.equal(engine.items[0].kind,'bread');assert.equal(engine.turn,1);
+  vm.runInContext('showBag()',ui);assert(markup.includes('足元：焼きたてパン'));
+  assert.equal(buttons.filter(button => button.type === 'exchange').length,4);
+  buttons.find(button => button.type === 'exchange' && button.dataset.exchange === '1').click();
+  assert.equal(engine.items[0].variant,'mirrorShield');assert.equal(engine.items[0].identified,false);
+  assert.equal(engine.player.bag.at(-1),'bread');assert.equal(engine.turn,2);
+  assert(!engine.player.bag.includes(unknown));
+}
+console.log('PASS: module parity, renderer, inventory display order/original indices and drop/exchange UI handlers.');

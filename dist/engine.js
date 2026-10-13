@@ -299,19 +299,37 @@
       return true;
     }
     dropEquipment(index) {
+      return this.drop(index);
+    }
+    drop(index, exchange = false) {
       const p = this.player,
         item = p.bag[index];
-      if (this.status !== "playing" || !validEquipment(item)) return false;
+      if (this.status !== "playing" || !Number.isInteger(index) || !item)
+        return false;
+      const ground = this.items.find((i) => i.x === p.x && i.y === p.y);
       if (
-        this.items.some((i) => i.x === p.x && i.y === p.y) ||
+        (exchange ? !ground || !ITEMS[ground.kind] : ground) ||
         this.onStairs()
       ) {
         this.say("足元には置けない。空いている床へ移動しよう。");
         return false;
       }
-      this.items.push({ ...item, x: p.x, y: p.y, amount: 1, discovered: true });
-      p.bag.splice(index, 1);
-      this.say(`${this.itemName(item)}を置いた。`);
+      const kind = itemKind(item),
+        amount = kind === "arrow" ? this.arrowCount() : 1;
+      if (kind === "arrow") p.bag = p.bag.filter((value) => value !== "arrow");
+      else p.bag.splice(index, 1);
+      if (exchange) this.collect();
+      this.items.push({
+        ...(isEquipment(item) ? item : { kind }),
+        x: p.x,
+        y: p.y,
+        amount,
+        discovered: true,
+      });
+      if (!this.arrowCount()) p.ammo = null;
+      this.say(
+        `${this.itemName(item)}を${kind === "arrow" ? `${amount}本` : ""}${exchange ? "足元のアイテムと交換した" : "置いた"}。`,
+      );
       this.finishTurn();
       return true;
     }
@@ -534,13 +552,13 @@
         const stacks = item.kind === "arrow" && this.arrowCount() > 0;
         if (this.inventoryCount() >= INVENTORY_CAPACITY && !stacks) {
           this.say(
-            "持ち物がいっぱい。アイテムを使うか、未装備の剣・盾を置いて空きを作ろう。",
+            "持ち物がいっぱい。アイテムを使うか、空いている床に置くか、持ち物から足元のアイテムと交換しよう。",
           );
           return;
         }
         const amount =
           item.kind === "arrow" && Number.isInteger(item.amount)
-            ? Math.max(1, Math.min(10, item.amount))
+            ? Math.max(1, item.amount)
             : 1;
         const value = isEquipment(item)
           ? {

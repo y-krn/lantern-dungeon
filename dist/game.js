@@ -322,11 +322,17 @@
   function showBag() {
     if (engine.status !== "playing") return;
     const p = engine.player,
+      priority = ({ kind, index }) =>
+        kind === "arrow"
+          ? 0
+          : typeof p.bag[index] === "object" && !p.bag[index].identified
+            ? 1
+            : 2,
       entries = engine
         .inventoryEntries()
-        .sort(
-          (a, b) => Number(b.kind === "arrow") - Number(a.kind === "arrow"),
-        );
+        .sort((a, b) => priority(a) - priority(b));
+    const ground = engine.items.find((item) => item.x === p.x && item.y === p.y);
+    const canExchange = ground && ITEMS[ground.kind] && !engine.onStairs();
     const equipment = Object.entries(p.equipment).filter(([, item]) => item);
     const equippedCards = equipment
       .map(([kind, item]) =>
@@ -344,7 +350,7 @@
           scroll = ["scroll", "map", "identify", "uncurse"].includes(kind),
           equipped = kind === "arrow" && p.ammo === "arrow";
         const buttons = gear
-          ? `<button class="use-button" data-use="${index}">装備</button><button class="use-button" data-drop="${index}">置く</button>`
+          ? `<button class="use-button" data-use="${index}">装備</button>`
           : kind === "arrow"
             ? `<button class="use-button" data-equip>${equipped ? "外す" : "装備"}</button>`
             : `<button class="use-button" data-use="${index}">${kind === "bread" ? "食べる" : scroll ? "かざす" : "使う"}</button>`;
@@ -354,14 +360,16 @@
             : "";
         return itemCard(
           item,
-          buttons + naming,
+          buttons + naming +
+            `<button class="use-button" data-drop="${index}" ${ground || engine.onStairs() ? "disabled" : ""}>置く</button>` +
+            (canExchange ? `<button class="use-button" data-exchange="${index}">交換</button>` : ""),
           kind === "arrow" ? ` × ${count}${equipped ? "（装備中）" : ""}` : "",
         );
       })
       .join("");
     openModal(
       "bag",
-      `<div class="modal-inner">${modalHeader("旅の持ち物")}<p class="modal-description">持ち物 ${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠。装備中の武器・盾も各1枠を使います。予備装備と道具も1個につき1枠、矢は1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。<br>使用・装備・解除・床に置く操作で1ターン。鑑定の対象選択・命名では時間は進みません。木の矢はまとめて1枠、装備後Rキーで発射できます。</p><div class="item-list">${equippedCards}${bagCards}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`,
+      `<div class="modal-inner">${modalHeader("旅の持ち物")}<p class="modal-description">持ち物 ${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠。装備中の武器・盾も各1枠を使います。予備装備と道具も1個につき1枠、矢は1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。<br>使用・装備・解除・床に置く・足元との交換で1ターン。鑑定の対象選択・命名では時間は進みません。木の矢はまとめて1枠、置く・交換も束ごと扱います。装備後Rキーで発射できます。</p>${ground && ITEMS[ground.kind] ? `<p class="modal-description">足元：${escapeHTML(engine.itemName(ground))}${ground.kind === "arrow" ? ` × ${ground.amount || 1}` : ""}。交換する持ち物の「交換」を選んでください。</p>` : ""}<div class="item-list">${equippedCards}${bagCards}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`,
     );
     $("modal-content")
       .querySelectorAll("[data-use]")
@@ -397,7 +405,15 @@
       .forEach((b) =>
         b.addEventListener("click", () => {
           closeModal();
-          act(() => engine.dropEquipment(Number(b.dataset.drop)), true);
+          act(() => engine.drop(Number(b.dataset.drop)), true);
+        }),
+      );
+    $("modal-content")
+      .querySelectorAll("[data-exchange]")
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          closeModal();
+          act(() => engine.drop(Number(b.dataset.exchange), true), true);
         }),
       );
     $("modal-content")
