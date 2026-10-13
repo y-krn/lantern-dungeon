@@ -9,6 +9,8 @@
     MONSTER_MARKS,
   } = DungeonData;
   const $ = (id) => document.getElementById(id);
+  const portraitUI = matchMedia("(max-width:600px) and (orientation:portrait)").matches;
+  const pwaPanel = $("pwa-panel");
   const canvas = $("game");
   const pickupNotice = document.createElement("div");
   pickupNotice.className = "pickup-notice";
@@ -187,7 +189,9 @@
     $("turn-button").textContent = turnOnly ? "向き変更中" : "向き変更";
     $("direction-help").textContent = turnOnly
       ? "方向ボタンで向きだけ変更。ターンは進みません。"
-      : "Shift＋方向キーで向きだけ変更。";
+      : portraitUI
+        ? "「向き変更」で移動せずに方向を選べます。"
+        : "Shift＋方向キーで向きだけ変更。";
     document.querySelectorAll("[data-direction]").forEach((b) => {
       const [dx, dy] = b.dataset.direction.split(",").map(Number),
         name = facingNames[DIRS.findIndex((d) => d[0] === dx && d[1] === dy)];
@@ -236,14 +240,20 @@
                       : engine.turn < 8
                         ? "灯りの届く先へ、進んでみよう。"
                         : "あせらず、一歩ずつ。";
+    const ground = engine.items.find((item) => item.x === p.x && item.y === p.y);
+    if (ground && engine.status === "playing" && !threat)
+      $("location-hint").textContent =
+        `足元：${ground.kind === "gold" ? `${ground.amount}G` : engine.itemName(ground)}${engine.inventoryCount() >= INVENTORY_CAPACITY ? " · 持ち物がいっぱい" : ""}`;
+    if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · ${p.gold}G`;
     const list = $("event-log");
     list.replaceChildren();
-    for (const event of engine.log.slice(0, 5)) {
+    for (const event of engine.log.slice(0, portraitUI ? 40 : 5)) {
       const li = document.createElement("li");
       li.className = event.type;
       li.textContent = event.text;
       list.append(li);
     }
+    list.scrollTop = 0;
     if (engine.status !== "playing" && !announcedEnd) {
       announcedEnd = true;
       const endedEngine = engine;
@@ -281,6 +291,7 @@
     save();
   }
   function toggleMinimap() {
+    if (portraitUI) return;
     minimapVisible = !minimapVisible;
     $("minimap-content").hidden = !minimapVisible;
     $("minimap-toggle").setAttribute("aria-expanded", String(minimapVisible));
@@ -291,6 +302,7 @@
     canvas.focus({ preventScroll: true });
   }
   function openModal(kind, html) {
+    if (portraitUI && pwaPanel) document.querySelector("main").append(pwaPanel);
     modalKind = kind;
     $("modal-content").innerHTML = html;
     if (!$("modal").open) $("modal").showModal();
@@ -371,6 +383,14 @@
       "bag",
       `<div class="modal-inner">${modalHeader("旅の持ち物")}<p class="modal-description">持ち物 ${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠。装備中の武器・盾も各1枠を使います。予備装備と道具も1個につき1枠、矢は1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。<br>使用・装備・解除・床に置く・足元との交換で1ターン。鑑定の対象選択・命名では時間は進みません。木の矢はまとめて1枠、置く・交換も束ごと扱います。装備後Rキーで発射できます。</p>${ground && ITEMS[ground.kind] ? `<p class="modal-description">足元：${escapeHTML(engine.itemName(ground))}${ground.kind === "arrow" ? ` × ${ground.amount || 1}` : ""}。交換する持ち物の「交換」を選んでください。</p>` : ""}<div class="item-list">${equippedCards}${bagCards}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`,
     );
+    if (portraitUI) {
+      const summary = document.createElement("p");
+      summary.className = "modal-description";
+      summary.textContent = `Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G · 攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本`;
+      $("modal-content").querySelector(".modal-description").before(summary);
+      const description = summary.nextElementSibling;
+      description.innerHTML = description.innerHTML.replace("装備後Rキーで発射", "装備後「矢を放つ」で発射");
+    }
     $("modal-content")
       .querySelectorAll("[data-use]")
       .forEach((b) =>
@@ -497,6 +517,15 @@
       "help",
       `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を見つけよう。</p><p class="modal-description">あなたが1回行動すると、敵も1回行動します。操作を止めている間、時間は進みません。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃。壁にぶつかってもターンは進みません。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角を斜めにすり抜けることはできません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>Shiftを押しながら移動キーで、その場で向きだけ変更。Tまたは「向き変更」で切り替えると、方向ボタンや迷宮タップでも向きだけ変えられます。ターン・満腹度は変わらず、敵も動きません。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃。空振りも1ターン。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ発射。1本消費し、最初の敵に12ダメージ。</p></div><div class="help-row"><span>. / X</span><p>足踏み。満腹なら7ターンごとに体力が1回復。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床のアイテムは上に乗ると拾います。武器・盾は全階で同じ確率で出現し、拾うだけでは強化されません。持ち物から選んで装備すると、補正値と呪いが判明します。呪われた装備は清めの灯札で解呪するまで外せません。木の矢も持ち物から装備・解除でき、本数にかかわらず1枠です。</p></div><div class="help-row"><span>灯札の識別</span><p>チュートリアルの灯札は識別済み。深淵の迷宮では冒険ごとに仮名が変わり、かざすか真名の灯札で鑑定すると同種すべてが識別されます。「名前」で推測を記録でき、命名や対象選択では時間は進みません。</p></div><div class="help-row"><span>魔物の見分け方</span><p>同じ名前なら能力は同じ。強い別種は色と頭の模様が変わります。黄色の予告マスから移動すると遠距離攻撃・強打を回避できます。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る（${Object.keys(MONSTERS).length}種）</button><div class="help-row"><span>満腹度・保存</span><p>通常は4ターンで満腹度が1減少。革の盾を装備すると8ターンで1減少。0になると毎ターン体力が減少。冒険はブラウザに自動保存されます。</p></div><p class="modal-description">${engine.dungeonInfo().guardian}を倒し、最深部のランタンにたどり着くとクリア。チュートリアル10階の踏破で、高難度の深淵の迷宮30階が解放されます。倒れたら、新しい迷宮で再出発です。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
     );
+    if (portraitUI) {
+      const rows = $("modal-content").querySelectorAll(".help-row");
+      ["方向ボタン", "斜め移動", "向き変更", "攻撃", "矢を放つ", "足踏み", "持ち物・階段"].forEach((label, index) => {
+        rows[index].querySelector("span").textContent = label;
+      });
+      rows[2].querySelector("p").textContent = "「向き変更」で切り替え、方向ボタンか迷宮タップで向きを選びます。移動・ターン・満腹度は変わらず、敵も動きません。";
+      rows[6].querySelector("p").textContent = "持ち物を開く / 階段を降りる。ミニマップは常に表示されます。";
+      if (pwaPanel) $("modal-content").querySelector(".modal-inner").append(pwaPanel);
+    }
     $("monster-guide-button").addEventListener("click", showMonsters);
   }
   function startNew(dungeon = engine.dungeon) {
@@ -666,6 +695,24 @@
     if (dx || dy) directionInput(dx, dy, turnOnly || event.shiftKey, true);
     else if (!turnOnly && !event.shiftKey) act(() => engine.wait(), true);
   });
+  if (portraitUI) {
+    $("canvas-wrap").append($("event-log").closest(".log-section"));
+    $("event-log").tabIndex = 0;
+    $("event-log").setAttribute("aria-label", "冒険の記録。スクロールして以前の出来事を確認できます。");
+    const progress = document.createElement("span");
+    progress.id = "mobile-progress";
+    document.querySelector(".player-status").append(progress);
+    const turn = $("turn-button");
+    turn.classList.add("action-button");
+    document.querySelector(".action-bar").append(turn);
+    document.querySelector(".control-deck").append(document.querySelector(".save-status"));
+    const choose = $("new-game-button");
+    choose.textContent = "迷宮";
+    choose.classList.add("header-button");
+    choose.setAttribute("aria-label", "ダンジョン選択");
+    document.querySelector(".site-header nav").prepend(choose);
+    $("minimap-toggle").disabled = true;
+  }
   new ResizeObserver(() => renderer.resize()).observe($("game-viewport"));
   renderer.resize();
   const portrait = $("portrait").getContext("2d");

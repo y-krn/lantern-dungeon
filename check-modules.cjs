@@ -73,7 +73,7 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   engine.player.bag = ['bread', known, unknown, 'arrow', 'potion', 'arrow'];
   const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
   let markup, buttons;
-  const ui = vm.createContext({engine, ...DungeonData,
+  const ui = vm.createContext({engine, ...DungeonData, portraitUI:false,
     modalHeader: () => '', closeModal() {}, act: action => action(),
     openModal: (kind, html) => {
       markup = html;

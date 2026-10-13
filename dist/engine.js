@@ -552,7 +552,7 @@
         const stacks = item.kind === "arrow" && this.arrowCount() > 0;
         if (this.inventoryCount() >= INVENTORY_CAPACITY && !stacks) {
           this.say(
-            "持ち物がいっぱい。アイテムを使うか、空いている床に置くか、持ち物から足元のアイテムと交換しよう。",
+            `持ち物がいっぱい。足元に${this.itemName(item)}がある。アイテムを使うか、空いている床に置くか、持ち物から足元のアイテムと交換しよう。`,
           );
           return;
         }
