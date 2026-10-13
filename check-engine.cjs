@@ -395,6 +395,23 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   p.bag=Array(18).fill('bread');game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(game.arrowCount(),0);
 }
 {
+  const game=new DungeonEngine(22,'depths',true),p=game.player;game.enemies=[];game.traps=[];
+  p.bag=[];p.bag=Array(DungeonData.INVENTORY_CAPACITY-game.inventoryCount()).fill('bread');
+  const [dx,dy]=DIRS.find(([dx,dy])=>game.canStep(p.x,p.y,dx,dy)),start={x:p.x,y:p.y};
+  for(const known of [[],['scroll','map','identify','uncurse']]){
+    game.identification.known=known;
+    for(const kind of Object.keys(ITEMS)){
+      Object.assign(p,start);game.log=[];game.effects=[];
+      const item={x:p.x+dx,y:p.y+dy,kind,amount:1,...(['weapon','shield'].includes(kind)?{rank:1,bonus:2,cursed:true,identified:false}:{})};
+      game.items=[item];const name=game.itemName(item),bag=[...p.bag];
+      assert(game.move(dx,dy));
+      assert(game.log.some(entry=>entry.text===`持ち物がいっぱい。足元に${name}がある。アイテムを使うか、空いている床に置くか、持ち物から足元のアイテムと交換しよう。`));
+      assert.deepEqual(p.bag,bag);assert.deepEqual(game.items,[item]);assert(!game.effects.some(effect=>effect.type==='pickup'));
+      assert.deepEqual(game.identification.known,known);assert.equal(item.identified,['weapon','shield'].includes(kind)?false:undefined);
+    }
+  }
+}
+{
   const game=new DungeonEngine(22),p=game.player;
   for(const kind of [...Object.keys(ITEMS),'gold','weapon','shield']){
     p.bag=[];game.effects=[];const gear=kind==='weapon'||kind==='shield';game.items=[{x:p.x,y:p.y,kind,amount:42,...(gear?{rank:1,bonus:2,cursed:false,identified:false}:{})}];game.collect();
