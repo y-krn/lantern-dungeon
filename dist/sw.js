@@ -1,10 +1,10 @@
 'use strict';
 
-const VERSION = '3ec665ae48e20499';
+const VERSION = '4d8868831b68fcaf';
 const PREFIX = `lantern-dungeon:${self.registration.scope}:`;
 const CACHE = PREFIX + VERSION;
 const ASSETS = [
-  './', 'style.css', 'pwa.js', 'manifest.webmanifest',
+  './', 'art/lantern-atlas.png', 'art/lantern-cover.png', 'style.css', 'pwa.js', 'manifest.webmanifest',
   'data.js', 'world.js', 'enemies.js', 'save.js', 'engine.js', 'renderer.js', 'game.js',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ].map(path => new URL(path, self.registration.scope).href);

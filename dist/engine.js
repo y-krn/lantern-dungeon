@@ -89,7 +89,7 @@
       };
       this.initIdentification();
       this.generateFloor();
-      this.say("ランタンを灯した。小さな冒険のはじまり。", "good");
+      this.say("リネはランタンを灯した。忘れられた灯りを探す旅へ。", "good");
       this.say(
         `${this.dungeonInfo().name}へ。地下${this.maxFloor()}階に眠る「${this.dungeonInfo().treasure}」を探そう。`,
       );

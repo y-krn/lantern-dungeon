@@ -64,6 +64,45 @@ renderer.resize();
 draw();
 renderer.reset({x: game.player.x + .5, y: game.player.y + .5});
 assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48 / 880 * bounds.width, clientY: bounds.height / 2})), [1, 0]);
+// Zoom changes the projection only, including the pointer-to-tile mapping.
+{
+  const saved = game.serialize();
+  for (const [close, size] of [[true, 96], [false, 48]]) {
+    renderer.setCloseView(close);
+    renderer.reset({x: game.player.x + .5, y: game.player.y + .5});
+    assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + size / 880 * bounds.width, clientY: bounds.height / 2})), [1, 0]);
+    assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2, clientY: bounds.height / 2 - size / 880 * bounds.width})), [0, -1]);
+    assert.equal(game.serialize(), saved, 'Zoom cannot consume a turn or change a save');
+  }
+}
+// Exercise the loaded-art path: all directions and species must use complete, in-bounds frames.
+{
+  const png = fs.readFileSync(path.join(__dirname, 'dist/art/lantern-atlas.png'));
+  const atlasWidth = png.readUInt32BE(16), atlasHeight = png.readUInt32BE(20), sources = [];
+  browser.Image = class {
+    complete = true; naturalWidth = atlasWidth;
+    set src(value) { assert.equal(value, 'art/lantern-atlas.png'); this.onload(); }
+  };
+  browser.document = {createElement: tag => {
+    assert.equal(tag, 'canvas');
+    return {getContext: () => ({drawImage(image, x, y, w, h) {
+      assert(x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= atlasWidth && y + h <= atlasHeight);
+      sources.push([x, y, w, h].join(','));
+    }})};
+  }};
+  const painted = browser.createDungeonRenderer({canvas, minimap: canvas, viewport: canvas, getEngine: () => game});
+  for (const [type, flip] of [['hero', false], ['heroDownRight', false], ['heroRight', false], ['heroUpRight', false], ['heroUp', false], ['heroUpRight', true], ['heroRight', true], ['heroDownRight', true]])
+    painted.sprite(context, type, 0, 0, 3, 1, flip);
+  assert.equal(new Set(sources).size, 8, 'Eight directions use eight different painted views');
+  const start = sources.length;
+  const bookContext = {save() {}, restore() {}, fillRect() {}, drawImage(image, x, y, w, h) {
+    assert(x >= -.001 && y >= -.001 && x + w <= 80.001 && y + h <= 80.001, `The bestiary cannot clip ears, wings or lanterns: ${[x, y, w, h]}`);
+  }};
+  for (const [species, monster] of Object.entries(DungeonData.MONSTERS))
+    painted.sprite(bookContext, monster.type, 0, 0, 5, 1, false, species);
+  assert.equal(sources.length - start, 25, 'All species have a painted sprite');
+  assert.equal(new Set(sources.slice(start)).size, 9, 'Nine monster families have distinct silhouettes');
+}
 // Inventory display sorting must preserve the indices used by item actions.
 {
   const engine = new DungeonEngine(42);

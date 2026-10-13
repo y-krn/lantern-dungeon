@@ -606,6 +606,18 @@
       feature: `隣の1マスを狙い、次のターンに強打します。${key === "starGuardian" ? "" : "移動は2ターンに1歩です。"}${key === "obsidianGolem" ? "剣と矢のダメージを4軽減します。" : ""}`,
       counter: "予告のマスから移動し、空振りの隙に攻撃しましょう。",
     });
+  const monsterStories = {
+    slime: "ひんやりした石畳に暮らす、葉飾りのぷるぷるした魔物。",
+    bat: "大きな耳とふかふかの襟が目印。遺跡の天井が寝床です。",
+    ghost: "かつての旅人の灯りが魂になった姿。小さなランタンを手放しません。",
+    beetle: "鉱石のような甲殻を持つ虫。長い角で遺跡のかけらを掘り起こします。",
+    plant: "一輪の花と葉のマントをまとった魔物。石の隙間に根を張ります。",
+    mimic: "忘れられた宝箱に宿る魔物。ぴかぴかの金貨が大好きです。",
+    moth: "ランタンに惹かれる、ふわふわの蛾。大きな羽に灯りの輪を描きます。",
+    golem: "苔と若葉をまとい、古い遺跡を歩き続ける無口な守り手。",
+    guardian: "ランタンを核にした古代の番人。失われた灯りを守り続けています。",
+  };
+  for (const monster of Object.values(MONSTERS)) monster.story = monsterStories[monster.type];
   const MONSTER_POOLS = [
     ["mossSlime"],
     ["amberSlime", "caveBat", "ironBeetle", "coinMimic", "lanternMoth"],

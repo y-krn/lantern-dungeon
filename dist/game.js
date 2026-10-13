@@ -9,6 +9,7 @@
     MONSTER_MARKS,
   } = DungeonData;
   const $ = (id) => document.getElementById(id);
+  $("game-viewport").after($("location-hint").closest(".canvas-caption"));
   const portraitUI = matchMedia("(max-width:600px) and (orientation:portrait)").matches;
   const pwaPanel = $("pwa-panel");
   const canvas = $("game");
@@ -159,10 +160,10 @@
     $("defense-stat").textContent = engine.defense();
     $("hero-title").textContent =
       p.level >= 8
-        ? "星を目指す探検家"
+        ? "星の灯りを継ぐ旅人"
         : p.level >= 4
-          ? "迷宮を歩く探検家"
-          : "駆け出しの探検家";
+          ? "遺跡の灯りを集める旅人"
+          : "はじまりの灯りを持つ旅人";
     document.body.classList.toggle("low-hunger", p.hunger < 20);
     document.body.classList.toggle("low-hp", p.hp / p.maxHp < 0.3);
     $("state-label").textContent =
@@ -171,6 +172,7 @@
         : engine.status === "won"
           ? "踏破達成"
           : "探索中";
+    $("state-label").hidden = engine.status === "playing";
     $("stairs-button").disabled =
       !engine.onStairs() ||
       engine.status !== "playing" ||
@@ -245,6 +247,7 @@
       $("location-hint").textContent =
         `足元：${ground.kind === "gold" ? `${ground.amount}G` : engine.itemName(ground)}${engine.inventoryCount() >= INVENTORY_CAPACITY ? " · 持ち物がいっぱい" : ""}`;
     if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · ${p.gold}G`;
+    $('location-hint').closest('.canvas-caption').hidden = ['灯りの届く先へ、進んでみよう。', 'あせらず、一歩ずつ。'].includes($('location-hint').textContent);
     const list = $("event-log");
     list.replaceChildren();
     for (const event of engine.log.slice(0, portraitUI ? 40 : 5)) {
@@ -494,12 +497,12 @@
   function showMonsters() {
     openModal(
       "monsters",
-      `<div class="modal-inner">${modalHeader("魔物図鑑")}<p class="modal-description">全${Object.keys(MONSTERS).length}種。同じ名前の魔物は、階数やダンジョンが変わっても同じ能力です。強い別種は色・頭の模様・名前で見分けられます。敵の特徴と対処法を確認しましょう。遠距離攻撃と強打は黄色のマスに予告され、次の行動でそのマスから移動すると回避できます。</p><div class="item-list">${Object.entries(
+      `<div class="modal-inner">${modalHeader("魔物図鑑")}<p class="modal-description">全${Object.keys(MONSTERS).length}種。同じ名前の魔物は、階数やダンジョンが変わっても同じ能力です。強い別種は色・紋章・名前で見分けられます。敵の特徴と対処法を確認しましょう。遠距離攻撃と強打は黄色のマスに予告され、次の行動でそのマスから移動すると回避できます。</p><div class="item-list">${Object.entries(
         MONSTERS,
       )
         .map(
           ([species, m]) =>
-            `<div class="item-card"><canvas data-monster="${species}" width="48" height="48" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p>${m.color}・${MONSTER_MARKS[m.tier]}<br>HP ${m.hp} ／ 攻撃力 ${m.attack} ／ 経験値 ${m.exp}<br><b>特徴</b>：${m.feature}<br><b>対処</b>：${m.counter}</p></div></div>`,
+            `<div class="item-card"><canvas data-monster="${species}" width="80" height="80" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p class="monster-story">${m.story}</p><p>${m.color}・${MONSTER_MARKS[m.tier]}<br>HP ${m.hp} ／ 攻撃力 ${m.attack} ／ 経験値 ${m.exp}<br><b>特徴</b>：${m.feature}<br><b>対処</b>：${m.counter}</p></div></div>`,
         )
         .join(
           "",
@@ -511,7 +514,7 @@
         const m = MONSTERS[c.dataset.monster],
           context = c.getContext("2d");
         context.imageSmoothingEnabled = false;
-        renderer.sprite(context, m.type, 0, 0, 3, 1, false, c.dataset.monster);
+        renderer.sprite(context, m.type, 0, 0, 5, 1, false, c.dataset.monster);
       });
     $("modal").scrollTop = 0;
     $("modal-content")
@@ -521,7 +524,7 @@
   function showHelp() {
     openModal(
       "help",
-      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を見つけよう。</p><p class="modal-description">あなたが1回行動すると、敵も1回行動します。操作を止めている間、時間は進みません。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃。壁にぶつかってもターンは進みません。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角を斜めにすり抜けることはできません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>Shiftを押しながら移動キーで、その場で向きだけ変更。Tまたは「向き変更」で切り替えると、方向ボタンや迷宮タップでも向きだけ変えられます。ターン・満腹度は変わらず、敵も動きません。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃。空振りも1ターン。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ発射。1本消費し、最初の敵に12ダメージ。</p></div><div class="help-row"><span>. / X</span><p>足踏み。満腹なら7ターンごとに体力が1回復。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床のアイテムは上に乗ると拾います。武器・盾は全階で同じ確率で出現し、拾うだけでは強化されません。持ち物から選んで装備すると、補正値と呪いが判明します。呪われた装備は清めの灯札で解呪するまで外せません。木の矢も持ち物から装備・解除でき、本数にかかわらず1枠です。</p></div><div class="help-row"><span>灯札の識別</span><p>チュートリアルの灯札は識別済み。深淵の迷宮では冒険ごとに仮名が変わり、かざすか真名の灯札で鑑定すると同種すべてが識別されます。「名前」で推測を記録でき、命名や対象選択では時間は進みません。</p></div><div class="help-row"><span>魔物の見分け方</span><p>同じ名前なら能力は同じ。強い別種は色と頭の模様が変わります。黄色の予告マスから移動すると遠距離攻撃・強打を回避できます。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る（${Object.keys(MONSTERS).length}種）</button><div class="help-row"><span>満腹度・保存</span><p>通常は4ターンで満腹度が1減少。革の盾を装備すると8ターンで1減少。0になると毎ターン体力が減少。冒険はブラウザに自動保存されます。</p></div><p class="modal-description">${engine.dungeonInfo().guardian}を倒し、最深部のランタンにたどり着くとクリア。チュートリアル10階の踏破で、高難度の深淵の迷宮30階が解放されます。倒れたら、新しい迷宮で再出発です。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
+      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を見つけよう。</p><p class="modal-description">あなたが1回行動すると、敵も1回行動します。操作を止めている間、時間は進みません。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃。壁にぶつかってもターンは進みません。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角を斜めにすり抜けることはできません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>Shiftを押しながら移動キーで、その場で向きだけ変更。Tまたは「向き変更」で切り替えると、方向ボタンや迷宮タップでも向きだけ変えられます。ターン・満腹度は変わらず、敵も動きません。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃。空振りも1ターン。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ発射。1本消費し、最初の敵に12ダメージ。</p></div><div class="help-row"><span>. / X</span><p>足踏み。満腹なら7ターンごとに体力が1回復。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床のアイテムは上に乗ると拾います。武器・盾は全階で同じ確率で出現し、拾うだけでは強化されません。持ち物から選んで装備すると、補正値と呪いが判明します。呪われた装備は清めの灯札で解呪するまで外せません。木の矢も持ち物から装備・解除でき、本数にかかわらず1枠です。</p></div><div class="help-row"><span>灯札の識別</span><p>チュートリアルの灯札は識別済み。深淵の迷宮では冒険ごとに仮名が変わり、かざすか真名の灯札で鑑定すると同種すべてが識別されます。「名前」で推測を記録でき、命名や対象選択では時間は進みません。</p></div><div class="help-row"><span>魔物の見分け方</span><p>同じ名前なら能力は同じ。強い別種は色と紋章が変わります。黄色の予告マスから移動すると遠距離攻撃・強打を回避できます。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る（${Object.keys(MONSTERS).length}種）</button><div class="help-row"><span>満腹度・保存</span><p>通常は4ターンで満腹度が1減少。革の盾を装備すると8ターンで1減少。0になると毎ターン体力が減少。冒険はブラウザに自動保存されます。</p></div><p class="modal-description">${engine.dungeonInfo().guardian}を倒し、最深部のランタンにたどり着くとクリア。チュートリアル10階の踏破で、高難度の深淵の迷宮30階が解放されます。倒れたら、新しい迷宮で再出発です。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
     );
     if (portraitUI) {
       const rows = $("modal-content").querySelectorAll(".help-row");
@@ -575,7 +578,7 @@
       info = engine.dungeonInfo();
     openModal(
       "end",
-      `<div class="modal-inner"><div class="end-symbol">${won ? "✦" : "☾"}</div>${modalHeader(won ? (tutorial ? "チュートリアル完了！" : "深淵の迷宮、踏破！") : "また、灯りをともして。")}<p class="modal-description">${won ? `${info.guardian}を倒し、${info.treasure}を手に入れました。${tutorial ? "高難度の「深淵の迷宮」が解放されました。次は地下30階を目指しましょう。" : "地下30階の冒険を達成しました。灯りは、永遠に。"}` : "ランタンの灯りが消え、商人は村に戻りました。見つけた道も、学んだことも、次の冒険の道しるべ。"}</p><div class="end-stats"><div><strong>${engine.floor}F</strong><span>到達した階</span></div><div><strong>${p.level}</strong><span>レベル</span></div><div><strong>${p.gold}</strong><span>獲得ゴールド</span></div></div><p class="modal-description" style="text-align:center">${engine.turn} ターンの冒険</p><button class="primary-button" id="restart-end">${won && tutorial ? "深淵の迷宮に挑む" : "同じダンジョンに再挑戦"}</button><button class="secondary-button" id="choose-end">ダンジョンを選ぶ</button><button class="secondary-button" data-close>迷宮を振り返る</button></div>`,
+      `<div class="modal-inner"><div class="end-symbol">${won ? "✦" : "☾"}</div>${modalHeader(won ? (tutorial ? "チュートリアル完了！" : "深淵の迷宮、踏破！") : "また、灯りをともして。")}<p class="modal-description">${won ? `${info.guardian}を倒し、${info.treasure}を手に入れました。${tutorial ? "高難度の「深淵の迷宮」が解放されました。次は地下30階を目指しましょう。" : "地下30階の冒険を達成しました。灯りは、永遠に。"}` : "ランタンの灯りが消え、リネは森のはずれの村に戻りました。見つけた道も、学んだことも、次の冒険の道しるべ。"}</p><div class="end-stats"><div><strong>${engine.floor}F</strong><span>到達した階</span></div><div><strong>${p.level}</strong><span>レベル</span></div><div><strong>${p.gold}</strong><span>獲得ゴールド</span></div></div><p class="modal-description" style="text-align:center">${engine.turn} ターンの冒険</p><button class="primary-button" id="restart-end">${won && tutorial ? "深淵の迷宮に挑む" : "同じダンジョンに再挑戦"}</button><button class="secondary-button" id="choose-end">ダンジョンを選ぶ</button><button class="secondary-button" data-close>迷宮を振り返る</button></div>`,
     );
     $("restart-end").addEventListener("click", () =>
       startNew(won && tutorial ? "depths" : engine.dungeon),
@@ -612,6 +615,17 @@
   );
   $("bag-button").addEventListener("click", showBag);
   $("help-button").addEventListener("click", showHelp);
+  $("world-button").addEventListener("click", () => {
+    openModal("world", `<div class="modal-inner world-modal">${modalHeader("灯りを拾う旅")}<img class="world-cover" src="art/lantern-cover.png" alt="ランタンを掲げるリネと、苔むす遺跡に暮らす魔物たち"><h3>灯りを集める旅人、リネ</h3><p class="modal-description">森のはずれの村から来た旅人。葉飾りの帽子、星の留め具、祖母から譲られたランタンが目印です。「まだ見ぬ灯りを、探しに行こう。」</p><p class="modal-description">迷宮は、かつて灯りを分け合って暮らした人々の遺跡。人が去ったあとも、苔や花、灯りに惹かれる魔物たちが息づいています。奥に眠る星のランタンには、失われた灯りをともす力があるといわれています。</p><button class="secondary-button" id="world-monsters">遺跡の魔物たちを見る</button><button class="primary-button" data-close>リネと探索に戻る</button></div>`);
+    $("world-monsters").addEventListener("click", showMonsters);
+  });
+  let closeView = true;
+  $("view-button").addEventListener("click", () => {
+    closeView = !closeView; renderer.setCloseView(closeView);
+    $("view-button").setAttribute("aria-pressed", String(closeView));
+    $("view-button").textContent = closeView ? "近景" : "広域";
+    $("view-button").setAttribute("aria-label", closeView ? "広域表示に切り替える" : "近景表示に切り替える");
+  });
   $("new-game-button").addEventListener("click", confirmNew);
   $("sound-button").addEventListener("click", () => {
     sound = !sound;
@@ -724,6 +738,16 @@
   const portrait = $("portrait").getContext("2d");
   portrait.imageSmoothingEnabled = false;
   renderer.sprite(portrait, "hero", 8, 5, 2);
+  renderer.ready.then(() => {
+    portrait.clearRect(0, 0, 48, 48);
+    renderer.sprite(portrait, "hero", 8, 5, 2);
+    const brandPortrait = $("brand-portrait").getContext("2d");
+    renderer.sprite(brandPortrait, "hero", 4, 0, 3.5);
+    document.querySelectorAll('[data-monster]').forEach(c => {
+      c.getContext('2d').clearRect(0, 0, c.width, c.height);
+      renderer.sprite(c.getContext('2d'), MONSTERS[c.dataset.monster].type, 0, 0, 5, 1, false, c.dataset.monster);
+    });
+  });
   if (resumed && engine.status === "playing")
     engine.say("ランタンを灯し直した。冒険の続きへ。", "good");
   updateUI();
