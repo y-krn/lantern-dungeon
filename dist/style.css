@@ -151,6 +151,10 @@ dialog.bag-dialog{max-width:520px;overflow:hidden}
 .bag-modal .close-modal{min-width:44px;min-height:44px;border-radius:5px}
 .bag-overview{display:flex;justify-content:space-between;align-items:center;gap:12px;flex:none;font-size:12px}.bag-overview strong{color:var(--gold)}.bag-overview span{color:var(--muted)}
 .bag-stats,.bag-turn-hint,.bag-ground{flex:none;font-size:11px;line-height:1.6;margin:0;color:#c1b8c8}.bag-ground{padding:8px;background:#af8b5817;border-left:2px solid var(--gold);color:var(--gold)}
+.bag-ground .use-button{min-height:44px;margin-top:4px}
+.canvas-wrap>.canvas-caption:not([hidden]){display:flex;align-items:center;gap:8px}
+#location-hint{flex:1;min-width:0;overflow-wrap:anywhere}
+.ground-use-button{pointer-events:auto;touch-action:manipulation;flex:none;min-height:44px;padding:8px;border:1px solid #a7ad81;border-radius:5px;background:#475a3e;color:#fff8e6;font-size:12px;white-space:nowrap}
 .bag-list{flex:0 1 auto;min-height:0;max-height:360px;overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--border);border-radius:6px;scrollbar-gutter:stable;touch-action:pan-y}
 .bag-entry+.bag-entry{border-top:1px solid var(--border)}
 .bag-entry>summary{display:flex;align-items:center;gap:9px;min-height:44px;padding:9px 10px;cursor:pointer;list-style:none}.bag-entry>summary::-webkit-details-marker{display:none}

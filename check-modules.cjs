@@ -143,12 +143,12 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   const unknown = {kind:'shield',variant:'mirrorShield',rank:0,bonus:-2,cursed:true,identified:false};
   engine.player.bag = ['bread', known, unknown, 'arrow', 'potion', 'arrow'];
   const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
-  let markup, buttons, rows;
+  let markup, buttons, rows, cancelIdentify;
   const ui = vm.createContext({engine, ...DungeonData, portraitUI:false,
     modalHeader: () => '', closeModal() {}, act: action => action(), requestAnimationFrame() {},
     openModal: (kind, html) => {
       markup = html;
-      buttons = [...html.matchAll(/<button[^>]*data-(drop|exchange)="(\d+)"[^>]*>/g)].map(match => ({
+      buttons = [...html.matchAll(/<button[^>]*data-(drop|exchange|use|target)="(\w+)"[^>]*>/g)].map(match => ({
         type: match[1], dataset: {[match[1]]: match[2]},
         addEventListener(event, listener) {this.click = listener;},
       }));
@@ -157,9 +157,9 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
         row.querySelector = () => ({addEventListener(event, listener) {row.activate = () => {listener();row.open = !row.open;};}});
       });
     },
-    $: () => ({querySelectorAll: selector => selector === '.bag-entry' ? rows : buttons.filter(button => selector === `[data-${button.type}]`)}),
+    $: id => id === "identify-cancel" ? {addEventListener(event, listener) {cancelIdentify = listener;}} : ({querySelectorAll: selector => selector === '.bag-entry' ? rows : buttons.filter(button => selector === `[data-${button.type}]`)}),
   });
-  vm.runInContext(source.slice(source.indexOf('  const escapeHTML'),source.indexOf('  function showIdentify')),ui);
+  vm.runInContext(source.slice(source.indexOf('  const escapeHTML'),source.indexOf('  function showItemName')),ui);
   const raw = engine.serialize();vm.runInContext('showBag()',ui);assert.equal(engine.serialize(),raw);
   assert.equal(rows.length, 7);
   rows[2].activate();assert.equal(rows.filter(row => row.open).length, 1);
@@ -177,5 +177,69 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   assert.equal(engine.items[0].variant,'mirrorShield');assert.equal(engine.items[0].identified,false);
   assert.equal(engine.player.bag.at(-1),'bread');assert.equal(engine.turn,2);
   assert(!engine.player.bag.includes(unknown));
+  engine.player.bag = Array(18).fill('bread');
+  engine.items = [{kind:'potion', x:engine.player.x, y:engine.player.y}];
+  engine.player.hp = 1;
+  vm.runInContext('showBag()',ui);
+  assert(markup.includes('足元から使う'));
+  buttons.find(button => button.dataset.use === 'ground').click();
+  assert.equal(engine.player.hp,26);assert.equal(engine.items.length,0);
+  assert.equal(engine.inventoryCount(),20);assert.equal(engine.turn,3);
+  engine.items = [{kind:'identify', x:engine.player.x, y:engine.player.y}];
+  engine.identification.known = [];
+  const beforeIdentify = engine.serialize();
+  vm.runInContext('showBag()',ui);
+  buttons.find(button => button.dataset.use === 'ground').click();
+  assert(markup.includes('で持ち物を1つ鑑定します。'));
+  assert.equal(engine.serialize(),beforeIdentify);
+  cancelIdentify();assert.equal(engine.serialize(),beforeIdentify);
+  buttons.find(button => button.dataset.use === 'ground').click();
+  assert(buttons.some(button => button.dataset.target === '0'));
+  buttons.find(button => button.dataset.target === 'weapon').click();
+  assert.equal(engine.items.length,0);assert.equal(engine.turn,4);
+  assert.equal(engine.inventoryCount(),20);
+  engine.items = [{...unknown,x:engine.player.x,y:engine.player.y}];
+  vm.runInContext('showBag()',ui);assert(!buttons.some(button => button.dataset.use === 'ground'));
+  engine.items = [{kind:'bread',x:engine.player.x,y:engine.player.y}];
+  const previousMarkup = markup;
+  vm.runInContext('useGroundFromField()',ui);
+  assert.equal(engine.turn,5);assert.equal(engine.items.length,0);
+  assert.equal(engine.inventoryCount(),20);assert.equal(markup,previousMarkup,'Direct use cannot open the bag');
+  engine.items = [{kind:'identify',x:engine.player.x,y:engine.player.y}];
+  const beforeDirectIdentify = engine.serialize();
+  vm.runInContext('useGroundFromField()',ui);
+  assert(markup.includes('鑑定します。'));assert.equal(engine.serialize(),beforeDirectIdentify);
+  assert.equal(cancelIdentify,ui.closeModal,'Direct appraisal cancellation returns to exploration');
+  cancelIdentify();assert.equal(engine.serialize(),beforeDirectIdentify);
+  vm.runInContext('useGroundFromField()',ui);
+  buttons.find(button => button.dataset.target === '0').click();
+  assert.equal(engine.turn,6);assert.equal(engine.items.length,0);assert.equal(engine.inventoryCount(),20);
+}
+// The contextual action remains available during warnings, preserves unknown names,
+// and disappears for equipment, coins, an empty tile or an ended adventure.
+{
+  const engine = new DungeonEngine(42), p = engine.player;
+  engine.identification.known = [];
+  const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
+  const start = source.indexOf('    const ground = engine.items.find');
+  const refresh = '{' + source.slice(start,source.indexOf('    if (portraitUI)',start)) + '}';
+  const groundUseButton = {hidden:true,setAttribute(name,value){this[name]=value;}};
+  const location = {};
+  const ui = vm.createContext({engine,p,ITEMS:DungeonData.ITEMS,groundUseButton,threat:{name:'敵'},$:()=>location});
+  for (const kind of ['bread','potion','scroll','map','identify','uncurse','arrow']) {
+    engine.items = [{kind,x:p.x,y:p.y}];
+    vm.runInContext(refresh,ui);
+    assert.equal(groundUseButton.hidden,false);
+    assert(groundUseButton['aria-label'].startsWith(engine.itemName(engine.items[0])));
+    if (['scroll','map','identify','uncurse'].includes(kind))
+      assert(!groundUseButton['aria-label'].includes(DungeonData.ITEMS[kind].name));
+  }
+  for (const kind of ['weapon','shield','gold']) {
+    engine.items = [{kind,x:p.x,y:p.y}];vm.runInContext(refresh,ui);assert(groundUseButton.hidden);
+  }
+  engine.items = [{kind:'potion',x:p.x+1,y:p.y}];vm.runInContext(refresh,ui);assert(groundUseButton.hidden);
+  engine.items = [];vm.runInContext(refresh,ui);assert(groundUseButton.hidden);
+  engine.items = [{kind:'bread',x:p.x,y:p.y}];
+  for (const status of ['dead','won']) {engine.status=status;vm.runInContext(refresh,ui);assert(groundUseButton.hidden);}
 }
 console.log('PASS: module parity, renderer, inventory display order/original indices and drop/exchange UI handlers.');
