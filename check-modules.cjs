@@ -81,14 +81,21 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   const atlasWidth = png.readUInt32BE(16), atlasHeight = png.readUInt32BE(20), sources = [];
   browser.Image = class {
     complete = true; naturalWidth = atlasWidth;
-    set src(value) { assert.equal(value, 'art/lantern-atlas.png'); this.onload(); }
+    set src(value) {
+      assert(['art/lantern-atlas.png', 'art/lantern-items.png'].includes(value));
+      const file = fs.readFileSync(path.join(__dirname, 'dist', value));
+      this.source = value; this.naturalWidth = file.readUInt32BE(16); this.naturalHeight = file.readUInt32BE(20);
+      this.onload();
+    }
   };
   browser.document = {createElement: tag => {
     assert.equal(tag, 'canvas');
-    return {getContext: () => ({drawImage(image, x, y, w, h) {
-      assert(x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= atlasWidth && y + h <= atlasHeight);
+    const texture = {getContext: () => ({drawImage(image, x, y, w, h) {
+      assert(x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= image.naturalWidth && y + h <= image.naturalHeight);
+      texture.frame = image.source + ':' + [x, y, w, h].join(',');
       sources.push([x, y, w, h].join(','));
     }})};
+    return texture;
   }};
   const painted = browser.createDungeonRenderer({canvas, minimap: canvas, viewport: canvas, getEngine: () => game});
   for (const [type, flip] of [['hero', false], ['heroDownRight', false], ['heroRight', false], ['heroUpRight', false], ['heroUp', false], ['heroUpRight', true], ['heroRight', true], ['heroDownRight', true]])
@@ -102,6 +109,31 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
     painted.sprite(bookContext, monster.type, 0, 0, 5, 1, false, species);
   assert.equal(sources.length - start, 25, 'All species have a painted sprite');
   assert.equal(new Set(sources.slice(start)).size, 9, 'Nine monster families have distinct silhouettes');
+  const itemTypes = ['bread', 'potion', 'scroll', 'arrow', 'gold', ...Object.keys(DungeonData.EQUIPMENT), 'lantern'];
+  const itemSources = {};
+  const itemContext = {save() {}, restore() {}, drawImage(image, x, y, w, h) {
+    assert(x >= -.001 && y >= -.001 && x + w <= 80.001 && y + h <= 80.001, 'An item must fit its tile');
+    assert(image.width >= 170 && image.height >= 190, 'Item textures exceed the former 16px patterns');
+    itemSources[itemTypes[Object.keys(itemSources).length]] = image.frame;
+  }};
+  for (const type of itemTypes) painted.sprite(itemContext, type, 0, 0, 5);
+  assert.equal(new Set(Object.values(itemSources)).size, 18, 'Every item family and equipment variant has its own art');
+
+  // Rendering must not reveal talisman effects, appraisal/curse state, or a disguised mimic.
+  const fixture = new DungeonEngine(41), {x, y} = fixture.player, drawFrames = [];
+  fixture.items = ['scroll', 'map', 'identify', 'uncurse', 'gold'].map(kind => ({kind, x, y}));
+  fixture.items.push(...[false, true].map(identified => ({kind:'weapon', variant:'ghostSword', rank:1, identified, cursed:identified, bonus:identified ? 3 : -1, x, y})));
+  fixture.enemies = [{...DungeonData.monsterStats('coinMimic'), hp:20, x, y, id:1, revealed:false}];
+  const drawContext = new Proxy(context, {get(target, key) {
+    return key === 'drawImage' ? image => {drawFrames.push(image.frame);} : target[key];
+  }});
+  const fixtureCanvas = {...canvas, getContext: () => drawContext};
+  const scene = browser.createDungeonRenderer({canvas:fixtureCanvas, minimap:canvas, viewport:canvas, getEngine:() => fixture, reduced:true});
+  scene.resize(); const before = fixture.serialize(); scene.start(); frames.pop()(1000);
+  assert.equal(fixture.serialize(), before, 'Painting items cannot alter saves, item knowledge or RNG');
+  assert.equal(drawFrames.filter(frame => frame === itemSources.scroll).length, 4, 'All four talismans share one appearance');
+  assert.equal(drawFrames.filter(frame => frame === itemSources.gold).length, 2, 'An unrevealed mimic looks exactly like gold');
+  assert.equal(drawFrames.filter(frame => frame === itemSources.ghostSword).length, 2, 'Appraisal, curses and bonuses cannot change equipment art');
 }
 // Inventory display sorting must preserve the indices used by item actions.
 {
