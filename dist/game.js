@@ -392,7 +392,10 @@
     );
     const rows = $("modal-content").querySelectorAll(".bag-entry");
     rows.forEach((row) => row.querySelector("summary").addEventListener("click", () => {
-      if (!row.open) rows.forEach((other) => { if (other !== row) other.open = false; });
+      if (!row.open) {
+        rows.forEach((other) => { if (other !== row) other.open = false; });
+        requestAnimationFrame(() => row.querySelector("summary").scrollIntoView({block: "nearest"}));
+      }
     }));
     $("modal-content")
       .querySelectorAll("[data-use]")

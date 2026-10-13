@@ -74,7 +74,7 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
   let markup, buttons, rows;
   const ui = vm.createContext({engine, ...DungeonData, portraitUI:false,
-    modalHeader: () => '', closeModal() {}, act: action => action(),
+    modalHeader: () => '', closeModal() {}, act: action => action(), requestAnimationFrame() {},
     openModal: (kind, html) => {
       markup = html;
       buttons = [...html.matchAll(/<button[^>]*data-(drop|exchange)="(\d+)"[^>]*>/g)].map(match => ({
