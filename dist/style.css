@@ -259,3 +259,6 @@ dialog::backdrop{background:#253023a6}
 
 /* Actionable guidance takes its own row and never covers an actor or warning tile. */
 .canvas-wrap>.canvas-caption{position:static;flex:none;transform:none;width:100%;max-width:none;margin:0;padding:5px 10px;border-radius:0;border-width:1px 0;font-size:12px;line-height:1.65;letter-spacing:0}
+
+/* Painted items retain smooth contours when the render canvas is scaled to the viewport. */
+#game{image-rendering:auto}

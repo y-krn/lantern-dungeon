@@ -1,6 +1,6 @@
 (function (root) {
   "use strict";
-  const { W, H, MONSTERS } =
+  const { W, H, MONSTERS, equipmentKind } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
       : root.DungeonData;
@@ -32,6 +32,17 @@
       moth: [564, 890, 276, 244], golem: [844, 878, 264, 254],
       guardian: [18, 1134, 264, 252], lantern: [358, 1134, 160, 248],
     };
+    const itemFrames = {
+      bread: [18, 50, 279, 220], potion: [323, 30, 271, 257],
+      scroll: [621, 40, 253, 243], arrow: [906, 17, 271, 285],
+      gold: [1204, 76, 259, 198], woodSword: [1500, 33, 253, 254],
+      copperSword: [29, 305, 246, 273], ironSword: [329, 304, 254, 273],
+      starSword: [622, 307, 261, 269], ghostSword: [915, 304, 257, 284],
+      pickaxe: [1199, 310, 272, 269], travelerShield: [1502, 315, 243, 262],
+      copperShield: [20, 594, 257, 266], ironShield: [325, 577, 242, 291],
+      starShield: [628, 576, 242, 291], leatherShield: [912, 598, 256, 263],
+      mirrorShield: [1224, 579, 223, 291], lantern: [1543, 582, 179, 283],
+    };
     const baseSpecies = {slime: 'mossSlime', bat: 'caveBat', ghost: 'lanternGhost',
       beetle: 'cobaltBeetle', plant: 'thornPlant', mimic: 'coinMimic',
       moth: 'lanternMoth', golem: 'stoneGolem', guardian: 'starGuardian'};
@@ -42,6 +53,12 @@
       atlas.onerror = () => resolve(false);
       atlas.src = 'art/lantern-atlas.png';
     }) : Promise.resolve(false);
+    const itemAtlas = typeof root.Image === 'function' ? new root.Image() : null;
+    const itemsReady = itemAtlas ? new Promise(resolve => {
+      itemAtlas.onload = () => resolve(true);
+      itemAtlas.onerror = () => resolve(false);
+      itemAtlas.src = 'art/lantern-items.png';
+    }) : Promise.resolve(false);
     function tone(hex) {
       const [r, g, b] = hex.match(/\w\w/g).map(value => parseInt(value, 16) / 255);
       const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
@@ -50,15 +67,17 @@
         saturation: delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0};
     }
     function paintedSprite(context, type, x, y, scale, alpha, flip, species) {
-      if (!atlas?.complete || !atlas.naturalWidth || !artFrames[type]) return false;
+      const useItem = !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
+      const sheet = useItem ? itemAtlas : atlas, frameBounds = useItem ? itemFrames[type] : artFrames[type];
+      if (!sheet?.complete || !sheet.naturalWidth || !frameBounds) return false;
       const m = MONSTERS[species];
       if (flip && type.startsWith('hero')) {
         type = {heroRight: 'heroLeft', heroUpRight: 'heroUpLeft', heroDownRight: 'heroDownLeft'}[type] || type;
         flip = false;
       }
-      const key = species || type;
+      const key = useItem ? `item:${type}` : species || type;
       if (!paintedSprites.has(key)) {
-        const [sx, sy, width, height] = artFrames[type];
+        const [sx, sy, width, height] = useItem ? frameBounds : artFrames[type];
         const image = document.createElement('canvas');
         image.width = width; image.height = height;
         const paint = image.getContext('2d'), base = MONSTERS[baseSpecies[type]];
@@ -66,13 +85,13 @@
           const target = tone(m.colors[1]), original = tone(base.colors[1]);
           paint.filter = `hue-rotate(${target.hue - original.hue}deg) saturate(${target.saturation / (original.saturation || 1)})`;
         }
-        paint.drawImage(atlas, sx, sy, width, height, 0, 0, width, height);
+        paint.drawImage(sheet, sx, sy, width, height, 0, 0, width, height);
         paintedSprites.set(key, image);
       }
       const image = paintedSprites.get(key), hero = type.startsWith('hero');
       const factor = Math.min(16 * scale / image.width, (hero ? 18 : 16) * scale / image.height);
       const width = image.width * factor, height = image.height * factor;
-      context.save(); context.globalAlpha = alpha; context.imageSmoothingEnabled = true;
+      context.save(); context.globalAlpha = alpha; context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
       if (flip) {context.translate(x + 16 * scale, y); context.scale(-1, 1); x = 0; y = 0;}
       context.drawImage(image, x + 8 * scale - width / 2, y + (hero ? 18 : 16) * scale - height, width, height);
       if (m?.tier) {
@@ -735,6 +754,11 @@
         Math.PI * 2,
       );
       ctx.fill();
+      // All lantern talismans share one appearance; neither knowledge nor curses leak into art.
+      const type = ['scroll', 'map', 'identify', 'uncurse'].includes(item.kind) ? 'scroll'
+        : ['weapon', 'shield'].includes(item.kind) ? equipmentKind(item) || (item.kind === 'weapon' ? 'ironSword' : 'travelerShield')
+        : item.kind;
+      if (paintedSprite(ctx, type, px + tile * .125, py + tile * .125 + bob, s * .75, 1, false, null)) return;
       if (item.kind === "gold") {
         ctx.fillStyle = "#7c5d32";
         ctx.fillRect(px + s * 5, py + s * 7 + bob, s * 7, s * 5);
@@ -1133,6 +1157,7 @@
     }
     return {
       ready,
+      itemsReady,
       setCloseView(value) { closeView = value; resize(); },
       sprite,
       drawMinimap,
