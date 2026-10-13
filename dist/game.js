@@ -304,6 +304,7 @@
   function openModal(kind, html) {
     if (portraitUI && pwaPanel) document.querySelector("main").append(pwaPanel);
     modalKind = kind;
+    $("modal").classList.toggle("bag-dialog", kind === "bag");
     $("modal-content").innerHTML = html;
     if (!$("modal").open) $("modal").showModal();
     $("modal-content")
@@ -346,12 +347,17 @@
     const ground = engine.items.find((item) => item.x === p.x && item.y === p.y);
     const canExchange = ground && ITEMS[ground.kind] && !engine.onStairs();
     const equipment = Object.entries(p.equipment).filter(([, item]) => item);
+    const bagRow = (item, buttons, suffix = "", equipped = false) => {
+      const kind = typeof item === "string" ? item : item.kind;
+      return `<details class="bag-entry"><summary><span class="item-icon" aria-hidden="true">${ITEMS[kind].icon}</span><strong>${escapeHTML(engine.itemName(item))}${suffix}</strong>${equipped ? '<span class="bag-badge">装備中</span>' : ""}</summary><div class="bag-entry-detail"><p>${escapeHTML(engine.itemDescription(item))}</p><div class="bag-actions">${buttons}</div></div></details>`;
+    };
     const equippedCards = equipment
       .map(([kind, item]) =>
-        itemCard(
+        bagRow(
           item,
           `<button class="use-button" data-unequip="${kind}">外す</button>`,
-          "（装備中）",
+          "",
+          true,
         ),
       )
       .join("");
@@ -370,27 +376,24 @@
           scroll && !engine.identification.known.includes(kind)
             ? `<button class="use-button" data-name="${index}">名前</button>`
             : "";
-        return itemCard(
+        return bagRow(
           item,
           buttons + naming +
             `<button class="use-button" data-drop="${index}" ${ground || engine.onStairs() ? "disabled" : ""}>置く</button>` +
             (canExchange ? `<button class="use-button" data-exchange="${index}">交換</button>` : ""),
-          kind === "arrow" ? ` × ${count}${equipped ? "（装備中）" : ""}` : "",
+          kind === "arrow" ? ` × ${count}` : "",
+          equipped,
         );
       })
       .join("");
     openModal(
       "bag",
-      `<div class="modal-inner">${modalHeader("旅の持ち物")}<p class="modal-description">持ち物 ${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠。装備中の武器・盾も各1枠を使います。予備装備と道具も1個につき1枠、矢は1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。<br>使用・装備・解除・床に置く・足元との交換で1ターン。鑑定の対象選択・命名では時間は進みません。木の矢はまとめて1枠、置く・交換も束ごと扱います。装備後Rキーで発射できます。</p>${ground && ITEMS[ground.kind] ? `<p class="modal-description">足元：${escapeHTML(engine.itemName(ground))}${ground.kind === "arrow" ? ` × ${ground.amount || 1}` : ""}。交換する持ち物の「交換」を選んでください。</p>` : ""}<div class="item-list">${equippedCards}${bagCards}</div><button class="secondary-button" data-close>冒険に戻る</button></div>`,
+      `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong><span>品名を選んで操作</span></div>${portraitUI ? `<p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本</p>` : ""}<p class="bag-turn-hint">閲覧・命名は時間が進みません。使用・装備・置く・交換は1ターン。</p>${ground && ITEMS[ground.kind] ? `<p class="bag-ground">足元：${escapeHTML(engine.itemName(ground))}${ground.kind === "arrow" ? ` × ${ground.amount || 1}` : ""}${canExchange ? " — 選んだ品と交換できます。" : " — 階段の上では交換できません。"}</p>` : ""}<div class="bag-list" role="region" aria-label="持ち物一覧" tabindex="0">${equippedCards}${bagCards}${!equipment.length && !entries.length ? '<p class="bag-turn-hint">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備中の武器・盾、予備装備、道具は1個につき1枠。矢は何本でも1束で1枠です。持ち替え・装備解除で使用枠数は変わりません。</p><p>使用・装備・解除・床に置く・足元との交換で1ターン進みます。鑑定の対象選択・命名では時間は進まず、鑑定を実行すると1ターン進みます。</p><p>木の矢を置く・交換する操作は束ごと扱います。装備後${portraitUI ? "「矢を放つ」" : "Rキー"}で発射できます。足元に品がある場所や階段の上には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`,
     );
-    if (portraitUI) {
-      const summary = document.createElement("p");
-      summary.className = "modal-description";
-      summary.textContent = `Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G · 攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本`;
-      $("modal-content").querySelector(".modal-description").before(summary);
-      const description = summary.nextElementSibling;
-      description.innerHTML = description.innerHTML.replace("装備後Rキーで発射", "装備後「矢を放つ」で発射");
-    }
+    const rows = $("modal-content").querySelectorAll(".bag-entry");
+    rows.forEach((row) => row.querySelector("summary").addEventListener("click", () => {
+      if (!row.open) rows.forEach((other) => { if (other !== row) other.open = false; });
+    }));
     $("modal-content")
       .querySelectorAll("[data-use]")
       .forEach((b) =>

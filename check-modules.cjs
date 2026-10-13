@@ -72,7 +72,7 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   const unknown = {kind:'shield',variant:'mirrorShield',rank:0,bonus:-2,cursed:true,identified:false};
   engine.player.bag = ['bread', known, unknown, 'arrow', 'potion', 'arrow'];
   const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
-  let markup, buttons;
+  let markup, buttons, rows;
   const ui = vm.createContext({engine, ...DungeonData, portraitUI:false,
     modalHeader: () => '', closeModal() {}, act: action => action(),
     openModal: (kind, html) => {
@@ -81,12 +81,21 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
         type: match[1], dataset: {[match[1]]: match[2]},
         addEventListener(event, listener) {this.click = listener;},
       }));
+      rows = [...html.matchAll(/<details class="bag-entry">/g)].map(() => ({open: false}));
+      rows.forEach(row => {
+        row.querySelector = () => ({addEventListener(event, listener) {row.activate = () => {listener();row.open = !row.open;};}});
+      });
     },
-    $: () => ({querySelectorAll: selector => buttons.filter(button => selector === `[data-${button.type}]`)}),
+    $: () => ({querySelectorAll: selector => selector === '.bag-entry' ? rows : buttons.filter(button => selector === `[data-${button.type}]`)}),
   });
   vm.runInContext(source.slice(source.indexOf('  const escapeHTML'),source.indexOf('  function showIdentify')),ui);
   const raw = engine.serialize();vm.runInContext('showBag()',ui);assert.equal(engine.serialize(),raw);
-  const names = [...markup.matchAll(/<strong>([^<]+)<\/strong>/g)].map(match => match[1]);
+  assert.equal(rows.length, 7);
+  rows[2].activate();assert.equal(rows.filter(row => row.open).length, 1);
+  rows[3].activate();assert.equal(rows[2].open, false);assert.equal(rows[3].open, true);
+  rows[3].activate();assert.equal(rows.filter(row => row.open).length, 0);
+  assert.equal(engine.serialize(), raw, 'Browsing and changing the expanded item cannot advance time or mutate inventory');
+  const names = [...markup.matchAll(/<summary>[\s\S]*?<strong>([^<]+)<\/strong>/g)].map(match => match[1]);
   assert.deepEqual(names.slice(2),['木の矢 × 2','鏡の盾（未鑑定）','焼きたてパン','回復草','星鉄の剣 +2']);
   assert.equal(buttons.filter(button => button.type === 'drop').length,5);
   buttons.find(button => button.type === 'drop' && button.dataset.drop === '0').click();
