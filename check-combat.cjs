@@ -89,4 +89,66 @@ pack.attack();
 const crowd = browser.createDungeonRenderer({canvas, minimap: canvas, viewport: canvas, getEngine: () => pack});
 crowd.playEffects(pack.effects);
 assert(crowd.remaining() <= 410, 'Eight attackers must not create a long sequential wait');
-console.log('PASS: combat visual snapshots, gameplay/save parity, ordered impacts, lunge/slash, defeated sprite, cancellation and reduced motion.');
+
+function arrowScene(dx, dy, distance = 3, hp = 80) {
+  const shot = arena(hp);
+  shot.player.facing = [dx, dy]; shot.player.bag.push('arrow'); shot.player.ammo = 'arrow';
+  shot.enemies[0].x = shot.player.x + dx * distance;
+  shot.enemies[0].y = shot.player.y + dy * distance;
+  shot.reveal(); shot.shoot();
+  return shot;
+}
+function playback(shot, reduced = false) {
+  let time = 0, origin;
+  const callbacks = [], arrows = [], impacts = [];
+  const paint = new Proxy({}, {get: (_, key) => key === 'createRadialGradient' ? () => gradient : (...args) => {
+    assert(args.filter(value => typeof value === 'number').every(Number.isFinite), `Invalid arrow ${key}`);
+    if (key === 'translate') origin = args;
+    if (key === 'moveTo' && Math.abs(args[0] + 96 * .65) < .001 && args[1] === 0) arrows.push(origin);
+  }, set: () => true});
+  const surface = {...canvas, getContext: () => paint};
+  const env = vm.createContext({DungeonData, performance: {now: () => time}, requestAnimationFrame: cb => callbacks.push(cb)});
+  vm.runInContext(fs.readFileSync('./dist/renderer.js', 'utf8'), env);
+  const view = env.createDungeonRenderer({canvas: surface, minimap: surface, viewport: surface, getEngine: () => shot, reduced});
+  view.resize(); view.start(); view.playEffects(shot.effects, event => impacts.push(event.type));
+  const state = shot.serialize();
+  return {view, impacts, draw(at) {
+    time = at; arrows.length = 0; callbacks.shift()(at);
+    assert.equal(shot.serialize(), state, 'Arrow drawing cannot mutate gameplay or saves');
+    return arrows.map(point => point.slice());
+  }};
+}
+for (const [dx, dy] of DungeonData.DIRS) {
+  const shot = arrowScene(dx, dy), flight = playback(shot);
+  assert.equal(shot.turn, 1); assert.equal(shot.arrowCount(), 0);
+  const first = flight.draw(60), later = flight.draw(150);
+  assert.equal(first.length, 1); assert.equal(later.length, 1);
+  assert.equal(Math.sign(later[0][0] - first[0][0]), dx, 'Arrow follows horizontal facing');
+  assert.equal(Math.sign(later[0][1] - first[0][1]), dy, 'Arrow follows vertical facing');
+  assert(!flight.impacts.includes('hit'), 'Damage feedback waits for arrival');
+  flight.draw(206); assert(flight.impacts.includes('hit'));
+  assert.equal(flight.draw(316).length, 0); assert.equal(flight.view.remaining(), 0);
+}
+for (const distance of [0, 3, 10]) {
+  const shot = arena(); shot.enemies = [];
+  shot.player.bag.push('arrow'); shot.player.ammo = 'arrow';
+  if (distance < 10) shot.tiles[shot.key(16 + distance, 10)] = 0;
+  shot.shoot();
+  const flight = playback(shot);
+  assert.equal(flight.draw(70).length, 1, 'Misses, adjacent walls and maximum range still animate');
+  flight.draw(600); assert.equal(flight.view.remaining(), 0);
+}
+const retaliation = playback(arrowScene(1, 0, 1));
+retaliation.draw(139); assert(!retaliation.impacts.includes('hit'));
+retaliation.draw(141); assert(retaliation.impacts.includes('hit')); assert(!retaliation.impacts.includes('damage'));
+retaliation.draw(251); assert(retaliation.impacts.includes('damage'), 'Counterattack follows arrow arrival');
+const arrowDeath = playback(arrowScene(1, 0, 3, 1));
+arrowDeath.draw(150); assert(!arrowDeath.impacts.includes('kill'));
+arrowDeath.draw(206); assert(arrowDeath.impacts.includes('kill'), 'Defeat feedback follows arrow arrival');
+const cancelled = playback(arrowScene(1, 0));
+cancelled.view.reset(); assert.equal(cancelled.draw(100).length, 0); assert.equal(cancelled.impacts.length, 0);
+const unseen = arrowScene(1, 0); unseen.visible.fill(false);
+assert.equal(playback(unseen).draw(100).length, 0, 'Arrows cannot reveal unlit tiles');
+const still = playback(arrowScene(1, 0), true);
+assert.equal(still.view.remaining(), 0); assert.equal(still.draw(0).length, 0); assert(still.impacts.includes('hit'));
+console.log('PASS: combat snapshots, save parity, melee, eight-direction arrow flight, misses/walls/range, ordered impacts, defeat, cancellation and reduced motion.');

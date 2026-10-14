@@ -12,6 +12,8 @@
     duel: "一対一 · 攻撃 → 反撃", surrounded: "囲まれる · 攻撃 → 三方向の反撃",
     miss: "空振り · 敵がいなくても剣を振る", kill: "撃破 · 命中してから消える",
     ranged: "敵の射撃 · 構え → 次のターンに発射",
+    arrow: "矢の命中 · 発射 → 飛行 → 着弾", arrowMiss: "矢の空振り · 壁まで飛んで落ちる",
+    arrowKill: "矢で撃破 · 着弾してから消える",
   };
   function prepare() {
     engine = new DungeonEngine(73, "tutorial");
@@ -36,6 +38,10 @@
       const species = Object.keys(DungeonData.MONSTERS).find(key => DungeonData.MONSTERS[key].trait === "ranged");
       add(species, 3, 0);
     }
+    if (scene.startsWith("arrow")) {
+      engine.player.bag.push(...Array(20).fill("arrow")); engine.player.ammo = "arrow";
+      if (scene !== "arrowMiss") add("mossSlime", 3, 0, scene === "arrowKill" ? 1 : 60);
+    }
     engine.log = []; engine.effects = [];
     engine.reveal(); engine.seen = engine.visible.slice();
     renderer.reset({ x: x + .5, y: y + .5 });
@@ -43,9 +49,10 @@
   }
   function act(wait = false) {
     if (renderer.remaining() > 0) return;
-    if (engine.status !== "playing" || (scene !== "miss" && !engine.enemies.length)) prepare();
+    if (engine.status !== "playing" || (!["miss", "arrowMiss"].includes(scene) && !engine.enemies.length) ||
+        (scene.startsWith("arrow") && !engine.arrowCount())) prepare();
     engine.player.hp = engine.player.maxHp;
-    if (wait) engine.wait(); else engine.attack();
+    if (wait) engine.wait(); else if (scene.startsWith("arrow")) engine.shoot(); else engine.attack();
     renderer.playEffects(engine.effects, event => {
       if (["hit", "damage", "swing"].includes(event.type)) {
         const from = event.attack?.source.id === "player" ? "リネ" : DungeonData.MONSTERS[event.attack?.source.species]?.name;
@@ -54,6 +61,7 @@
       }
       if (event.type === "kill") $("feedback").textContent = "命中 → 魔物を撃破。もう一度攻撃すると同じ場面を試せます。";
       if (event.type === "warning") $("feedback").textContent = "敵が射撃の構え。次のターンに発射します。";
+      if (event.type === "arrow" && scene === "arrowMiss") $("feedback").textContent = "木の矢は敵に当たらず、壁にぶつかって床に落ちました。";
     });
     engine.effects = [];
   }
