@@ -406,7 +406,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
       const item={x:p.x+dx,y:p.y+dy,kind,amount:1,...(['weapon','shield'].includes(kind)?{rank:1,bonus:2,cursed:true,identified:false}:{})};
       game.items=[item];const name=game.itemName(item),bag=[...p.bag];
       assert(game.move(dx,dy));
-      assert(game.log.some(entry=>entry.text===`持ち物がいっぱい。足元に${name}がある。持ち物から足元のアイテムを${["weapon","shield"].includes(kind) ? "交換しよう" : "使うか交換しよう"}。空いている床に置いて枠を空けることもできる。`));
+      assert(game.log.some(entry=>entry.text===`持ち物がいっぱい。${name}は足元に残った。`));
       assert.deepEqual(p.bag,bag);assert.deepEqual(game.items,[item]);assert(!game.effects.some(effect=>effect.type==='pickup'));
       assert.deepEqual(game.identification.known,known);assert.equal(item.identified,['weapon','shield'].includes(kind)?false:undefined);
     }

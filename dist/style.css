@@ -152,9 +152,13 @@ dialog.bag-dialog{max-width:520px;overflow:hidden}
 .bag-overview{display:flex;justify-content:space-between;align-items:center;gap:12px;flex:none;font-size:12px}.bag-overview strong{color:var(--gold)}.bag-overview span{color:var(--muted)}
 .bag-stats,.bag-turn-hint,.bag-ground{flex:none;font-size:11px;line-height:1.6;margin:0;color:#c1b8c8}.bag-ground{padding:8px;background:#af8b5817;border-left:2px solid var(--gold);color:var(--gold)}
 .bag-ground .use-button{min-height:44px;margin-top:4px}
-.canvas-wrap>.canvas-caption:not([hidden]){display:flex;align-items:center;gap:8px}
-#location-hint{flex:1;min-width:0;overflow-wrap:anywhere}
-.ground-use-button{pointer-events:auto;touch-action:manipulation;flex:none;min-height:44px;padding:8px;border:1px solid #a7ad81;border-radius:5px;background:#475a3e;color:#fff8e6;font-size:12px;white-space:nowrap}
+.canvas-wrap>.canvas-caption:not([hidden]){display:block;text-align:left}
+#location-hint{min-width:0;overflow-wrap:anywhere}
+#ground-context:not([hidden]){display:flex;align-items:center;gap:8px}
+.ground-item-button{pointer-events:auto;touch-action:manipulation;display:flex;align-items:center;gap:7px;flex:1;min-width:0;min-height:44px;padding:0;border:0;background:none;color:inherit;text-align:left}
+.ground-marker{flex:none;color:#d5d6bd;font-size:11px}
+.ground-name{flex:1;min-width:0;font-size:13px;font-weight:600;line-height:1.5;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.ground-use-button{pointer-events:auto;touch-action:manipulation;flex:none;min-width:64px;min-height:44px;padding:8px;border:1px solid #a7ad81;border-radius:5px;background:#475a3e;color:#fff8e6;font-size:12px;white-space:nowrap}
 .bag-list{flex:0 1 auto;min-height:0;max-height:360px;overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--border);border-radius:6px;scrollbar-gutter:stable;touch-action:pan-y}
 .bag-entry+.bag-entry{border-top:1px solid var(--border)}
 .bag-entry>summary{display:flex;align-items:center;gap:9px;min-height:44px;padding:9px 10px;cursor:pointer;list-style:none}.bag-entry>summary::-webkit-details-marker{display:none}
@@ -168,6 +172,19 @@ dialog.bag-dialog{max-width:520px;overflow:hidden}
 .bag-rules>div{max-height:120px;overflow-y:auto;overscroll-behavior:contain;line-height:1.8}.bag-rules p{margin:0 0 8px}
 .bag-modal>.secondary-button{flex:none;min-height:44px;margin:0}
 .bag-list:focus-visible,.bag-entry>summary:focus-visible,.bag-rules>summary:focus-visible,.bag-rules>div:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.bag-entry[data-ground-row]{border-left:3px solid #72834e;background:#e9edda}
+.ground-detail{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.ground-detail h3{margin:0 0 8px;font-size:18px;line-height:1.6;overflow-wrap:anywhere}
+.ground-detail p,.selection-source,.item-note{margin:0 0 10px;font-size:12px;line-height:1.7;color:#71634e;overflow-wrap:anywhere}
+.ground-modal .bag-actions,.bag-entry[data-ground-row] .bag-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.ground-modal .bag-actions>.use-button:first-child,.bag-entry[data-ground-row] .bag-actions>.use-button:first-child{background:#4c633e;color:#fff6df;border-color:#31482a}
+.selection-source{flex:none;padding:8px 10px;margin:0;background:#e9edda;border-left:3px solid #72834e;color:#3f3427}
+.target-choice{display:flex;align-items:center;gap:9px;width:100%;min-height:52px;padding:10px;text-align:left;border:0;background:none}
+.target-choice+.target-choice{border-top:1px solid var(--border)}
+.target-choice:hover,.target-choice:focus-visible{background:#e9edda}
+.target-choice .item-icon{flex:none;font-size:20px;color:#73512c}
+.target-choice strong{flex:1;min-width:0;font-size:13px;font-weight:500;line-height:1.6;overflow-wrap:anywhere}
+.target-choice[data-target=ground]{border-left:3px solid #72834e;background:#e9edda}
 
 /* The travel journal frames a bright, readable lantern-lit playfield. */
 .site-header{border-bottom-color:var(--border);padding-top:14px;padding-bottom:14px}

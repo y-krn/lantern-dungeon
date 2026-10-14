@@ -135,111 +135,128 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   assert.equal(drawFrames.filter(frame => frame === itemSources.gold).length, 2, 'An unrevealed mimic looks exactly like gold');
   assert.equal(drawFrames.filter(frame => frame === itemSources.ghostSword).length, 2, 'Appraisal, curses and bonuses cannot change equipment art');
 }
-// Inventory display sorting must preserve the indices used by item actions.
-{
-  const engine = new DungeonEngine(42);
-  engine.enemies = [];engine.items = [];engine.traps = [];engine.monsterHouse = null;
-  const known = {kind:'weapon',variant:'starSword',rank:3,bonus:2,cursed:false,identified:true};
-  const unknown = {kind:'shield',variant:'mirrorShield',rank:0,bonus:-2,cursed:true,identified:false};
-  engine.player.bag = ['bread', known, unknown, 'arrow', 'potion', 'arrow'];
+// The UI keeps item locations explicit and never mutates state while choosing.
+function inventoryUI(engine) {
   const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
-  let markup, buttons, rows, cancelIdentify;
-  const ui = vm.createContext({engine, ...DungeonData, portraitUI:false,
-    modalHeader: () => '', closeModal() {}, act: action => action(), requestAnimationFrame() {},
-    openModal: (kind, html) => {
-      markup = html;
-      buttons = [...html.matchAll(/<button[^>]*data-(drop|exchange|use|target)="(\w+)"[^>]*>/g)].map(match => ({
-        type: match[1], dataset: {[match[1]]: match[2]},
-        addEventListener(event, listener) {this.click = listener;},
-      }));
-      rows = [...html.matchAll(/<details class="bag-entry">/g)].map(() => ({open: false}));
-      rows.forEach(row => {
-        row.querySelector = () => ({addEventListener(event, listener) {row.activate = () => {listener();row.open = !row.open;};}});
+  const state = {kind:null, html:'', buttons:[], rows:[], controls:new Map(), open:false};
+  function buttons(html) {
+    return [...html.matchAll(/<button\b([^>]*)>/g)].map(match => {
+      const attrs = Object.fromEntries([...match[1].matchAll(/([\w-]+)="([^"]*)"/g)].map(value => [value[1],value[2]]));
+      const dataset = Object.fromEntries(Object.entries(attrs).filter(([key]) => key.startsWith('data-'))
+        .map(([key,value]) => [key.slice(5).replace(/-([a-z])/g,(_,letter) => letter.toUpperCase()),value]));
+      return {dataset, disabled:/\bdisabled\b/.test(match[1]), addEventListener(event,listener){this.listener=listener;},
+        click(){assert(!this.disabled,'Cannot click a disabled action');assert(this.listener,'Missing action listener');this.listener();}};
+    });
+  }
+  const controls = id => {
+    if (!state.controls.has(id)) state.controls.set(id,{value:'',focus(){},addEventListener(event,listener){this[event]=listener;}});
+    return state.controls.get(id);
+  };
+  const closeModal = () => {state.open=false;state.kind=null;};
+  const context = vm.createContext({engine,...DungeonData,portraitUI:false,modalHeader:title=>`<h2>${title}</h2>`,
+    closeModal,act:action=>action(),requestAnimationFrame(){},save(){},updateUI(){},
+    openModal(kind,html){
+      state.kind=kind;state.html=html;state.open=true;state.controls.clear();state.buttons=buttons(html);
+      state.rows=[...html.matchAll(/<details class="bag-entry"[^>]*>([\s\S]*?)<\/details>/g)].map(match=>{
+        const summary={scrollIntoView(){},addEventListener(event,listener){this.listener=listener;}};
+        const row={open:false,querySelector(selector){
+          return selector==='summary'?summary:match[1].includes(selector.slice(1,-1))?{}:null;
+        },activate(){summary.listener();row.open=!row.open;}};
+        return row;
       });
     },
-    $: id => id === "identify-cancel" ? {addEventListener(event, listener) {cancelIdentify = listener;}} : ({querySelectorAll: selector => selector === '.bag-entry' ? rows : buttons.filter(button => selector === `[data-${button.type}]`)}),
+    $:id=>id==='modal'?{get open(){return state.open;}}:id==='modal-content'?{
+      querySelectorAll(selector){
+        if(selector==='.bag-entry')return state.rows;
+        const key=selector.slice(6,-1).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());
+        return state.buttons.filter(button=>Object.hasOwn(button.dataset,key));
+      },
+    }:controls(id),
   });
-  vm.runInContext(source.slice(source.indexOf('  const escapeHTML'),source.indexOf('  function showItemName')),ui);
-  const raw = engine.serialize();vm.runInContext('showBag()',ui);assert.equal(engine.serialize(),raw);
-  assert.equal(rows.length, 7);
-  rows[2].activate();assert.equal(rows.filter(row => row.open).length, 1);
-  rows[3].activate();assert.equal(rows[2].open, false);assert.equal(rows[3].open, true);
-  rows[3].activate();assert.equal(rows.filter(row => row.open).length, 0);
-  assert.equal(engine.serialize(), raw, 'Browsing and changing the expanded item cannot advance time or mutate inventory');
-  const names = [...markup.matchAll(/<summary>[\s\S]*?<strong>([^<]+)<\/strong>/g)].map(match => match[1]);
-  assert.deepEqual(names.slice(2),['木の矢 × 2','鏡の盾（未鑑定）','焼きたてパン','回復草','星鉄の剣 +2']);
-  assert.equal(buttons.filter(button => button.type === 'drop').length,5);
-  buttons.find(button => button.type === 'drop' && button.dataset.drop === '0').click();
-  assert.equal(engine.items[0].kind,'bread');assert.equal(engine.turn,1);
-  vm.runInContext('showBag()',ui);assert(markup.includes('足元：焼きたてパン'));
-  assert.equal(buttons.filter(button => button.type === 'exchange').length,4);
-  buttons.find(button => button.type === 'exchange' && button.dataset.exchange === '1').click();
-  assert.equal(engine.items[0].variant,'mirrorShield');assert.equal(engine.items[0].identified,false);
-  assert.equal(engine.player.bag.at(-1),'bread');assert.equal(engine.turn,2);
-  assert(!engine.player.bag.includes(unknown));
-  engine.player.bag = Array(18).fill('bread');
-  engine.items = [{kind:'potion', x:engine.player.x, y:engine.player.y}];
-  engine.player.hp = 1;
-  vm.runInContext('showBag()',ui);
-  assert(markup.includes('足元から使う'));
-  buttons.find(button => button.dataset.use === 'ground').click();
-  assert.equal(engine.player.hp,26);assert.equal(engine.items.length,0);
-  assert.equal(engine.inventoryCount(),20);assert.equal(engine.turn,3);
-  engine.items = [{kind:'identify', x:engine.player.x, y:engine.player.y}];
-  engine.identification.known = [];
-  const beforeIdentify = engine.serialize();
-  vm.runInContext('showBag()',ui);
-  buttons.find(button => button.dataset.use === 'ground').click();
-  assert(markup.includes('で持ち物を1つ鑑定します。'));
-  assert.equal(engine.serialize(),beforeIdentify);
-  cancelIdentify();assert.equal(engine.serialize(),beforeIdentify);
-  buttons.find(button => button.dataset.use === 'ground').click();
-  assert(buttons.some(button => button.dataset.target === '0'));
-  buttons.find(button => button.dataset.target === 'weapon').click();
-  assert.equal(engine.items.length,0);assert.equal(engine.turn,4);
-  assert.equal(engine.inventoryCount(),20);
-  engine.items = [{...unknown,x:engine.player.x,y:engine.player.y}];
-  vm.runInContext('showBag()',ui);assert(!buttons.some(button => button.dataset.use === 'ground'));
-  engine.items = [{kind:'bread',x:engine.player.x,y:engine.player.y}];
-  const previousMarkup = markup;
-  vm.runInContext('useGroundFromField()',ui);
-  assert.equal(engine.turn,5);assert.equal(engine.items.length,0);
-  assert.equal(engine.inventoryCount(),20);assert.equal(markup,previousMarkup,'Direct use cannot open the bag');
-  engine.items = [{kind:'identify',x:engine.player.x,y:engine.player.y}];
-  const beforeDirectIdentify = engine.serialize();
-  vm.runInContext('useGroundFromField()',ui);
-  assert(markup.includes('鑑定します。'));assert.equal(engine.serialize(),beforeDirectIdentify);
-  assert.equal(cancelIdentify,ui.closeModal,'Direct appraisal cancellation returns to exploration');
-  cancelIdentify();assert.equal(engine.serialize(),beforeDirectIdentify);
-  vm.runInContext('useGroundFromField()',ui);
-  buttons.find(button => button.dataset.target === '0').click();
-  assert.equal(engine.turn,6);assert.equal(engine.items.length,0);assert.equal(engine.inventoryCount(),20);
+  vm.runInContext(source.slice(source.indexOf('  const escapeHTML'),source.indexOf('  function showMonsters')),context);
+  state.call=code=>vm.runInContext(code,context);
+  state.action=(action,index='ground')=>{
+    const button=state.buttons.find(button=>button.dataset.itemAction===action&&button.dataset.index===String(index));
+    assert(button,`Missing ${action} action for ${index}`);button.click();
+  };
+  state.target=target=>{const button=state.buttons.find(button=>button.dataset.target===String(target));assert(button);button.click();};
+  state.cancel=id=>{const control=controls(id);assert(control.click);control.click();};
+  state.control=controls;state.close=closeModal;state.context=context;return state;
 }
-// The contextual action remains available during warnings, preserves unknown names,
-// and disappears for equipment, coins, an empty tile or an ended adventure.
+function quietUI() {
+  const engine=new DungeonEngine(42),room=engine.roomAt(engine.player.x,engine.player.y);
+  engine.player.x=room.cx;engine.player.y=room.cy;engine.enemies=[];engine.items=[];engine.traps=[];engine.monsterHouse=null;
+  return engine;
+}
 {
-  const engine = new DungeonEngine(42), p = engine.player;
-  engine.identification.known = [];
-  const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
-  const start = source.indexOf('    const ground = engine.items.find');
-  const refresh = '{' + source.slice(start,source.indexOf('    if (portraitUI)',start)) + '}';
-  const groundUseButton = {hidden:true,setAttribute(name,value){this[name]=value;}};
-  const location = {};
-  const ui = vm.createContext({engine,p,ITEMS:DungeonData.ITEMS,groundUseButton,threat:{name:'敵'},$:()=>location});
-  for (const kind of ['bread','potion','scroll','map','identify','uncurse','arrow']) {
-    engine.items = [{kind,x:p.x,y:p.y}];
-    vm.runInContext(refresh,ui);
-    assert.equal(groundUseButton.hidden,false);
-    assert(groundUseButton['aria-label'].startsWith(engine.itemName(engine.items[0])));
-    if (['scroll','map','identify','uncurse'].includes(kind))
-      assert(!groundUseButton['aria-label'].includes(DungeonData.ITEMS[kind].name));
-  }
-  for (const kind of ['weapon','shield','gold']) {
-    engine.items = [{kind,x:p.x,y:p.y}];vm.runInContext(refresh,ui);assert(groundUseButton.hidden);
-  }
-  engine.items = [{kind:'potion',x:p.x+1,y:p.y}];vm.runInContext(refresh,ui);assert(groundUseButton.hidden);
-  engine.items = [];vm.runInContext(refresh,ui);assert(groundUseButton.hidden);
-  engine.items = [{kind:'bread',x:p.x,y:p.y}];
-  for (const status of ['dead','won']) {engine.status=status;vm.runInContext(refresh,ui);assert(groundUseButton.hidden);}
+  const engine=quietUI(),p=engine.player;
+  const known={kind:'weapon',variant:'starSword',rank:3,bonus:2,cursed:false,identified:true};
+  const unknown={kind:'shield',variant:'mirrorShield',rank:0,bonus:-2,cursed:true,identified:false};
+  p.bag=['bread',known,unknown,'arrow','potion','arrow'];const ui=inventoryUI(engine);
+  const saved=engine.serialize();ui.call('showBag()');assert.equal(engine.serialize(),saved);assert.equal(ui.rows.length,7);
+  ui.rows[2].activate();ui.rows[3].activate();assert.equal(ui.rows[2].open,false);assert.equal(ui.rows[3].open,true);
+  ui.rows[3].activate();assert(ui.rows.every(row=>!row.open));assert.equal(engine.serialize(),saved);
+  const names=[...ui.html.matchAll(/<summary>[\s\S]*?<strong>([^<]+)<\/strong>/g)].map(match=>match[1]);
+  assert.deepEqual(names.slice(2),['木の矢 × 2','鏡の盾（未鑑定）','焼きたてパン','回復草','星鉄の剣 +2']);
+  ui.action('drop',0);assert.equal(engine.groundItem().kind,'bread');assert.equal(engine.turn,1);
+  ui.call('showBag()');assert(ui.html.includes('data-ground-row'));assert(ui.html.includes('足元'));
+  ui.action('exchange',1);assert.equal(engine.groundItem().variant,'mirrorShield');assert(!engine.groundItem().identified);
+  assert.equal(p.bag.at(-1),'bread');assert.equal(engine.turn,2);
 }
-console.log('PASS: module parity, renderer, inventory display order/original indices and drop/exchange UI handlers.');
+{
+  const engine=quietUI(),p=engine.player;
+  const gear={...p.equipment.weapon,bonus:-2,cursed:true,identified:false,x:p.x,y:p.y,amount:1};
+  engine.items=[gear];p.bag=['identify',{...p.equipment.shield,identified:false},...Array(16).fill('bread')];
+  const ui=inventoryUI(engine),before=engine.serialize();ui.call('showBag()');
+  assert(ui.html.includes('data-ground-row'));assert(ui.html.includes('鑑定（灯札1枚）'));assert.equal(engine.serialize(),before);
+  ui.action('use',0);assert.equal(ui.kind,'identify');
+  assert.deepEqual(ui.buttons.filter(button=>button.dataset.target).map(button=>button.dataset.target),['ground','1']);
+  assert(ui.html.includes('足元'));assert(ui.html.includes('持ち物'));assert.equal(engine.serialize(),before);
+  ui.cancel('identify-cancel');assert.equal(ui.kind,'bag');assert.equal(engine.serialize(),before);
+  assert(ui.rows.some(row=>row.open),'Cancellation reopens the source item');
+  ui.action('use',0);ui.target('ground');assert(gear.identified);assert(gear.cursed);assert.equal(gear.bonus,-2);
+  assert.equal(engine.turn,1);assert.equal(engine.inventoryCount(),19);assert.equal(engine.groundItem(),gear);
+  gear.identified=false;p.bag.push('identify');ui.call('showBag()');ui.action('appraise');
+  assert(gear.identified);assert.equal(engine.turn,2);assert.equal(engine.inventoryCount(),19);
+  p.bag=Array(18).fill('bread');p.hp=1;engine.items=[{kind:'potion',x:p.x,y:p.y}];
+  ui.call('showBag()');ui.action('use');assert.equal(p.hp,26);assert.equal(engine.turn,3);assert.equal(engine.inventoryCount(),20);
+  engine.items=[{...gear,identified:false}];ui.call('useGroundFromField()');assert.equal(ui.kind,'ground');
+  const beforeExchange=engine.serialize();ui.action('exchange');assert.equal(ui.kind,'exchange');assert.equal(engine.serialize(),beforeExchange);
+  ui.cancel('exchange-cancel');assert.equal(ui.kind,'ground');assert.equal(engine.serialize(),beforeExchange);
+  ui.action('exchange');ui.buttons.find(button=>button.dataset.exchange==='17').click();
+  assert.equal(engine.groundItem().kind,'bread');assert(p.bag.some(item=>item.cursed&&!item.identified));
+  assert.equal(engine.inventoryCount(),20);assert.equal(engine.turn,4);
+}
+{
+  const engine=quietUI(),p=engine.player;p.bag=['identify',...Array(17).fill('bread')];engine.identification.known=[];
+  engine.items=[{kind:'map',x:p.x,y:p.y}];const ui=inventoryUI(engine);ui.call('showGround()');
+  assert(!ui.html.includes('道しるべの灯札'));assert(!ui.buttons.some(button=>button.dataset.itemAction==='appraise'));
+  ui.action('name');ui.control('item-name').value='<script>&地図？';
+  ui.control('item-name-form').submit({preventDefault(){}});
+  assert.equal(ui.kind,'ground');assert(ui.html.includes('&lt;script&gt;&amp;地図？'));assert.equal(engine.turn,0);
+  assert.equal(engine.identification.known.length,0);
+  ui.close();engine.items=[{kind:'identify',x:p.x,y:p.y}];const before=engine.serialize();
+  ui.call('useGroundFromField()');assert.equal(ui.kind,'identify');assert.equal(engine.serialize(),before);
+  ui.cancel('identify-cancel');assert.equal(ui.kind,null);assert.equal(engine.serialize(),before);
+  engine.identification.known=['identify'];engine.items=[];p.bag=['identify','bread'];
+  ui.call('showIdentify(0)');assert(ui.html.includes('鑑定できる品がありません。'));assert(!ui.buttons.some(button=>button.dataset.target));
+}
+// Field controls keep threats visible and all unknown identities concealed.
+{
+  const engine=quietUI(),p=engine.player,ui=inventoryUI(engine);engine.identification.known=[];
+  const node=()=>({hidden:true,setAttribute(name,value){this[name]=value;}});
+  const caption={},hint={textContent:'敵が攻撃準備。',closest:()=>caption};
+  Object.assign(ui.context,{p,groundContext:node(),groundUseButton:node(),groundItemButton:node(),threat:{name:'敵'},nearest:null,$:()=>hint});
+  const source=fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8'),start=source.indexOf('    const ground = engine.groundItem();');
+  const refresh='{'+source.slice(start,source.indexOf('    const list = $("event-log");',start))+'}';
+  for(const kind of ['bread','potion','scroll','map','identify','uncurse','arrow','weapon','shield','gold']){
+    engine.items=[{kind,x:p.x,y:p.y,amount:1,...(['weapon','shield'].includes(kind)?p.equipment[kind]:{})}];ui.call(refresh);
+    assert(!ui.context.groundContext.hidden);assert(!hint.hidden);assert(!caption.hidden);
+    if(['scroll','map','identify','uncurse'].includes(kind))assert(!ui.context.groundItemButton.innerHTML.includes(DungeonData.ITEMS[kind].name));
+  }
+  engine.items=[];ui.call(refresh);assert(ui.context.groundContext.hidden);assert(ui.context.groundUseButton.hidden);
+  engine.items=[{kind:'bread',x:p.x+1,y:p.y}];ui.call(refresh);assert(ui.context.groundContext.hidden);
+  engine.items=[{kind:'bread',x:p.x,y:p.y}];
+  for(const status of ['dead','won']){engine.status=status;ui.call(refresh);assert(ui.context.groundContext.hidden);}
+}
+console.log('PASS: item locations, ground action UI, appraisal/exchange targets and cancellation, source-row restoration, naming privacy and field warnings.');
