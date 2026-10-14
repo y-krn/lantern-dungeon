@@ -624,6 +624,7 @@
         kind = itemKind(item);
       if (!ITEMS[kind]) return false;
       if (fromGround && isEquipment(item)) return false;
+      let arrowLanding;
       if (isEquipment(p.bag[index])) return this.equip(index);
       if (
         kind === "identify" &&
@@ -683,7 +684,10 @@
           y = p.y,
           hit = false;
         for (let i = 0; i < 10; i++) {
-          if (!this.canStep(x, y, dx, dy)) break;
+          if (!this.canStep(x, y, dx, dy)) {
+            arrowLanding = { x, y };
+            break;
+          }
           x += dx;
           y += dy;
           const e = this.enemyAt(x, y);
@@ -702,6 +706,24 @@
       } else {
         p.bag.splice(index, 1);
         if (kind === "arrow" && !this.arrowCount()) p.ammo = null;
+      }
+      if (arrowLanding) {
+        const { x, y } = arrowLanding;
+        for (const [lx, ly] of [
+          [x, y],
+          ...DIRS.map(([dx, dy]) => [x + dx, y + dy]),
+        ]) {
+          if (
+            !this.canStep(x, y, lx - x, ly - y) ||
+            (lx === this.stairs.x && ly === this.stairs.y)
+          ) continue;
+          const ground = this.items.find((value) => value.x === lx && value.y === ly);
+          if (ground && ground.kind !== "arrow") continue;
+          if (ground) ground.amount = (ground.amount || 1) + 1;
+          else this.items.push({ kind: "arrow", x: lx, y: ly, amount: 1 });
+          this.say("木の矢が壁にぶつかり、床に落ちた。");
+          break;
+        }
       }
       this.finishTurn();
       return true;
