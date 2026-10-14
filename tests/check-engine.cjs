@@ -1,9 +1,5 @@
 const assert = require('node:assert/strict');
-require('./dist/engine.js');
-require('./check-traits.cjs');
-require('./check-identification.cjs');
-require('./check-equipment.cjs');
-require('./check-ground.cjs');
+require('../dist/engine.js');
 const {W,H,DIRS,ITEMS}=DungeonData;
 
 // A species keeps its identity and combat stats across both dungeons and saves.
@@ -456,7 +452,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   assert.equal(migrated.items[0].discovered,true);assert.equal(migrated.items[1].discovered,undefined);
   assert.equal(migrated.enemies[1].lastSeen,undefined);
   // Exercise the renderer itself: remembered positions, hidden occupants, removal and marker priority.
-  const createDungeonRenderer=require('./dist/renderer.js');
+  const createDungeonRenderer=require('../dist/renderer.js');
   const calls=[],mini={fillStyle:'',fillRect(...args){calls.push({color:this.fillStyle,args});}};
   const renderer=createDungeonRenderer({canvas:{getContext:()=>({})},minimap:{getContext:()=>mini},getEngine:()=>game});
   function markers(){calls.length=0;renderer.drawMinimap();return calls.filter(c=>['#d08288','#ffc857'].includes(c.color));}
@@ -474,7 +470,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 }
 {
   const fs=require('node:fs'),vm=require('node:vm');
-  const source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
+  const source=fs.readFileSync(require.resolve('../dist/game.js'),'utf8');
   const notice={textContent:''},timers=new Map();let nextTimer=0,clock=0;
   const context={pickupNotice:notice,setTimeout(fn,ms){const id=++nextTimer;timers.set(id,{fn,at:clock+ms});return id;},clearTimeout(id){timers.delete(id);}};
   const start=source.indexOf('  let pickupTimer;'),end=source.indexOf('  const SAVE_KEY',start);
@@ -562,7 +558,7 @@ for(let seed=1;seed<=100;seed++){
   }
 }
 {
-  const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('./dist/game.js'),'utf8');
+  const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../dist/game.js'),'utf8');
   const storage=new Map(),context={DungeonEngine,renderer:{reset(){}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:''}),clearPickupNotice(){},closeModal(){},updateUI(){}};
   vm.createContext(context);
   const startup=source.slice(source.indexOf('  const SAVE_KEY'),source.indexOf('  let sound'));

@@ -3,14 +3,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-require('./dist/engine.js');
-const html = fs.readFileSync(path.join(__dirname, 'dist/index.html'), 'utf8');
+require('../dist/engine.js');
+const html = fs.readFileSync(path.join(__dirname, '../dist/index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]).filter(file => file !== 'pwa.js');
 assert.equal(scripts.at(-1), 'game.js', 'The UI starts after its dependencies');
 const frames = [];
 const browser = vm.createContext({requestAnimationFrame: callback => frames.push(callback)});
 for (const script of scripts.slice(0, -1)) {
-  vm.runInContext(fs.readFileSync(path.join(__dirname, 'dist', script), 'utf8'), browser, {filename: script});
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../dist', script), 'utf8'), browser, {filename: script});
 }
 
 for (const dungeon of ['tutorial', 'depths']) {
@@ -77,13 +77,13 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
 }
 // Exercise the loaded-art path: all directions and species must use complete, in-bounds frames.
 {
-  const png = fs.readFileSync(path.join(__dirname, 'dist/art/lantern-atlas.png'));
+  const png = fs.readFileSync(path.join(__dirname, '../dist/art/lantern-atlas.png'));
   const atlasWidth = png.readUInt32BE(16), atlasHeight = png.readUInt32BE(20), sources = [];
   browser.Image = class {
     complete = true; naturalWidth = atlasWidth;
     set src(value) {
       assert(['art/lantern-atlas.png', 'art/lantern-items.png'].includes(value));
-      const file = fs.readFileSync(path.join(__dirname, 'dist', value));
+      const file = fs.readFileSync(path.join(__dirname, '../dist', value));
       this.source = value; this.naturalWidth = file.readUInt32BE(16); this.naturalHeight = file.readUInt32BE(20);
       this.onload();
     }
@@ -137,7 +137,7 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
 }
 // The UI keeps item locations explicit and never mutates state while choosing.
 function inventoryUI(engine) {
-  const source = fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8');
+  const source = fs.readFileSync(path.join(__dirname,'../dist/game.js'),'utf8');
   const state = {kind:null, html:'', buttons:[], rows:[], controls:new Map(), open:false};
   function buttons(html) {
     return [...html.matchAll(/<button\b([^>]*)>/g)].map(match => {
@@ -247,7 +247,7 @@ function quietUI() {
   const node=()=>({hidden:true,setAttribute(name,value){this[name]=value;}});
   const caption={},hint={textContent:'敵が攻撃準備。',closest:()=>caption};
   Object.assign(ui.context,{p,groundContext:node(),groundUseButton:node(),groundItemButton:node(),threat:{name:'敵'},nearest:null,$:()=>hint});
-  const source=fs.readFileSync(path.join(__dirname,'dist/game.js'),'utf8'),start=source.indexOf('    const ground = engine.groundItem();');
+  const source=fs.readFileSync(path.join(__dirname,'../dist/game.js'),'utf8'),start=source.indexOf('    const ground = engine.groundItem();');
   const refresh='{'+source.slice(start,source.indexOf('    const list = $("event-log");',start))+'}';
   for(const kind of ['bread','potion','scroll','map','identify','uncurse','arrow','weapon','shield','gold']){
     engine.items=[{kind,x:p.x,y:p.y,amount:1,...(['weapon','shield'].includes(kind)?p.equipment[kind]:{})}];ui.call(refresh);

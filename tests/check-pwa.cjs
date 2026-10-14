@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {createHash} = require('node:crypto');
 
-const dist = path.join(__dirname, 'dist');
+const dist = path.join(__dirname, '..', 'dist');
 const swPath = path.join(dist, 'sw.js');
 let source = fs.readFileSync(swPath, 'utf8');
 const scope = 'https://example.test/games/lantern/';
@@ -56,7 +56,7 @@ if (process.argv.includes('--refresh')) {
   console.log(`PWA cache version refreshed: ${version}`);
   process.exit(0);
 }
-assert.equal(config.VERSION, version, 'Assets changed: run node check-pwa.cjs --refresh before publishing');
+assert.equal(config.VERSION, version, 'Assets changed: run node tests/check-pwa.cjs --refresh before publishing');
 const localAssets = fs.readdirSync(dist).filter(file => /\.(js|css|html|webmanifest)$/.test(file) && file !== 'sw.js');
 for (const file of localAssets) assert(files.includes(file), `Missing offline dependency: ${file}`);
 for (const file of fs.readdirSync(path.join(dist, 'art'))) {

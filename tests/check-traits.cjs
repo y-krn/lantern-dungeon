@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-require('./dist/engine.js');
+require('../dist/engine.js');
 const {MONSTERS}=DungeonData;
 function arena(species,x=8,y=5){
   const g=new DungeonEngine(73);g.tiles.fill(0);g.items=[];g.traps=[];g.monsterHouse=null;
