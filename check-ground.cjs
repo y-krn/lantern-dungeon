@@ -82,21 +82,47 @@ for (const facing of DungeonData.DIRS) {
     [{kind: 'arrow', x, y, amount: 1}]);
   assert(game.log.some(entry => entry.text.includes('床に落ちた')));
   assert(game.shoot()); assert.equal(game.arrowCount(), 0); assert.equal(p.ammo, null);
-  assert.equal(game.items.length, 1); assert.equal(game.items[0].amount, 2);
+  assert.equal(game.items.length, 2); assert(game.items.every(item => item.amount === 1));
+  assert.equal(new Set(game.items.map(item => game.key(item.x, item.y))).size, 2);
   const saved = game.serialize(), restored = DungeonEngine.restore(saved);
   assert(restored); assert.equal(restored.serialize(), saved);
   for (let i = 0; i < 3; i++) assert(restored.move(...facing));
+  if (restored.items.length) {
+    const remaining = restored.items[0];
+    assert(restored.move(remaining.x - restored.player.x, remaining.y - restored.player.y));
+  }
   assert.equal(restored.arrowCount(), 2); assert.equal(restored.items.length, 0);
 }
 // The source arrow is consumed before landing, including a shot at an adjacent wall.
 for (const amount of [1, 27]) {
   const game = shootingArena([1, 0], 0), p = game.player;
   game.items = [{kind: 'arrow', amount, x: p.x, y: p.y}];
+  if (amount > 1) game.tiles[game.key(p.x - 1, p.y)] = 1;
   const bag = [...p.bag];
   assert(game.useGround()); assert.equal(game.turn, 1);
   assert.deepEqual(p.bag, bag); assert.equal(p.ammo, 'arrow');
-  assert.equal(game.items.length, 1); assert.equal(game.groundItem().amount, amount);
+  assert.equal(game.items.length, amount === 1 ? 1 : 2);
+  assert.equal(game.groundItem().amount, amount === 1 ? 1 : amount - 1);
+  assert.equal(game.items.reduce((sum, item) => sum + item.amount, 0), amount);
+  if (amount > 1) assert.equal(game.items[1].amount, 1);
   const saved = game.serialize(); assert.equal(DungeonEngine.restore(saved).serialize(), saved);
+}
+// Fired arrows never merge into an existing floor stack.
+{
+  const game = shootingArena(), p = game.player;
+  game.items = [{kind: 'arrow', amount: 27, x: p.x + 3, y: p.y}];
+  assert(game.shoot()); assert.equal(game.items[0].amount, 27);
+  assert.equal(game.items.length, 2); assert.equal(game.items[1].amount, 1);
+  assert.notEqual(game.key(game.items[0].x, game.items[0].y), game.key(game.items[1].x, game.items[1].y));
+  const saved = game.serialize(); assert.equal(DungeonEngine.restore(saved).serialize(), saved);
+}
+// Once all nearby landing tiles hold arrows, later shots are consumed without merging.
+{
+  const game = shootingArena(), p = game.player;
+  p.bag = Array(4).fill('arrow');
+  for (let i = 0; i < 4; i++) assert(game.shoot());
+  assert.equal(game.turn, 4); assert.equal(game.arrowCount(), 0); assert.equal(p.ammo, null);
+  assert.equal(game.items.length, 2); assert(game.items.every(item => item.amount === 1));
 }
 // Other floor items and stairs are preserved; the arrow lands on nearby floor.
 for (const occupied of ['potion', 'stairs']) {
