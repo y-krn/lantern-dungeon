@@ -82,4 +82,71 @@ for (const setup of [
   Object.assign(game.items[0], game.stairs);
   assert(game.useGround()); assert.equal(game.turn, 1);
 }
-console.log('PASS: ground consumables at 20/20, effect/turn parity, appraisal, arrow stacks/ammo, invalid actions and save round-trip.');
+// Inventory appraisal can target the floor without collecting it or changing gear.
+{
+  const game = arena('weapon'), p = game.player;
+  const item = {...p.equipment.weapon, variant:'starSword',rank:3,bonus:-2,cursed:true,identified:false,x:p.x,y:p.y,amount:1};
+  game.items = [item]; p.bag[0] = 'identify'; game.identification.known = [];
+  const equipped = structuredClone(p.equipment);
+  assert.equal(game.targetItem('ground'),item);
+  assert(game.use(0,'ground'));assert.equal(game.turn,1);
+  assert.equal(game.items[0],item);assert(item.identified);assert(item.cursed);assert.equal(item.bonus,-2);
+  assert.equal(game.inventoryCount(),19);assert.deepEqual(p.equipment,equipped);
+  assert(game.identification.known.includes('identify'));
+  const saved = game.serialize();assert.equal(DungeonEngine.restore(saved).serialize(),saved);
+  // Removing the floor target cannot silently consume a second scroll.
+  p.bag.push('identify');game.items=[];
+  const before = game.serialize();assert.equal(game.use(p.bag.length-1,'ground'),false);
+  assert.equal(game.serialize(),before);
+}
+// A floor scroll can be named or identified with run-wide knowledge preserved.
+{
+  const game = arena('map');game.identification.known=[];game.player.bag[0]='identify';
+  assert(game.nameScroll('ground','地図かも'));assert.equal(game.turn,0);
+  assert(game.itemName(game.groundItem()).includes('地図かも'));
+  assert(game.use(0,'ground'));assert(game.identification.known.includes('map'));
+  assert.equal(game.groundItem().kind,'map');assert.equal(game.inventoryCount(),19);
+  const saved=game.serialize();assert.equal(DungeonEngine.restore(saved).serialize(),saved);
+  const own=arena('identify'),before=own.serialize();
+  assert.equal(own.useGround('ground'),false);assert.equal(own.serialize(),before);
+}
+// Manual pickup is one turn only on success, including arrow stacking at capacity.
+{
+  const game=arena('potion'),p=game.player;
+  assert.equal(game.pickup(),false);assert.equal(game.turn,0);assert.equal(game.items.length,1);
+  p.bag.pop();assert(game.pickup());assert.equal(game.turn,1);assert.equal(game.inventoryCount(),20);
+  assert.equal(game.items.length,0);assert.equal(p.bag.at(-1),'potion');
+  assert.equal(game.pickup(),false);assert.equal(game.turn,1);
+}
+{
+  const game=arena('arrow',27);game.player.bag[0]='arrow';game.player.ammo='arrow';
+  assert(game.pickup());assert.equal(game.turn,1);assert.equal(game.arrowCount(),28);assert.equal(game.inventoryCount(),20);
+  const saved=game.serialize();assert.equal(DungeonEngine.restore(saved).serialize(),saved);
+}
+// Direct equipment swapping leaves the previous gear on the floor, never in the bag.
+for(const kind of ['weapon','shield']) {
+  const game=arena(kind),p=game.player,old=structuredClone(p.equipment[kind]),bag=structuredClone(p.bag);
+  game.items=[{...old,bonus:2,cursed:true,identified:false,x:p.x,y:p.y,amount:1}];
+  assert(game.equip('ground'));assert.equal(game.turn,1);assert.equal(game.inventoryCount(),20);
+  assert.deepEqual(p.bag,bag);assert(p.equipment[kind].identified);assert(p.equipment[kind].cursed);
+  assert.equal(p.equipment[kind].bonus,2);assert(!Object.hasOwn(p.equipment[kind],'x'));
+  assert.deepEqual(game.groundItem(),{...old,x:p.x,y:p.y,amount:1,discovered:true});
+  const saved=game.serialize();assert.equal(DungeonEngine.restore(saved).serialize(),saved);
+  const before=structuredClone(game.items);assert.equal(game.equip('ground'),false);assert.equal(game.turn,1);
+  assert.deepEqual(game.items,before);assert.deepEqual(p.bag,bag);
+}
+{
+  const game=arena('weapon'),p=game.player;
+  game.items=[{...p.equipment.weapon,x:p.x,y:p.y,amount:1,identified:false}];
+  p.equipment.weapon=null;p.weapon=0;p.bag=Array(19).fill('bread');
+  assert.equal(game.inventoryCount(),20);assert.equal(game.equip('ground'),false);
+  assert.equal(game.turn,0);assert(!game.groundItem().identified);
+  p.bag.pop();assert(game.equip('ground'));assert.equal(game.turn,1);assert.equal(game.inventoryCount(),20);
+  assert.equal(game.items.length,0);assert(p.equipment.weapon.identified);
+}
+for(const status of ['dead','won']){
+  const game=arena('weapon');game.items=[{...game.player.equipment.weapon,x:game.player.x,y:game.player.y}];game.status=status;
+  const before=game.serialize();assert.equal(game.pickup(),false);assert.equal(game.equip('ground'),false);
+  assert.equal(game.nameScroll('ground','名前'),false);assert.equal(game.serialize(),before);
+}
+console.log('PASS: ground use/pickup/equipment/appraisal/naming, capacity and curse guards, arrow stacks, invalid targets and exact saves.');

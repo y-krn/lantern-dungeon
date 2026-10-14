@@ -187,7 +187,7 @@
         : ITEMS[kind]?.description || "";
     }
     nameScroll(index, name) {
-      const kind = itemKind(this.player.bag[index]);
+      const kind = itemKind(this.targetItem(index));
       if (
         this.status !== "playing" ||
         !SCROLLS.includes(kind) ||
@@ -199,11 +199,15 @@
       return true;
     }
     targetItem(target) {
+      if (target === "ground") return this.groundItem();
       return typeof target === "number" && Number.isInteger(target)
         ? this.player.bag[target]
         : Object.hasOwn(EQUIPMENT_NAMES, target)
           ? this.player.equipment[target]
           : null;
+    }
+    groundItem() {
+      return this.items.find((item) => item.x === this.player.x && item.y === this.player.y);
     }
     identifyItem(target) {
       const item = this.targetItem(target),
@@ -262,14 +266,25 @@
     equip(index) {
       if (this.status !== "playing") return false;
       const p = this.player,
-        item = p.bag[index];
+        fromGround = index === "ground",
+        ground = fromGround ? this.groundItem() : null,
+        item = fromGround && ground
+          ? {kind: ground.kind, rank: ground.rank, bonus: ground.bonus, cursed: ground.cursed, identified: ground.identified, ...(ground.variant ? {variant: ground.variant} : {})}
+          : p.bag[index];
       if (!validEquipment(item)) return false;
       const old = p.equipment[item.kind];
       if (old?.cursed) {
         this.say(`${this.itemName(old)}は呪われていて外せない！`, "danger");
         return false;
       }
-      if (old) p.bag[index] = old;
+      if (fromGround) {
+        if (!old && this.inventoryCount() >= INVENTORY_CAPACITY) {
+          this.say("持ち物がいっぱい。装備する枠がない。");
+          return false;
+        }
+        this.items.splice(this.items.indexOf(ground), 1,
+          ...(old ? [{...old, x: p.x, y: p.y, amount: 1, discovered: true}] : []));
+      } else if (old) p.bag[index] = old;
       else p.bag.splice(index, 1);
       p.equipment[item.kind] = item;
       p[item.kind] = item.rank;
@@ -543,8 +558,8 @@
     }
     collect() {
       const p = this.player,
-        item = this.items.find((i) => i.x === p.x && i.y === p.y);
-      if (!item) return;
+        item = this.groundItem();
+      if (!item || (!ITEMS[item.kind] && item.kind !== "gold")) return false;
       if (item.kind === "gold") {
         p.gold += item.amount;
         this.say(`${item.amount}Gを拾った。`, "good");
@@ -552,9 +567,9 @@
         const stacks = item.kind === "arrow" && this.arrowCount() > 0;
         if (this.inventoryCount() >= INVENTORY_CAPACITY && !stacks) {
           this.say(
-            `持ち物がいっぱい。足元に${this.itemName(item)}がある。持ち物から足元のアイテムを${isEquipment(item) ? "交換しよう" : "使うか交換しよう"}。空いている床に置いて枠を空けることもできる。`,
+            `持ち物がいっぱい。${this.itemName(item)}は足元に残った。`,
           );
-          return;
+          return false;
         }
         const amount =
           item.kind === "arrow" && Number.isInteger(item.amount)
@@ -578,6 +593,12 @@
       }
       this.effect("pickup", p.x, p.y, item.kind, this.log[0].text);
       this.items.splice(this.items.indexOf(item), 1);
+      return true;
+    }
+    pickup() {
+      if (this.status !== "playing" || !this.collect()) return false;
+      this.finishTurn();
+      return true;
     }
     triggerTrap() {
       const p = this.player,
@@ -590,9 +611,7 @@
       this.effect("damage", p.x, p.y, d);
     }
     scrollNeedsTarget(index) {
-      if (index === "ground")
-        return this.items.some((item) => item.x === this.player.x && item.y === this.player.y && item.kind === "identify");
-      return this.player.bag[index] === "identify";
+      return itemKind(this.targetItem(index)) === "identify";
     }
     useGround(target) {
       return this.use("ground", target);
@@ -601,9 +620,7 @@
       const fromGround = index === "ground";
       if (this.status !== "playing" || (!fromGround && !Number.isInteger(index))) return false;
       const p = this.player,
-        item = fromGround
-          ? this.items.find((value) => value.x === p.x && value.y === p.y)
-          : p.bag[index],
+        item = this.targetItem(index),
         kind = itemKind(item);
       if (!ITEMS[kind]) return false;
       if (fromGround && isEquipment(item)) return false;
