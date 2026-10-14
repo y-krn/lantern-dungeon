@@ -18,7 +18,10 @@
       particles = [],
       labels = [],
       frame = 0,
-      playerTween = null;
+      playerTween = null,
+      attacks = [],
+      pendingEffects = [],
+      busyUntil = 0;
     let closeView = true;
     // The painted sheet has uneven gutters; these bounds isolate each complete silhouette.
     const artFrames = {
@@ -798,6 +801,13 @@
     }
     function render(now) {
       const engine = getEngine();
+      const due = pendingEffects.filter(entry => now >= entry.born);
+      pendingEffects = pendingEffects.filter(entry => now < entry.born);
+      for (const entry of due) {
+        effect(entry.event, entry.born);
+        entry.notify?.(entry.event);
+      }
+      attacks = attacks.filter(attack => now < attack.born + 180);
       frame++;
       ctx.imageSmoothingEnabled = false;
       const p = engine.player;
@@ -899,7 +909,16 @@
       const entities = engine.enemies
         .filter((e) => e.hp > 0 && engine.visible[engine.key(e.x, e.y)])
         .map((e) => ({ ...e, isPlayer: false }));
-      entities.push({ x: drawX, y: drawY, isPlayer: true, type: "hero" });
+      for (const attack of attacks) {
+        const target = attack.target;
+        const live = entities.find(entity => entity.id === target.id);
+        if (live && target.visible && (live.x !== target.x || live.y !== target.y)) {
+          live.x = target.x; live.y = target.y;
+        }
+        if (target.type && target.visible && target.id !== "player" && !live)
+          entities.push({ ...target, isPlayer: false, defeated: target.hp <= 0 });
+      }
+      entities.push({ id: "player", x: drawX, y: drawY, isPlayer: true, type: "hero" });
       entities.sort((a, b) => a.y - b.y);
       for (const e of entities) {
         const px = e.x * tile + offsetX,
@@ -927,24 +946,47 @@
           !e.revealed
         )
           drawItem({ kind: "gold", x: e.x }, px, py, now);
-        else
+        else {
+          let pushX = 0, pushY = 0, opacity = 1, lean = 0;
+          for (const attack of attacks) {
+            const age = now - attack.born;
+            if (age < 0) continue;
+            const dx = attack.target.x - attack.source.x, dy = attack.target.y - attack.source.y;
+            const length = Math.hypot(dx, dy) || 1;
+            if (attack.source.id === e.id && age < 160) {
+              const push = Math.sin(Math.PI * age / 160) * (attack.kind === "melee" ? .18 : .06);
+              pushX += dx / length * push; pushY += dy / length * push;
+              lean = dx / length * Math.sin(Math.PI * age / 160) * .09;
+            }
+            if (attack.target.id === e.id && age >= 70 && !attack.miss) {
+              const impact = Math.min(1, (age - 70) / 100);
+              const recoil = Math.sin(impact * Math.PI * 3) * (1 - impact) * .08;
+              pushX += dx / length * recoil; pushY += dy / length * recoil;
+              opacity = e.defeated ? 1 - impact : 1 - Math.sin(impact * Math.PI * 2) ** 2 * .35;
+            }
+          }
+          ctx.save();
+          ctx.translate(px + tile / 2 + pushX * tile, py + tile * .8 + pushY * tile);
+          ctx.rotate(lean);
           sprite(
             ctx,
             e.isPlayer ? heroSprite(p.facing) : e.type,
-            px,
-            py - (e.isPlayer ? tile * 0.125 : 0) + bob,
+            -tile / 2,
+            -tile * .8 - (e.isPlayer ? tile * 0.125 : 0) + bob,
             s,
-            1,
+            opacity,
             e.isPlayer && p.facing[0] < 0,
             e.species,
           );
+          ctx.restore();
+        }
         if (e.intent) {
           ctx.fillStyle = "#ffdf85";
           ctx.font = `bold ${Math.round(tile * 0.5)}px sans-serif`;
           ctx.textAlign = "center";
           ctx.fillText("!", px + tile / 2, py - tile * 0.05);
         }
-        if (!e.isPlayer && e.hp < e.maxHp) {
+        if (!e.isPlayer && !e.defeated && e.hp < e.maxHp) {
           ctx.fillStyle = "#10171ee0";
           ctx.fillRect(px + tile * 0.16, py - tile * 0.12, tile * 0.68, s * 2);
           ctx.fillStyle = "#db8790";
@@ -994,6 +1036,33 @@
           ctx.fill();
         }
       }
+      for (const attack of attacks) {
+        const age = now - attack.born;
+        if (age < 20 || age > 135 || !attack.source.visible) continue;
+        const dx = attack.target.x - attack.source.x, dy = attack.target.y - attack.source.y;
+        const angle = Math.atan2(dy, dx), length = Math.hypot(dx, dy) || 1;
+        const hero = attack.source.id === "player";
+        ctx.save();
+        ctx.globalAlpha = Math.sin(Math.PI * (age - 20) / 115) * (attack.miss ? .45 : .9);
+        ctx.strokeStyle = hero ? "#fff1bb" : "#eea092";
+        ctx.lineWidth = tile * .055;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        if (attack.kind === "melee") {
+          const x = (attack.source.x + .5 + dx / length * .55) * tile + offsetX;
+          const y = (attack.source.y + .45 + dy / length * .55) * tile + offsetY;
+          const sweep = (age - 20) / 115;
+          ctx.arc(x, y, tile * .42, angle - 1.2 + sweep * .8, angle + .4 + sweep * .8);
+        } else {
+          const travel = Math.min(1, age / 70);
+          const x = (attack.source.x + .5 + dx * travel) * tile + offsetX;
+          const y = (attack.source.y + .5 + dy * travel) * tile + offsetY;
+          ctx.moveTo(x - dx / length * tile * .25, y - dy / length * tile * .25);
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
       for (const particle of particles) {
         particle.x += particle.vx;
         particle.y += particle.vy;
@@ -1019,8 +1088,8 @@
         ctx.textAlign = "center";
         ctx.lineWidth = 3;
         ctx.strokeStyle = "#181921";
-        const x = (label.x + 0.5) * tile + offsetX,
-          y = (label.y - 0.2 - age * 0.7) * tile + offsetY;
+        const x = (label.x + 0.5 + (label.labelOffset?.x || 0)) * tile + offsetX,
+          y = (label.y - 0.2 + (label.labelOffset?.y || 0) - age * 0.7) * tile + offsetY;
         ctx.strokeText(label.text, x, y);
         ctx.fillStyle =
           label.type === "damage"
@@ -1091,11 +1160,11 @@
       camera.x = 0;
     }
 
-    function effect(e) {
+    function effect(e, born = performance.now()) {
       if (["hit", "damage", "heal", "level"].includes(e.type))
         labels.push({
           ...e,
-          born: performance.now(),
+          born,
           text:
             e.type === "damage"
               ? `−${e.value}`
@@ -1126,9 +1195,33 @@
                   : "#ebc985",
           });
     }
+    function playEffects(events, notify) {
+      const now = performance.now();
+      let heroActed = false, enemyIndex = 0, impactAt = now;
+      const multipleHits = events.filter(event => event.type === "damage" && event.attack).length > 1;
+      let damageIndex = 0;
+      for (const event of events) {
+        if (event.attack && !reduced) {
+          const hero = event.attack.source.id === "player";
+          const delay = hero ? 0 : (heroActed ? 140 : 0) + Math.min(enemyIndex++ * 30, 90);
+          const born = now + delay;
+          heroActed ||= hero;
+          attacks.push({ ...event.attack, born, miss: event.type === "swing" });
+          impactAt = born + 70;
+          busyUntil = Math.max(busyUntil, born + 180);
+        } else if (!["kill", "level", "won", "dead"].includes(event.type)) impactAt = now;
+        const visual = multipleHits && event.type === "damage" && event.attack
+          ? { ...event, labelOffset: { x: (damageIndex % 3 - 1) * .34, y: -Math.floor(damageIndex++ / 3) * .35 } }
+          : event;
+        pendingEffects.push({ event: visual, born: impactAt, notify });
+      }
+    }
     function reset(position) {
       camera = { x: position?.x ?? 0, y: position?.y ?? 0 };
       playerTween = null;
+      attacks = [];
+      pendingEffects = [];
+      busyUntil = 0;
       if (!position) {
         particles = [];
         labels = [];
@@ -1165,6 +1258,8 @@
       reset,
       movePlayer,
       effect,
+      playEffects,
+      remaining: () => Math.max(0, busyUntil - performance.now()),
       directionAt,
       start: () => requestAnimationFrame(render),
     };

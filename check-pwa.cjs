@@ -21,6 +21,7 @@ const caches = {
           assert.equal(request.cache, 'reload');
           assert.equal(request.redirect, 'error', 'Authentication redirects cannot enter the app cache');
           assert.notEqual(request.url, scope + 'index.html', 'Precache the canonical directory URL to avoid static-host redirects');
+          assert.notEqual(request.url, scope + 'combat-preview.html', 'Precache the canonical preview URL to avoid static-host redirects');
           if (failInstall) throw new Error('Download failed');
           entries.set(request.url, new Response(request.url));
         }
@@ -43,7 +44,10 @@ const context = vm.createContext({
 });
 vm.runInContext(source, context);
 const config = vm.runInContext('({ASSETS, CACHE, PREFIX, VERSION})', context);
-const files = [...new Set(config.ASSETS.map(url => new URL(url).pathname.slice(new URL(scope).pathname.length) || 'index.html'))].sort();
+const files = [...new Set(config.ASSETS.map(url => {
+  const route = new URL(url).pathname.slice(new URL(scope).pathname.length);
+  return route === 'combat-preview' ? 'combat-preview.html' : route || 'index.html';
+}))].sort();
 const hash = createHash('sha256').update(source.replace(/const VERSION = '[^']+';/, "const VERSION = '';"));
 for (const file of files) hash.update(file).update(fs.readFileSync(path.join(dist, file)));
 const version = hash.digest('hex').slice(0, 16);
@@ -120,6 +124,8 @@ async function response(url, mode = 'cors', method = 'GET') {
   assert.equal(await (await response(scope + '?from=homescreen', 'navigate')).text(), scope);
   assert.equal(await (await response(scope + 'index.html?resume=1', 'navigate')).text(), scope);
   assert.equal(await (await response(scope + 'index.html')).text(), scope);
+  assert.equal(await (await response(scope + 'combat-preview', 'navigate')).text(), scope + 'combat-preview');
+  assert.equal(await (await response(scope + 'combat-preview.html?scene=kill', 'navigate')).text(), scope + 'combat-preview');
   for (const url of config.ASSETS) assert.equal(await (await response(url)).text(), url);
   assert.equal(fetched, 0, 'Every game dependency is usable offline');
   for (const [url, mode, method] of [

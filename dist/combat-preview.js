@@ -1,0 +1,76 @@
+(() => {
+  "use strict";
+  const { W, H, monsterStats } = DungeonData;
+  const $ = id => document.getElementById(id);
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let engine, scene = "duel", auto = null;
+  const renderer = createDungeonRenderer({
+    canvas: $("scene"), minimap: $("minimap"), viewport: $("viewport"),
+    getEngine: () => engine, reduced,
+  });
+  const labels = {
+    duel: "一対一 · 攻撃 → 反撃", surrounded: "囲まれる · 攻撃 → 三方向の反撃",
+    miss: "空振り · 敵がいなくても剣を振る", kill: "撃破 · 命中してから消える",
+    ranged: "敵の射撃 · 構え → 次のターンに発射",
+  };
+  function prepare() {
+    engine = new DungeonEngine(73, "tutorial");
+    const x = Math.floor(W / 2), y = Math.floor(H / 2);
+    engine.player.x = x; engine.player.y = y; engine.player.facing = [1, 0];
+    engine.player.hp = engine.player.maxHp = 100;
+    engine.tiles.fill(0);
+    for (let py = y - 5; py <= y + 5; py++)
+      for (let px = x - 5; px <= x + 5; px++) engine.tiles[engine.key(px, py)] = 1;
+    engine.rooms = [{ x: x - 5, y: y - 5, w: 11, h: 11 }];
+    engine.stairs = { x: x - 4, y: y - 4 };
+    engine.items = []; engine.traps = []; engine.monsterHouse = null; engine.enemies = [];
+    const add = (species, dx, dy, hp = 60) => engine.enemies.push({
+      ...monsterStats(species), id: engine.enemies.length + 1,
+      x: x + dx, y: y + dy, hp, maxHp: hp, awake: true, revealed: true,
+    });
+    if (scene === "duel" || scene === "kill") add("mossSlime", 1, 0, scene === "kill" ? 1 : 60);
+    if (scene === "surrounded") {
+      add("mossSlime", 1, 0); add("caveBat", -1, 0); add("cobaltBeetle", 0, -1);
+    }
+    if (scene === "ranged") {
+      const species = Object.keys(DungeonData.MONSTERS).find(key => DungeonData.MONSTERS[key].trait === "ranged");
+      add(species, 3, 0);
+    }
+    engine.log = []; engine.effects = [];
+    engine.reveal(); engine.seen = engine.visible.slice();
+    renderer.reset({ x: x + .5, y: y + .5 });
+    $("scene-label").textContent = labels[scene];
+  }
+  function act(wait = false) {
+    if (renderer.remaining() > 0) return;
+    if (engine.status !== "playing" || (scene !== "miss" && !engine.enemies.length)) prepare();
+    engine.player.hp = engine.player.maxHp;
+    if (wait) engine.wait(); else engine.attack();
+    renderer.playEffects(engine.effects, event => {
+      if (["hit", "damage", "swing"].includes(event.type)) {
+        const from = event.attack?.source.id === "player" ? "リネ" : DungeonData.MONSTERS[event.attack?.source.species]?.name;
+        $("feedback").textContent = event.type === "swing" ? `${from || "リネ"}：空振り。`
+          : `${from || "魔物"}の攻撃：${event.value}ダメージ。`;
+      }
+      if (event.type === "kill") $("feedback").textContent = "命中 → 魔物を撃破。もう一度攻撃すると同じ場面を試せます。";
+      if (event.type === "warning") $("feedback").textContent = "敵が射撃の構え。次のターンに発射します。";
+    });
+    engine.effects = [];
+  }
+  for (const button of document.querySelectorAll("[data-scene]")) button.addEventListener("click", () => {
+    scene = button.dataset.scene;
+    document.querySelectorAll("[data-scene]").forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+    prepare(); $("feedback").textContent = "「攻撃する」で動きを確認できます。";
+  });
+  $("attack").addEventListener("click", () => act());
+  $("wait").addEventListener("click", () => act(true));
+  $("auto").addEventListener("click", () => {
+    if (auto) { clearInterval(auto); auto = null; }
+    else { act(); auto = setInterval(() => { if (!document.hidden) act(); }, 1200); }
+    $("auto").setAttribute("aria-pressed", String(!!auto));
+    $("auto").textContent = auto ? "再生を止める" : "自動再生";
+  });
+  $("motion-notice").hidden = !reduced;
+  prepare(); new ResizeObserver(() => renderer.resize()).observe($("viewport"));
+  renderer.resize(); renderer.start();
+})();
