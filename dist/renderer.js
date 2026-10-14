@@ -807,7 +807,7 @@
         effect(entry.event, entry.born);
         entry.notify?.(entry.event);
       }
-      attacks = attacks.filter(attack => now < attack.born + 180);
+      attacks = attacks.filter(attack => now < attack.born + attack.impact + 110);
       frame++;
       ctx.imageSmoothingEnabled = false;
       const p = engine.player;
@@ -958,8 +958,8 @@
               pushX += dx / length * push; pushY += dy / length * push;
               lean = dx / length * Math.sin(Math.PI * age / 160) * .09;
             }
-            if (attack.target.id === e.id && age >= 70 && !attack.miss) {
-              const impact = Math.min(1, (age - 70) / 100);
+            if (attack.target.id === e.id && age >= attack.impact && !attack.miss) {
+              const impact = Math.min(1, (age - attack.impact) / 100);
               const recoil = Math.sin(impact * Math.PI * 3) * (1 - impact) * .08;
               pushX += dx / length * recoil; pushY += dy / length * recoil;
               opacity = e.defeated ? 1 - impact : 1 - Math.sin(impact * Math.PI * 2) ** 2 * .35;
@@ -1038,6 +1038,35 @@
       }
       for (const attack of attacks) {
         const age = now - attack.born;
+        if (attack.kind === "arrow") {
+          if (age < 40 || age >= attack.impact) continue;
+          let dx = attack.target.x - attack.source.x, dy = attack.target.y - attack.source.y;
+          if (!dx && !dy) {
+            dx = (attack.source.facing?.[0] || 0) * .35;
+            dy = (attack.source.facing?.[1] || 0) * .35;
+          }
+          const travel = (age - 40) / (attack.impact - 40);
+          const x = attack.source.x + dx * travel, y = attack.source.y + dy * travel;
+          if (!engine.visible[engine.key(Math.round(x), Math.round(y))]) continue;
+          ctx.save();
+          ctx.translate((x + .5) * tile + offsetX, (y + .5) * tile + offsetY);
+          ctx.rotate(Math.atan2(dy, dx));
+          ctx.lineCap = "round";
+          ctx.strokeStyle = "#ffe2a166"; ctx.lineWidth = tile * .06;
+          ctx.beginPath(); ctx.moveTo(-tile * .65, 0); ctx.lineTo(-tile * .2, 0); ctx.stroke();
+          ctx.strokeStyle = "#302831"; ctx.lineWidth = tile * .09;
+          ctx.beginPath(); ctx.moveTo(-tile * .3, 0); ctx.lineTo(tile * .28, 0); ctx.stroke();
+          ctx.strokeStyle = "#f5ce8d"; ctx.lineWidth = tile * .035; ctx.stroke();
+          ctx.fillStyle = "#f5efdf";
+          ctx.beginPath(); ctx.moveTo(tile * .37, 0);
+          ctx.lineTo(tile * .16, -tile * .09); ctx.lineTo(tile * .16, tile * .09);
+          ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = "#c3d5ba"; ctx.lineWidth = tile * .045;
+          ctx.beginPath(); ctx.moveTo(-tile * .19, 0); ctx.lineTo(-tile * .32, -tile * .09);
+          ctx.moveTo(-tile * .19, 0); ctx.lineTo(-tile * .32, tile * .09); ctx.stroke();
+          ctx.restore();
+          continue;
+        }
         if (age < 20 || age > 135 || !attack.source.visible) continue;
         const dx = attack.target.x - attack.source.x, dy = attack.target.y - attack.source.y;
         const angle = Math.atan2(dy, dx), length = Math.hypot(dx, dy) || 1;
@@ -1197,19 +1226,23 @@
     }
     function playEffects(events, notify) {
       const now = performance.now();
-      let heroActed = false, enemyIndex = 0, impactAt = now;
+      let heroDelay = 0, enemyIndex = 0, impactAt = now;
       const multipleHits = events.filter(event => event.type === "damage" && event.attack).length > 1;
       let damageIndex = 0;
       for (const event of events) {
         if (event.attack && !reduced) {
           const hero = event.attack.source.id === "player";
-          const delay = hero ? 0 : (heroActed ? 140 : 0) + Math.min(enemyIndex++ * 30, 90);
+          const delay = hero ? 0 : heroDelay + Math.min(enemyIndex++ * 30, 90);
           const born = now + delay;
-          heroActed ||= hero;
-          attacks.push({ ...event.attack, born, miss: event.type === "swing" });
-          impactAt = born + 70;
-          busyUntil = Math.max(busyUntil, born + 180);
-        } else if (!["kill", "level", "won", "dead"].includes(event.type)) impactAt = now;
+          const { source, target, kind } = event.attack;
+          const impact = kind === "arrow"
+            ? 40 + Math.max(100, Math.min(360, Math.max(Math.abs(target.x - source.x), Math.abs(target.y - source.y)) * 55))
+            : 70;
+          if (hero) heroDelay = kind === "arrow" ? impact + 40 : 140;
+          attacks.push({ ...event.attack, born, impact, miss: event.type === "swing" });
+          impactAt = born + impact;
+          busyUntil = Math.max(busyUntil, impactAt + 110);
+        } else if (!["kill", "level", "won", "dead", "arrow"].includes(event.type)) impactAt = now;
         const visual = multipleHits && event.type === "damage" && event.attack
           ? { ...event, labelOffset: { x: (damageIndex % 3 - 1) * .34, y: -Math.floor(damageIndex++ / 3) * .35 } }
           : event;
