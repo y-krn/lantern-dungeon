@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-require('./dist/engine.js');
+require('../dist/engine.js');
 const {EQUIPMENT,MONSTERS,INVENTORY_CAPACITY}=DungeonData;
 const legacyKeys={weapon:['woodSword','copperSword','ironSword','starSword'],shield:['travelerShield','copperShield','ironShield','starShield']};
 const gear=(variant,bonus=0)=>{const kind=EQUIPMENT[variant]?.slot??'weapon';return{kind,variant,rank:Math.max(0,legacyKeys[kind].indexOf(variant)),bonus,cursed:false,identified:true};};

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-require('./dist/engine.js');
+require('../dist/engine.js');
 const scrolls=['scroll','map','identify','uncurse'];
 const gear=(kind='weapon',cursed=false,bonus=2)=>({kind,rank:1,bonus,cursed,identified:false});
 function quiet(seed=42,dungeon='depths'){

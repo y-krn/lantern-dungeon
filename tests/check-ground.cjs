@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-require('./dist/engine.js');
+require('../dist/engine.js');
 
 function arena(kind, amount = 1) {
   const game = new DungeonEngine(42), p = game.player;
