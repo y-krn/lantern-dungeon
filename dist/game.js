@@ -134,15 +134,14 @@
     }
   }
   function flushEffects() {
-    for (const e of engine.effects) {
+    renderer.playEffects(engine.effects, (e) => {
       beep(e.type);
       if (e.type === "pickup") showPickupNotice(e.text);
-      renderer.effect(e);
-      if (e.type === "damage") {
+      if (e.type === "damage" && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
         $("damage-flash").classList.add("active");
         setTimeout(() => $("damage-flash").classList.remove("active"), 200);
       }
-    }
+    });
     engine.effects = [];
   }
   function updateUI() {
@@ -283,11 +282,11 @@
       const endedEngine = engine;
       setTimeout(() => {
         if (engine === endedEngine) showEnd();
-      }, 350);
+      }, Math.max(350, renderer.remaining()));
     }
   }
   function act(action, force = false) {
-    if ($("modal").open || engine.status !== "playing") return;
+    if ($("modal").open || engine.status !== "playing" || renderer.remaining() > 0) return;
     const now = performance.now();
     if (!force && now - lastInput < 95) return;
     lastInput = now;

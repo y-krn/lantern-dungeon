@@ -8,5 +8,6 @@ for (const file of fs.readdirSync(path.join(__dirname, 'dist')).filter(file => f
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 require('./check-modules.cjs');
+require('./check-combat.cjs');
 require('./check-engine.cjs');
 require('./check-pwa.cjs');
