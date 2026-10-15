@@ -7,6 +7,12 @@ require('../dist/engine.js');
 const html = fs.readFileSync(path.join(__dirname, '../dist/index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]).filter(file => file !== 'pwa.js');
 assert.equal(scripts.at(-1), 'game.js', 'The UI starts after its dependencies');
+for (const file of ['index.html', 'combat-preview.html']) {
+  const page = fs.readFileSync(path.join(__dirname, '../dist', file), 'utf8');
+  const dependencies = [...page.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]);
+  assert(dependencies.indexOf('sprites.js') > dependencies.indexOf('data.js'));
+  assert(dependencies.indexOf('renderer.js') > dependencies.indexOf('sprites.js'), 'Sprite drawing loads before the scene renderer');
+}
 const frames = [];
 const browser = vm.createContext({requestAnimationFrame: callback => frames.push(callback)});
 for (const script of scripts.slice(0, -1)) {

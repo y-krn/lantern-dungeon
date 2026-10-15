@@ -54,6 +54,7 @@ const canvas = {width: 880, height: 576, getContext: () => context,
   getBoundingClientRect: () => ({left: 0, top: 0, width: 390, height: 350})};
 const browser = vm.createContext({DungeonData, performance: {now: () => now},
   requestAnimationFrame: callback => frames.push(callback)});
+vm.runInContext(fs.readFileSync(require.resolve('../dist/sprites.js'), 'utf8'), browser);
 vm.runInContext(fs.readFileSync(require.resolve('../dist/renderer.js'), 'utf8'), browser);
 const renderer = browser.createDungeonRenderer({canvas, minimap: canvas, viewport: canvas, getEngine: () => game});
 renderer.resize(); renderer.start();
@@ -108,6 +109,7 @@ function playback(shot, reduced = false) {
   }, set: () => true});
   const surface = {...canvas, getContext: () => paint};
   const env = vm.createContext({DungeonData, performance: {now: () => time}, requestAnimationFrame: cb => callbacks.push(cb)});
+  vm.runInContext(fs.readFileSync(require.resolve('../dist/sprites.js'), 'utf8'), env);
   vm.runInContext(fs.readFileSync(require.resolve('../dist/renderer.js'), 'utf8'), env);
   const view = env.createDungeonRenderer({canvas: surface, minimap: surface, viewport: surface, getEngine: () => shot, reduced});
   view.resize(); view.start(); view.playEffects(shot.effects, event => impacts.push(event.type));
