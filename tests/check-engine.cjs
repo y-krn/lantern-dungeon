@@ -559,13 +559,15 @@ for(let seed=1;seed<=100;seed++){
 }
 {
   const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../dist/game.js'),'utf8');
-  const storage=new Map(),context={DungeonEngine,renderer:{reset(){}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:''}),clearPickupNotice(){},closeModal(){},updateUI(){}};
+  const notice={hidden:false};
+  const storage=new Map(),context={DungeonEngine,renderer:{reset(){}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:'',closest:()=>notice}),clearPickupNotice(){},closeModal(){},updateUI(){}};
   vm.createContext(context);
   const startup=source.slice(source.indexOf('  const SAVE_KEY'),source.indexOf('  let sound'));
   const save=source.slice(source.indexOf('  function save()'),source.indexOf('  function beep('));
   const startNew=source.slice(source.indexOf('  function startNew('),source.indexOf('  function confirmNew('));
   vm.runInContext(startup+save+startNew,context);
   vm.runInContext("engine.tutorialCleared=true;save();startNew('depths');engine.floor=23;engine.generateFloor();save();",context);
+  assert.equal(notice.hidden,true,'Successful saves hide the notice');
   assert.equal(storage.get('lantern-dungeon-progress-v1'),'true');
   const resumed=DungeonEngine.restore(storage.get('lantern-dungeon-v1'));assert.equal(resumed.floor,23);assert.equal(resumed.dungeon,'depths');
   vm.runInContext("engine.status='dead';save();startNew('tutorial');save();",context);
@@ -574,5 +576,6 @@ for(let seed=1;seed<=100;seed++){
   storage.set('lantern-dungeon-v1','broken');
   const freshContext={...context};vm.createContext(freshContext);vm.runInContext(startup+'globalThis.unlocked=engine.tutorialCleared;',freshContext);assert.equal(freshContext.unlocked,true);
   context.localStorage.setItem=()=>{throw new Error('Storage unavailable');};vm.runInContext('save();globalThis.unlocked=engine.tutorialCleared;',context);assert.equal(context.unlocked,true);
+  assert.equal(notice.hidden,false,'Failed saves keep the notice visible');
 }
 console.log('PASS: 3,000 challenge floors connected; stronger enemies, supplies, equipment, safe spawns, 30F guardian gate; legacy migration and permanent unlock across retries/load/storage failures checked.');
