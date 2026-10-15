@@ -17,3 +17,4 @@ require('./tests/check-equipment.cjs');
 require('./tests/check-ground.cjs');
 require('./tests/check-engine.cjs');
 require('./tests/check-pwa.cjs');
+require('./tests/check-playtest.cjs');

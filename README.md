@@ -146,6 +146,8 @@ npx --yes wrangler@4.149.0 deploy --dry-run
 
 ## 検証
 
+ブラウザでの固定シード自動プレイと改善点の評価手順は[ブラウザ自動プレイ](docs/browser-playtest.md)を参照してください。`node scripts/browser-playtest.cjs --seeds 101,102,103 --out output/playtest-baseline`で、行動履歴・スクリーンショット・保存復帰検証を含むレポートを生成します。
+
 ```sh
 node check.cjs
 ```

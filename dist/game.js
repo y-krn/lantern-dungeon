@@ -596,6 +596,10 @@
   // Read-only snapshots make integration diagnostics possible without mutating a live run.
   window.lanternGame = {
     snapshot: () => JSON.parse(engine.serialize()),
+    get inputReady() {
+      return engine.status === "playing" && !$("modal").open &&
+        renderer.remaining() === 0 && performance.now() - lastInput >= 95;
+    },
     get status() {
       return engine.status;
     },
