@@ -7,6 +7,7 @@ a { color: #73512c; }
 h1 { font-family: serif; font-size: 25px; margin: 22px 0 8px; }
 .intro, .detail { font-size: 12px; line-height: 1.7; margin: 8px 0 16px; color: #76634d; }
 .scenarios { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 12px; }
+.scenarios[hidden] { display: none; }
 button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; border: 1px solid #c8b99d; border-radius: 8px; background: #fcf8ed; }
 .scenarios button { font-size: 12px; min-height: 40px; padding: 8px 10px; }
 button[aria-pressed="true"] { background: #73512c; border-color: #73512c; color: #fff6e5; }

@@ -33,6 +33,15 @@
       beetle: 'cobaltBeetle', plant: 'thornPlant', mimic: 'coinMimic',
       moth: 'lanternMoth', golem: 'stoneGolem', guardian: 'starGuardian'};
     const paintedSprites = new Map();
+    // Each row shares a canvas size and ground anchor so changing strides never zooms the hero.
+    const walkFrames = [
+      [[49,15,206,291],[322,15,206,291],[580,15,201,291],[863,15,203,291]],
+      [[49,312,216,288],[326,311,207,288],[583,312,212,288],[870,312,210,288]],
+      [[45,606,217,278],[324,606,209,278],[586,606,213,281],[870,606,210,279]],
+      [[53,890,218,261],[316,889,220,262],[575,891,226,260],[862,889,228,262]],
+      [[52,1156,222,236],[330,1155,215,237],[582,1155,226,236],[865,1155,222,237]],
+    ];
+    const walkRows = {hero:0, heroDownRight:1, heroRight:2, heroUpRight:3, heroUp:4};
     const atlas = typeof root.Image === 'function' ? new root.Image() : null;
     const ready = atlas ? new Promise(resolve => {
       atlas.onload = () => resolve(true);
@@ -45,6 +54,12 @@
       itemAtlas.onerror = () => resolve(false);
       itemAtlas.src = 'art/lantern-items.png';
     }) : Promise.resolve(false);
+    const walkAtlas = typeof root.Image === 'function' ? new root.Image() : null;
+    const walkReady = walkAtlas ? new Promise(resolve => {
+      walkAtlas.onload = () => resolve(true);
+      walkAtlas.onerror = () => resolve(false);
+      walkAtlas.src = 'art/hero-walk.png';
+    }) : Promise.resolve(false);
     function tone(hex) {
       const [r, g, b] = hex.match(/\w\w/g).map(value => parseInt(value, 16) / 255);
       const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
@@ -52,26 +67,31 @@
       return {hue: delta ? ((max === r ? (g - b) / delta : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4) * 60 + 360) % 360 : 0,
         saturation: delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0};
     }
-    function paintedSprite(context, type, x, y, scale, alpha, flip, species) {
-      const useItem = !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
-      const sheet = useItem ? itemAtlas : atlas, frameBounds = useItem ? itemFrames[type] : artFrames[type];
+    function paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame = null) {
+      const walking = Number.isInteger(walkFrame) && walkFrame >= 0 && walkFrame < 4
+        && walkRows[type] !== undefined && walkAtlas?.complete && walkAtlas.naturalWidth;
+      const useItem = !walking && !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
+      const row = walking ? walkFrames[walkRows[type]] : null;
+      const sheet = walking ? walkAtlas : useItem ? itemAtlas : atlas;
+      const frameBounds = walking ? row[walkFrame] : useItem ? itemFrames[type] : artFrames[type];
       if (!sheet?.complete || !sheet.naturalWidth || !frameBounds) return false;
       const m = MONSTERS[species];
-      if (flip && type.startsWith('hero')) {
+      if (flip && type.startsWith('hero') && !walking) {
         type = {heroRight: 'heroLeft', heroUpRight: 'heroUpLeft', heroDownRight: 'heroDownLeft'}[type] || type;
         flip = false;
       }
-      const key = useItem ? `item:${type}` : species || type;
+      const key = walking ? `walk:${type}:${walkFrame}` : useItem ? `item:${type}` : species || type;
       if (!paintedSprites.has(key)) {
-        const [sx, sy, width, height] = useItem ? frameBounds : artFrames[type];
+        const [sx, sy, width, height] = walking || useItem ? frameBounds : artFrames[type];
         const image = document.createElement('canvas');
-        image.width = width; image.height = height;
+        image.width = walking ? Math.max(...row.map(frame => frame[2])) : width;
+        image.height = walking ? Math.max(...row.map(frame => frame[3])) : height;
         const paint = image.getContext('2d'), base = MONSTERS[baseSpecies[type]];
         if (m && base && m !== base) {
           const target = tone(m.colors[1]), original = tone(base.colors[1]);
           paint.filter = `hue-rotate(${target.hue - original.hue}deg) saturate(${target.saturation / (original.saturation || 1)})`;
         }
-        paint.drawImage(sheet, sx, sy, width, height, 0, 0, width, height);
+        paint.drawImage(sheet, sx, sy, width, height, (image.width - width) / 2, image.height - height, width, height);
         paintedSprites.set(key, image);
       }
       const image = paintedSprites.get(key), hero = type.startsWith('hero');
@@ -504,8 +524,9 @@
       alpha = 1,
       flip = false,
       species = null,
+      walkFrame = null,
     ) {
-      if (paintedSprite(context, type, x, y, scale, alpha, flip, species)) return;
+      if (paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame)) return;
       const m = MONSTERS[species],
         pattern = sprites[type] || sprites.scroll;
       const colors = m
@@ -570,6 +591,7 @@
     return {
       ready,
       itemsReady,
+      walkReady,
       paintedSprite,
       sprite,
       heroSprite,
