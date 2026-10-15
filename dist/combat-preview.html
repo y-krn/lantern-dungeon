@@ -19,8 +19,9 @@
   <main>
     <header><span>灯りの迷宮 · 動きの確認</span><a href="./">冒険で試す ↗</a></header>
     <h1>剣を振る、魔物が返す。</h1>
-    <p class="intro">実ゲームと同じ攻撃処理・描画。冒険のセーブには影響しません。</p>
+    <p class="intro">実ゲームと同じ移動・攻撃処理と描画。冒険のセーブには影響しません。</p>
     <div class="scenarios" role="group" aria-label="確認する場面">
+      <button data-scene="walk" aria-pressed="false">歩行（8方向）</button>
       <button data-scene="duel" aria-pressed="true">一対一</button>
       <button data-scene="surrounded" aria-pressed="false">囲まれる</button>
       <button data-scene="miss" aria-pressed="false">空振り</button>
@@ -29,6 +30,16 @@
       <button data-scene="arrow" aria-pressed="false">矢の命中</button>
       <button data-scene="arrowMiss" aria-pressed="false">矢の空振り</button>
       <button data-scene="arrowKill" aria-pressed="false">矢で撃破</button>
+    </div>
+    <div id="walk-directions" class="scenarios" role="group" aria-label="歩く方向" hidden>
+      <button data-walk="0,-1" aria-label="上へ歩く" aria-pressed="false">↑</button>
+      <button data-walk="1,-1" aria-label="右上へ歩く" aria-pressed="false">↗</button>
+      <button data-walk="1,0" aria-label="右へ歩く" aria-pressed="true">→</button>
+      <button data-walk="1,1" aria-label="右下へ歩く" aria-pressed="false">↘</button>
+      <button data-walk="0,1" aria-label="下へ歩く" aria-pressed="false">↓</button>
+      <button data-walk="-1,1" aria-label="左下へ歩く" aria-pressed="false">↙</button>
+      <button data-walk="-1,0" aria-label="左へ歩く" aria-pressed="false">←</button>
+      <button data-walk="-1,-1" aria-label="左上へ歩く" aria-pressed="false">↖</button>
     </div>
     <section class="stage" aria-label="攻撃アニメーションの確認">
       <div id="viewport"><canvas id="scene" width="880" height="900" role="img" aria-label="リネと魔物の攻撃アニメーション"></canvas></div>

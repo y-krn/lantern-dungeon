@@ -23,11 +23,12 @@
       labels = [],
       frame = 0,
       playerTween = null,
+      walkDistance = 0,
       attacks = [],
       pendingEffects = [],
       busyUntil = 0;
     let closeView = true;
-    const { ready, itemsReady, paintedSprite, sprite, heroSprite, hasAtlas } =
+    const { ready, itemsReady, walkReady, paintedSprite, sprite, heroSprite, hasAtlas } =
       createSpriteRenderer();
     function hash(x, y, s = 0) {
       const engine = getEngine();
@@ -344,12 +345,19 @@
           ctx.stroke();
         }
       let drawX = p.x,
-        drawY = p.y;
+        drawY = p.y,
+        walkFrame = null,
+        stepLift = 0;
       if (playerTween) {
-        const t = Math.min(1, (now - playerTween.born) / 100);
-        drawX = playerTween.from.x + (p.x - playerTween.from.x) * t;
-        drawY = playerTween.from.y + (p.y - playerTween.from.y) * t;
+        const t = Math.max(0, Math.min(1, (now - playerTween.born) / 160));
+        drawX = playerTween.from.x + (playerTween.to.x - playerTween.from.x) * t;
+        drawY = playerTween.from.y + (playerTween.to.y - playerTween.from.y) * t;
+        walkDistance = playerTween.start + playerTween.distance * t;
         if (t === 1) playerTween = null;
+        else {
+          walkFrame = Math.floor(walkDistance * 2) % 4;
+          stepLift = Math.sin((walkDistance % 1) * Math.PI) * tile * .025;
+        }
       }
       const entities = engine.enemies
         .filter((e) => e.hp > 0 && engine.visible[engine.key(e.x, e.y)])
@@ -399,6 +407,7 @@
             const dx = attack.target.x - attack.source.x, dy = attack.target.y - attack.source.y;
             const length = Math.hypot(dx, dy) || 1;
             if (attack.source.id === e.id && age < 160) {
+              if (e.isPlayer) { walkFrame = null; stepLift = 0; }
               const push = Math.sin(Math.PI * age / 160) * (attack.kind === "melee" ? .18 : .06);
               pushX += dx / length * push; pushY += dy / length * push;
               lean = dx / length * Math.sin(Math.PI * age / 160) * .09;
@@ -417,11 +426,12 @@
             ctx,
             e.isPlayer ? heroSprite(p.facing) : e.type,
             -tile / 2,
-            -tile * .8 - (e.isPlayer ? tile * 0.125 : 0) + bob,
+            -tile * .8 - (e.isPlayer ? tile * 0.125 + stepLift : 0) + bob,
             s,
             opacity,
             e.isPlayer && p.facing[0] < 0,
             e.species,
+            e.isPlayer ? walkFrame : null,
           );
           ctx.restore();
         }
@@ -697,6 +707,7 @@
     function reset(position) {
       camera = { x: position?.x ?? 0, y: position?.y ?? 0 };
       playerTween = null;
+      walkDistance = 0;
       attacks = [];
       pendingEffects = [];
       busyUntil = 0;
@@ -706,7 +717,19 @@
       }
     }
     function movePlayer(from, born) {
-      if (!reduced) playerTween = { from, born };
+      if (reduced) return;
+      let origin = { x: from.x, y: from.y };
+      if (playerTween) {
+        const t = Math.max(0, Math.min(1, (born - playerTween.born) / 160));
+        origin = {
+          x: playerTween.from.x + (playerTween.to.x - playerTween.from.x) * t,
+          y: playerTween.from.y + (playerTween.to.y - playerTween.from.y) * t,
+        };
+        walkDistance = playerTween.start + playerTween.distance * t;
+      }
+      const { x, y } = getEngine().player;
+      const distance = Math.hypot(x - origin.x, y - origin.y);
+      if (distance) playerTween = { from: origin, to: { x, y }, born, start: walkDistance, distance };
     }
     function directionAt(event) {
       const engine = getEngine(),
@@ -729,6 +752,7 @@
     return {
       ready,
       itemsReady,
+      walkReady,
       setCloseView(value) { closeView = value; resize(); },
       sprite,
       drawMinimap,

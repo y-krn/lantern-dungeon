@@ -50,20 +50,22 @@ function load(commonJS) {
   const withoutDOM = createSpriteRenderer();
   assert.equal(await withoutDOM.ready, false);
   assert.equal(await withoutDOM.itemsReady, false);
+  assert.equal(await withoutDOM.walkReady, false);
   assert.equal(withoutDOM.hasAtlas(), false, 'CommonJS remains usable without images or DOM');
   const before = JSON.stringify(data.MONSTERS);
   for (const commonJS of [false, true]) {
     const {factory, context, calls, images, textures, settle} = load(commonJS);
     const art = factory();
-    assert.equal(images.length, 2);
+    assert.equal(images.length, 3);
     assert.equal(art.hasAtlas(), false);
     assert.equal(art.paintedSprite(context, 'hero', 4, 5, 2, .4, false), false);
     art.sprite(context, 'heroRight', 4, 5, 2, .4, true);
     assert(calls.some(call => call[0] === 'pixel'), 'Unloaded art falls back immediately');
     assert(calls.some(call => call[0] === 'scale' && call[1] === -1), 'Fallback left views are mirrored');
     assert.equal(context.globalAlpha, .4);
-    settle(images[0], true); settle(images[1], true);
+    settle(images[0], true); settle(images[1], true); settle(images[2], true);
     assert.equal(await art.ready, true); assert.equal(await art.itemsReady, true);
+    assert.equal(await art.walkReady, true);
     assert.equal(art.hasAtlas(), true);
     const directions = data.DIRS.map(direction => {
       const type = art.heroSprite(direction);
@@ -90,13 +92,13 @@ function load(commonJS) {
     art.sprite(context, 'lantern', 0, 0, 2);
     assert.equal(calls.at(-1)[1].frame[0], 'art/lantern-items.png', 'Items retain atlas priority');
     const second = factory();
-    settle(images[2], true); settle(images[3], true);
+    settle(images[3], true); settle(images[4], true); settle(images[5], true);
     second.sprite(context, 'heroRight', 0, 0, 2);
     assert.notEqual(calls.at(-1)[1], firstHeroRight, 'Renderer instances own their textures');
 
-    for (const [characterOK, itemOK] of [[false, false], [true, false], [false, true]]) {
-      const failed = factory(), pair = images.slice(-2);
-      settle(pair[0], characterOK); settle(pair[1], itemOK);
+    for (const [characterOK, itemOK, walkOK] of [[false, false, false], [true, false, false], [false, true, false], [true, true, false]]) {
+      const failed = factory(), pair = images.slice(-3);
+      settle(pair[0], characterOK); settle(pair[1], itemOK); settle(pair[2], walkOK);
       assert.equal(await failed.ready, characterOK); assert.equal(await failed.itemsReady, itemOK);
       assert.equal(failed.hasAtlas(), characterOK);
       calls.length = 0;
@@ -106,7 +108,23 @@ function load(commonJS) {
       failed.sprite(context, 'bread', 0, 0, 2);
       assert.equal(calls.some(call => call[0] === 'image'), itemOK);
       assert(calls.length > 0, 'A failed atlas never prevents the available art or pixel fallback');
+      failed.sprite(context, 'heroRight', 0, 0, 2, 1, false, null, 2);
+      assert.equal(await failed.walkReady, false, 'Missing walk art falls back to the normal hero');
     }
+    const strides = new Set();
+    for (const direction of data.DIRS) {
+      for (let frame = 0; frame < 4; frame++) {
+        calls.length = 0;
+        art.sprite(context, art.heroSprite(direction), 0, 0, 3, 1, direction[0] < 0, null, frame);
+        const texture = calls.at(-1)[1];
+        assert.equal(texture.frame[0], 'art/hero-walk.png');
+        strides.add(texture.frame.join(':'));
+        const [x,y,w,h] = calls.at(-1).slice(2);
+        assert(x >= 0 && y >= 0 && x + w <= 48.001 && y + h <= 54.001, 'Walking keeps hat, boots and lantern inside the sprite');
+        assert.equal(calls.some(call => call[0] === 'scale'), direction[0] < 0, 'Left walking mirrors the corresponding right view');
+      }
+    }
+    assert.equal(strides.size, 20, 'Five directions have four unique strides, shared by their mirrored views');
   }
   assert.equal(JSON.stringify(data.MONSTERS), before, 'Sprite rendering cannot mutate species definitions');
   console.log('PASS: browser/CommonJS sprite loading, readiness/failure, direction identity, tint/cache, item priority and pixel fallback.');
