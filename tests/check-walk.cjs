@@ -21,7 +21,7 @@ function scene(reduced = false) {
     requestAnimationFrame:callback => frames.push(callback),
     createSpriteRenderer:() => ({ready:Promise.resolve(true), itemsReady:Promise.resolve(true), walkReady:Promise.resolve(true),
       sprite:(...args) => sprites.push(args), paintedSprite:() => false,
-      heroSprite:() => 'heroRight', hasAtlas:() => true}),
+      heroSprite:() => 'heroRight', walkFrameCount:() => 6, walkCycleDistance:() => 1, hasAtlas:() => true}),
   });
   vm.runInContext(fs.readFileSync(require.resolve('../dist/renderer.js'), 'utf8'), env);
   const renderer = env.createDungeonRenderer({canvas, minimap:canvas, viewport:canvas, getEngine:() => game, reduced});
@@ -48,8 +48,7 @@ const second = normal.draw(1090);
 assert.notEqual(first.stride, second.stride, 'The foot pose must actually change during movement');
 normal.move(1090);
 assert.equal(normal.draw(1090).x, second.x, 'Repeated input cannot snap the hero back to a tile');
-const strides = new Set([first.stride, second.stride, normal.draw(1170).stride, normal.draw(1210).stride]);
-assert.equal(strides.size, 4, 'Continuous steps alternate all four foot poses');
+assert.notEqual(normal.draw(1130).stride, second.stride, 'Footfall progress continues through repeated input');
 const stopped = normal.draw(1250);
 assert.equal(stopped.stride, null); assert.equal(stopped.x, 24, 'Stopping settles on the actual destination');
 normal.move(1300); normal.game.attack(); normal.renderer.playEffects(normal.game.effects);
@@ -58,4 +57,7 @@ normal.renderer.reset(); assert.equal(normal.draw(1400).stride, null, 'Floor/res
 const reduced = scene(true); reduced.move(1000);
 assert.equal(reduced.draw(1000).stride, null); assert.equal(reduced.draw(1000).x, 23);
 assert.equal(reduced.renderer.remaining(), 0, 'Reduced motion has neither travel animation nor an input wait');
+const single = scene(); single.move(1000);
+assert.equal(new Set([1005,1035,1060,1085,1115,1145].map(at => single.draw(at).stride)).size, 6,
+  'A single horizontal step must show the entire six-frame contact/support/passing cycle, not just two similar drawings');
 console.log('PASS: alternating walking poses, continuous input, stopping/attack/reset, reduced motion and game/save isolation.');

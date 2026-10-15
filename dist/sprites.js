@@ -42,6 +42,10 @@
       [[52,1156,222,236],[330,1155,215,237],[582,1155,226,236],[865,1155,222,237]],
     ];
     const walkRows = {hero:0, heroDownRight:1, heroRight:2, heroUpRight:3, heroUp:4};
+    const sideFrames = [[39,117,338,481],[403,116,323,481],[752,115,331,483],
+      [1105,115,329,483],[1470,116,327,484],[1825,115,325,484]];
+    const walkFrameCount = type => type === 'heroRight' ? 6 : 4;
+    const walkCycleDistance = type => type === 'heroRight' ? 1 : 2;
     const atlas = typeof root.Image === 'function' ? new root.Image() : null;
     const ready = atlas ? new Promise(resolve => {
       atlas.onload = () => resolve(true);
@@ -60,6 +64,12 @@
       walkAtlas.onerror = () => resolve(false);
       walkAtlas.src = 'art/hero-walk.png';
     }) : Promise.resolve(false);
+    const sideAtlas = typeof root.Image === 'function' ? new root.Image() : null;
+    const sideWalkReady = sideAtlas ? new Promise(resolve => {
+      sideAtlas.onload = () => resolve(true);
+      sideAtlas.onerror = () => resolve(false);
+      sideAtlas.src = 'art/hero-side-walk.png';
+    }) : Promise.resolve(false);
     function tone(hex) {
       const [r, g, b] = hex.match(/\w\w/g).map(value => parseInt(value, 16) / 255);
       const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
@@ -68,19 +78,20 @@
         saturation: delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0};
     }
     function paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame = null) {
-      const walking = Number.isInteger(walkFrame) && walkFrame >= 0 && walkFrame < 4
-        && walkRows[type] !== undefined && walkAtlas?.complete && walkAtlas.naturalWidth;
+      const side = type === 'heroRight' && sideAtlas?.complete && sideAtlas.naturalWidth;
+      const walking = Number.isInteger(walkFrame) && walkFrame >= 0 && walkFrame < walkFrameCount(type)
+        && walkRows[type] !== undefined && (side || (walkAtlas?.complete && walkAtlas.naturalWidth));
       const useItem = !walking && !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
-      const row = walking ? walkFrames[walkRows[type]] : null;
-      const sheet = walking ? walkAtlas : useItem ? itemAtlas : atlas;
-      const frameBounds = walking ? row[walkFrame] : useItem ? itemFrames[type] : artFrames[type];
+      const row = walking ? side ? sideFrames : walkFrames[walkRows[type]] : null;
+      const sheet = walking ? side ? sideAtlas : walkAtlas : useItem ? itemAtlas : atlas;
+      const frameBounds = walking ? row[walkFrame % row.length] : useItem ? itemFrames[type] : artFrames[type];
       if (!sheet?.complete || !sheet.naturalWidth || !frameBounds) return false;
       const m = MONSTERS[species];
       if (flip && type.startsWith('hero') && !walking) {
         type = {heroRight: 'heroLeft', heroUpRight: 'heroUpLeft', heroDownRight: 'heroDownLeft'}[type] || type;
         flip = false;
       }
-      const key = walking ? `walk:${type}:${walkFrame}` : useItem ? `item:${type}` : species || type;
+      const key = walking ? `walk:${side ? 'side:' : ''}${type}:${walkFrame % row.length}` : useItem ? `item:${type}` : species || type;
       if (!paintedSprites.has(key)) {
         const [sx, sy, width, height] = walking || useItem ? frameBounds : artFrames[type];
         const image = document.createElement('canvas');
@@ -592,6 +603,9 @@
       ready,
       itemsReady,
       walkReady,
+      sideWalkReady,
+      walkFrameCount,
+      walkCycleDistance,
       paintedSprite,
       sprite,
       heroSprite,

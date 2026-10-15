@@ -51,21 +51,23 @@ function load(commonJS) {
   assert.equal(await withoutDOM.ready, false);
   assert.equal(await withoutDOM.itemsReady, false);
   assert.equal(await withoutDOM.walkReady, false);
+  assert.equal(await withoutDOM.sideWalkReady, false);
   assert.equal(withoutDOM.hasAtlas(), false, 'CommonJS remains usable without images or DOM');
   const before = JSON.stringify(data.MONSTERS);
   for (const commonJS of [false, true]) {
     const {factory, context, calls, images, textures, settle} = load(commonJS);
     const art = factory();
-    assert.equal(images.length, 3);
+    assert.equal(images.length, 4);
     assert.equal(art.hasAtlas(), false);
     assert.equal(art.paintedSprite(context, 'hero', 4, 5, 2, .4, false), false);
     art.sprite(context, 'heroRight', 4, 5, 2, .4, true);
     assert(calls.some(call => call[0] === 'pixel'), 'Unloaded art falls back immediately');
     assert(calls.some(call => call[0] === 'scale' && call[1] === -1), 'Fallback left views are mirrored');
     assert.equal(context.globalAlpha, .4);
-    settle(images[0], true); settle(images[1], true); settle(images[2], true);
+    settle(images[0], true); settle(images[1], true); settle(images[2], true); settle(images[3], true);
     assert.equal(await art.ready, true); assert.equal(await art.itemsReady, true);
     assert.equal(await art.walkReady, true);
+    assert.equal(await art.sideWalkReady, true);
     assert.equal(art.hasAtlas(), true);
     const directions = data.DIRS.map(direction => {
       const type = art.heroSprite(direction);
@@ -92,13 +94,13 @@ function load(commonJS) {
     art.sprite(context, 'lantern', 0, 0, 2);
     assert.equal(calls.at(-1)[1].frame[0], 'art/lantern-items.png', 'Items retain atlas priority');
     const second = factory();
-    settle(images[3], true); settle(images[4], true); settle(images[5], true);
+    settle(images[4], true); settle(images[5], true); settle(images[6], true); settle(images[7], true);
     second.sprite(context, 'heroRight', 0, 0, 2);
     assert.notEqual(calls.at(-1)[1], firstHeroRight, 'Renderer instances own their textures');
 
     for (const [characterOK, itemOK, walkOK] of [[false, false, false], [true, false, false], [false, true, false], [true, true, false]]) {
-      const failed = factory(), pair = images.slice(-3);
-      settle(pair[0], characterOK); settle(pair[1], itemOK); settle(pair[2], walkOK);
+      const failed = factory(), pair = images.slice(-4);
+      settle(pair[0], characterOK); settle(pair[1], itemOK); settle(pair[2], walkOK); settle(pair[3], false);
       assert.equal(await failed.ready, characterOK); assert.equal(await failed.itemsReady, itemOK);
       assert.equal(failed.hasAtlas(), characterOK);
       calls.length = 0;
@@ -113,18 +115,25 @@ function load(commonJS) {
     }
     const strides = new Set();
     for (const direction of data.DIRS) {
-      for (let frame = 0; frame < 4; frame++) {
+      for (let frame = 0; frame < art.walkFrameCount(art.heroSprite(direction)); frame++) {
         calls.length = 0;
         art.sprite(context, art.heroSprite(direction), 0, 0, 3, 1, direction[0] < 0, null, frame);
         const texture = calls.at(-1)[1];
-        assert.equal(texture.frame[0], 'art/hero-walk.png');
+        assert.equal(texture.frame[0], direction[1] === 0 ? 'art/hero-side-walk.png' : 'art/hero-walk.png');
         strides.add(texture.frame.join(':'));
         const [x,y,w,h] = calls.at(-1).slice(2);
         assert(x >= 0 && y >= 0 && x + w <= 48.001 && y + h <= 54.001, 'Walking keeps hat, boots and lantern inside the sprite');
         assert.equal(calls.some(call => call[0] === 'scale'), direction[0] < 0, 'Left walking mirrors the corresponding right view');
       }
     }
-    assert.equal(strides.size, 20, 'Five directions have four unique strides, shared by their mirrored views');
+    assert.equal(strides.size, 22, 'Horizontal walking has six footfalls; other directions keep four mirrored strides');
+    const sideFailed = factory(), fallbackImages = images.slice(-4);
+    for (let i = 0; i < 4; i++) settle(fallbackImages[i], i !== 3);
+    assert.equal(await sideFailed.sideWalkReady, false);
+    for (let frame = 0; frame < 6; frame++) {
+      sideFailed.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, frame);
+      assert.equal(calls.at(-1)[1].frame[0], 'art/hero-walk.png', 'A failed side sheet must not make the final two footfalls disappear');
+    }
   }
   assert.equal(JSON.stringify(data.MONSTERS), before, 'Sprite rendering cannot mutate species definitions');
   console.log('PASS: browser/CommonJS sprite loading, readiness/failure, direction identity, tint/cache, item priority and pixel fallback.');

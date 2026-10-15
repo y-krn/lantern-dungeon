@@ -42,10 +42,14 @@
       <button data-walk="-1,-1" aria-label="左上へ歩く" aria-pressed="false">↖</button>
     </div>
     <section class="stage" aria-label="攻撃アニメーションの確認">
-      <div id="viewport"><canvas id="scene" width="880" height="900" role="img" aria-label="リネと魔物の攻撃アニメーション"></canvas></div>
+      <div id="viewport"><canvas id="scene" width="880" height="900" role="img" aria-label="リネと魔物の攻撃アニメーション"></canvas><canvas id="gait-review" width="880" height="900" role="img" aria-label="位置を固定して拡大した主人公の足運び" hidden></canvas></div>
       <canvas id="minimap" width="144" height="96" aria-label="確認用のマップ"></canvas>
       <span class="stage-label" id="scene-label">一対一 · 攻撃 → 反撃</span>
     </section>
+    <div id="walk-review" class="scenarios" role="group" aria-label="足運びの確認方法" hidden>
+      <button id="footfall" aria-pressed="false">足運びだけ（拡大）</button>
+      <button id="slow" aria-pressed="false">ゆっくり</button>
+    </div>
     <p class="notice" id="motion-notice" hidden>端末の「動きを減らす」設定に合わせ、移動・斬撃・揺れを省略しています。</p>
     <div class="controls">
       <button id="attack">攻撃する</button>
