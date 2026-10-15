@@ -7,6 +7,13 @@ for (const file of fs.readdirSync(path.join(__dirname, 'dist')).filter(file => f
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
-require('./check-modules.cjs');
-require('./check-engine.cjs');
-require('./check-pwa.cjs');
+require('./tests/check-modules.cjs');
+require('./tests/check-sprites.cjs');
+require('./tests/check-inventory-ui.cjs');
+require('./tests/check-combat.cjs');
+require('./tests/check-traits.cjs');
+require('./tests/check-identification.cjs');
+require('./tests/check-equipment.cjs');
+require('./tests/check-ground.cjs');
+require('./tests/check-engine.cjs');
+require('./tests/check-pwa.cjs');

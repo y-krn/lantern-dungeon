@@ -365,8 +365,19 @@
       this.log.unshift({ text, type, turn: this.turn });
       this.log = this.log.slice(0, 40);
     }
-    effect(type, x, y, value, text) {
-      this.effects.push({ type, x, y, value, text });
+    effect(type, x, y, value, text, attack) {
+      this.effects.push({ type, x, y, value, text, ...(attack ? { attack } : {}) });
+    }
+    attackVisual(source, target, kind = "melee") {
+      // Capture appearances now: defeated and blinking enemies leave their impact tile this turn.
+      const capture = (actor) => ({
+        id: actor === this.player ? "player" : actor.id,
+        x: actor.x, y: actor.y, type: actor === this.player ? "hero" : actor.type,
+        species: actor.species, hp: actor.hp, maxHp: actor.maxHp,
+        revealed: actor.revealed, facing: actor.facing?.slice(),
+        visible: actor === this.player || !!this.visible[this.key(actor.x, actor.y)],
+      });
+      return { source: capture(source), target: capture(target), kind };
     }
     canStep(x, y, dx, dy) {
       return (
@@ -509,7 +520,8 @@
       if (e) this.hit(e, this.attackPower() + this.int(-1, 2), "melee");
       else {
         this.say("武器を振った。目の前に敵はいない。");
-        this.effect("swing", p.x + dx, p.y + dy, 0);
+        this.effect("swing", p.x + dx, p.y + dy, 0, undefined,
+          this.attackVisual(p, { x: p.x + dx, y: p.y + dy }));
       }
       this.finishTurn();
       return true;
@@ -536,7 +548,8 @@
       if (m?.trait === "blink" && enemy.hp > 0) enemy.blinkPending = true;
       enemy.awake = true;
       this.say(`${enemy.name}に${damage}ダメージ。`);
-      this.effect("hit", enemy.x, enemy.y, damage);
+      this.effect("hit", enemy.x, enemy.y, damage, undefined,
+        ["melee", "arrow"].includes(kind) ? this.attackVisual(this.player, enemy, kind) : undefined);
       if (enemy.hp <= 0) {
         this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`, "good");
         this.player.exp += enemy.exp;
@@ -692,13 +705,14 @@
           y += dy;
           const e = this.enemyAt(x, y);
           if (e) {
-            this.hit(e, 12);
+            this.hit(e, 12, "arrow");
             hit = true;
             break;
           }
         }
         if (!hit) this.say("木の矢を放った。敵には当たらなかった。");
-        this.effect("arrow", x, y, 0);
+        this.effect("arrow", x, y, 0, undefined,
+          !hit ? this.attackVisual(p, { x, y }, "arrow") : undefined);
       }
       if (fromGround) {
         if (kind === "arrow" && item.amount > 1) item.amount--;
@@ -828,7 +842,8 @@
         `${e.name}の攻撃。${d}ダメージ。${loss ? ` 満腹度 −${loss}。` : ""}`,
         "danger",
       );
-      this.effect("damage", p.x, p.y, d);
+      this.effect("damage", p.x, p.y, d, undefined,
+        this.attackVisual(e, p, ranged ? "ranged" : "melee"));
     }
     enemyTurn() {
       return runEnemyTurn(this);

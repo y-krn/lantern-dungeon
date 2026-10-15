@@ -78,7 +78,11 @@
         ) {
           game.enemyHit(e, aim.kind === "ranged");
           if (p.hp <= 0) break;
-        } else if (visible) game.say(`${e.name}の攻撃は空を切った。`);
+        } else if (visible) {
+          game.say(`${e.name}の攻撃は空を切った。`);
+          game.effect("swing", aim.x, aim.y, 0, undefined,
+            game.attackVisual(e, aim, aim.kind === "ranged" ? "ranged" : "melee"));
+        }
         continue;
       }
       const adjacent =
