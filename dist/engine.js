@@ -731,10 +731,8 @@
             !this.canStep(x, y, lx - x, ly - y) ||
             (lx === this.stairs.x && ly === this.stairs.y)
           ) continue;
-          const ground = this.items.find((value) => value.x === lx && value.y === ly);
-          if (ground && ground.kind !== "arrow") continue;
-          if (ground) ground.amount = (ground.amount || 1) + 1;
-          else this.items.push({ kind: "arrow", x: lx, y: ly, amount: 1 });
+          if (this.items.some((value) => value.x === lx && value.y === ly)) continue;
+          this.items.push({ kind: "arrow", x: lx, y: ly, amount: 1 });
           this.say("木の矢が壁にぶつかり、床に落ちた。");
           break;
         }
