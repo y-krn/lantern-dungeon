@@ -42,10 +42,13 @@
       [[52,1156,222,236],[330,1155,215,237],[582,1155,226,236],[865,1155,222,237]],
     ];
     const walkRows = {hero:0, heroDownRight:1, heroRight:2, heroUpRight:3, heroUp:4};
-    const sideFrames = [[39,117,338,481],[403,116,323,481],[752,115,331,483],
-      [1105,115,329,483],[1470,116,327,484],[1825,115,325,484]];
-    const walkFrameCount = type => type === 'heroRight' ? 6 : 4;
-    const walkCycleDistance = type => type === 'heroRight' ? 1 : 2;
+    const sideParts = { body: [203,18,749,802], thigh: [1273,71,136,263],
+      shin: [1306,388,98,228], boot: [1285,651,230,186] };
+    const directionParts = { hero: [14,84,371,467], heroDownRight: [409,83,364,443],
+      heroUpRight: [779,80,377,432], heroUp: [1156,80,371,430],
+      frontBoot: [381,673,194,297], backBoot: [961,668,189,302] };
+    const walkFrameCount = () => 6;
+    const walkCycleDistance = () => 2;
     const atlas = typeof root.Image === 'function' ? new root.Image() : null;
     const ready = atlas ? new Promise(resolve => {
       atlas.onload = () => resolve(true);
@@ -68,8 +71,59 @@
     const sideWalkReady = sideAtlas ? new Promise(resolve => {
       sideAtlas.onload = () => resolve(true);
       sideAtlas.onerror = () => resolve(false);
-      sideAtlas.src = 'art/hero-side-walk.png';
+      sideAtlas.src = 'art/hero-side-rig.png';
     }) : Promise.resolve(false);
+    const directionAtlas = typeof root.Image === 'function' ? new root.Image() : null;
+    const directionWalkReady = directionAtlas ? new Promise(resolve => {
+      directionAtlas.onload = () => resolve(true);
+      directionAtlas.onerror = () => resolve(false);
+      directionAtlas.src = 'art/hero-direction-rig.png';
+    }) : Promise.resolve(false);
+    function paintWalk(paint, frame, type) {
+      const side = type === 'heroRight', frontal = type === 'hero' || type === 'heroUp';
+      const back = type === 'heroUp' || type === 'heroUpRight';
+      const projection = side ? [38,0] : frontal ? [0, back ? -12 : 12] : [26, back ? -8 : 8];
+      const hipX = back ? 158 : 176, hipY = side || type === 'hero' ? 333 : 347;
+      function part(name, x, y, width, height, directional = false) {
+        paint.drawImage(directional ? directionAtlas : sideAtlas,
+          ...(directional ? directionParts : sideParts)[name], x, y, width, height);
+      }
+      function limb(name, from, to, width) {
+        paint.save();
+        paint.translate(from.x, from.y);
+        paint.rotate(-Math.atan2(to.x - from.x, to.y - from.y));
+        const [sx, sy, sw, sh] = sideParts[name];
+        // Trim the outlined end caps; overlapping skin joins hide the paper-doll seams.
+        paint.drawImage(sideAtlas, sx, sy + 14, sw, sh - 28,
+          -width / 2, -3, width, Math.hypot(to.x - from.x, to.y - from.y) + 6);
+        paint.restore();
+      }
+      // The far leg is always behind and shaded; its phase is half a cycle ahead.
+      for (const far of [true, false]) {
+        const phase = (frame / 6 + (far ? .5 : 0)) % 1, swing = phase >= .5;
+        const u = (phase % .5) * 2;
+        const travel = swing ? -1 + 2 * u * u * (3 - 2 * u) : 1 - 2 * u;
+        const hip = {x: hipX + (frontal ? far ? -16 : 16 : 0), y: hipY};
+        const foot = {x: hip.x + projection[0] * travel,
+          y: (side ? 480 : 466) + projection[1] * travel - (swing ? 30 * Math.sin(Math.PI * u) : 0)};
+        const ankle = {x: foot.x, y: foot.y - 40};
+        const dx = ankle.x - hip.x, dy = ankle.y - hip.y, distance = Math.hypot(dx, dy);
+        const bend = Math.sqrt(Math.max(0, 58 * 58 - distance * distance / 4));
+        const knee = {x: (hip.x + ankle.x) / 2 + (frontal ? 0 : dy / distance * bend),
+          y: (hip.y + ankle.y) / 2 - (frontal ? swing ? 8 : 0 : dx / distance * bend)};
+        paint.save(); paint.filter = far ? 'brightness(.65)' : 'none';
+        limb('thigh', hip, knee, 30); limb('shin', knee, ankle, 25);
+        // Keep the sole level while the knee bends and the planted foot travels backward.
+        const boot = side ? sideParts.boot : directionParts[back ? 'backBoot' : 'frontBoot'];
+        const bootWidth = boot[2] * 55 / boot[3];
+        part(side ? 'boot' : back ? 'backBoot' : 'frontBoot',
+          foot.x - (side ? 22 : bootWidth / 2), foot.y - 55, bootWidth, 55, !side);
+        paint.restore();
+      }
+      const body = side ? sideParts.body : directionParts[type];
+      const height = side ? body[3] * 338 / body[2] : 360, width = body[2] * height / body[3];
+      part(side ? 'body' : type, (338 - width) / 2, 0, width, height, !side);
+    }
     function tone(hex) {
       const [r, g, b] = hex.match(/\w\w/g).map(value => parseInt(value, 16) / 255);
       const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
@@ -78,12 +132,13 @@
         saturation: delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0};
     }
     function paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame = null) {
-      const side = type === 'heroRight' && sideAtlas?.complete && sideAtlas.naturalWidth;
+      const rig = sideAtlas?.complete && sideAtlas.naturalWidth &&
+        (type === 'heroRight' || (directionParts[type] && directionAtlas?.complete && directionAtlas.naturalWidth));
       const walking = Number.isInteger(walkFrame) && walkFrame >= 0 && walkFrame < walkFrameCount(type)
-        && walkRows[type] !== undefined && (side || (walkAtlas?.complete && walkAtlas.naturalWidth));
+        && walkRows[type] !== undefined && (rig || (walkAtlas?.complete && walkAtlas.naturalWidth));
       const useItem = !walking && !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
-      const row = walking ? side ? sideFrames : walkFrames[walkRows[type]] : null;
-      const sheet = walking ? side ? sideAtlas : walkAtlas : useItem ? itemAtlas : atlas;
+      const row = walking ? walkFrames[walkRows[type]] : null;
+      const sheet = walking ? rig ? sideAtlas : walkAtlas : useItem ? itemAtlas : atlas;
       const frameBounds = walking ? row[walkFrame % row.length] : useItem ? itemFrames[type] : artFrames[type];
       if (!sheet?.complete || !sheet.naturalWidth || !frameBounds) return false;
       const m = MONSTERS[species];
@@ -91,18 +146,19 @@
         type = {heroRight: 'heroLeft', heroUpRight: 'heroUpLeft', heroDownRight: 'heroDownLeft'}[type] || type;
         flip = false;
       }
-      const key = walking ? `walk:${side ? 'side:' : ''}${type}:${walkFrame % row.length}` : useItem ? `item:${type}` : species || type;
+      const key = walking ? `walk:${rig ? 'rig:' : ''}${type}:${rig ? walkFrame : walkFrame % row.length}` : useItem ? `item:${type}` : species || type;
       if (!paintedSprites.has(key)) {
         const [sx, sy, width, height] = walking || useItem ? frameBounds : artFrames[type];
         const image = document.createElement('canvas');
-        image.width = walking ? Math.max(...row.map(frame => frame[2])) : width;
-        image.height = walking ? Math.max(...row.map(frame => frame[3])) : height;
+        image.width = walking && rig ? 338 : walking ? Math.max(...row.map(frame => frame[2])) : width;
+        image.height = walking && rig ? 484 : walking ? Math.max(...row.map(frame => frame[3])) : height;
         const paint = image.getContext('2d'), base = MONSTERS[baseSpecies[type]];
         if (m && base && m !== base) {
           const target = tone(m.colors[1]), original = tone(base.colors[1]);
           paint.filter = `hue-rotate(${target.hue - original.hue}deg) saturate(${target.saturation / (original.saturation || 1)})`;
         }
-        paint.drawImage(sheet, sx, sy, width, height, (image.width - width) / 2, image.height - height, width, height);
+        if (walking && rig) paintWalk(paint, walkFrame, type);
+        else paint.drawImage(sheet, sx, sy, width, height, (image.width - width) / 2, image.height - height, width, height);
         paintedSprites.set(key, image);
       }
       const image = paintedSprites.get(key), hero = type.startsWith('hero');
@@ -604,6 +660,7 @@
       itemsReady,
       walkReady,
       sideWalkReady,
+      directionWalkReady,
       walkFrameCount,
       walkCycleDistance,
       paintedSprite,

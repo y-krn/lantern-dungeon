@@ -2,8 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {inflateSync} = require('node:zlib');
 
-// Inspect the real alpha silhouettes, not just six different source rectangles.
-const png = fs.readFileSync(require.resolve('../dist/art/hero-side-walk.png'));
+// Check the actual cutouts used by the articulated feet, including the leg-free body.
+const png = fs.readFileSync(require.resolve('../dist/art/hero-side-rig.png'));
 const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
 assert.equal(png[24], 8); assert.equal(png[25], 6); assert.equal(png[28], 0, 'Use non-interlaced RGBA8 artwork');
 const chunks = [];
@@ -27,20 +27,16 @@ for (let y=0, at=0; y<height; y++) {
   }
 }
 const source = fs.readFileSync(require.resolve('../dist/sprites.js'),'utf8');
-const frames = JSON.parse(source.match(/const sideFrames = (\[[\s\S]*?\]);/)[1]);
-assert.equal(frames.length,6);
-const soles = frames.map(([fx,fy,w,h]) => {
-  let min=w, max=-1, sum=0, count=0;
-  for(let y=Math.floor(h*.96);y<h;y++) for(let x=0;x<w;x++) {
-    if(pixels[((fy+y)*width+fx+x)*4+3] <= 90) continue;
-    min=Math.min(min,x);max=Math.max(max,x);sum+=x;count++;
-  }
-  assert(count>0,'Every pose must have a grounded boot');
-  return {width:(max-min)/w, center:sum/count/w};
-});
-for (const start of [0,3]) {
-  assert(soles[start].width > soles[start+1].width*1.7, 'Contact must visibly open the feet before weight transfer');
-  assert(soles[start+1].width < .35 && soles[start+2].width < .35, 'Support and passing must lift one foot, not repeat the wide contact drawing');
-  assert(soles[start+1].center-soles[start+2].center > .08, 'The planted boot must travel backward under the hips while the other foot passes');
+const parts = JSON.parse(source.match(/const sideParts = (\{[\s\S]*?\});/)[1].replace(/(\w+):/g, '"$1":'));
+assert.deepEqual(Object.keys(parts), ['body', 'thigh', 'shin', 'boot']);
+for (const [name, [fx,fy,w,h]] of Object.entries(parts)) {
+  assert(fx >= 0 && fy >= 0 && fx+w <= width && fy+h <= height);
+  let opaque = 0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++)
+    opaque += Number(pixels[((fy+y)*width+fx+x)*4+3] > 90);
+  assert(opaque > w*h*.3, `${name} must contain painted artwork, not an empty cutout`);
 }
-console.log('PASS: actual boot silhouettes show wide contact, single-foot support and backward planted-foot travel in both half-cycles.');
+const [fx,fy,w,h] = parts.body;
+for (let y=Math.floor(h*.96);y<h;y++) for(let x=Math.floor(w*.4);x<w*.65;x++)
+  assert(pixels[((fy+y)*width+fx+x)*4+3] <= 90, 'The torso must not retain a third, baked-in leg');
+console.log('PASS: RGBA rig contains body, thigh, shin and boot cutouts, without baked-in legs below the torso.');

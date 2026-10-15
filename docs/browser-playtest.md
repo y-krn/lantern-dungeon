@@ -21,7 +21,10 @@ node scripts/browser-playtest.cjs --seeds 101 --viewport 320x568 --max-turns 100
 node scripts/browser-playtest.cjs --seeds 101 --dungeon depths --max-turns 300 --out output/playtest-depths
 node scripts/browser-playtest.cjs --scenarios only --seeds 101 --out output/playtest-conditions
 node scripts/browser-playtest.cjs --scenarios only --seeds 101 --viewport 320x568 --out output/playtest-conditions-small
+node scripts/browser-playtest.cjs --seeds 101 --max-turns 100 --motion on --out output/playtest-motion
 ```
+
+`--motion on` は探索中のゲームキャンバスを約30fpsで連続保存します。`motion.jsonl` に各画像の実測時刻・ターン・階・位置・向き、`motion/` に画面幅と同じ幅へ縮小したJPEGを保存します。行動は通常のDOM操作のまま、ゲーム状態の書き換えや描画時刻の固定は行いません。フレームは元の時刻間隔で再生して通常速度を確認し、拡大や低速再生とは区別してください。動きの自然さは目視で判断する必要があり、画像を保存できただけでは成功判定になりません。`summary.json` の `sourceHashes` は主人公のPNGも含め、比較に使った画像を識別します。
 
 - `--seeds`: カンマ区切りのuint32値。デフォルトは101,102,103です。
 - `--max-turns`: 1冒険のターン上限。デフォルトは600です。

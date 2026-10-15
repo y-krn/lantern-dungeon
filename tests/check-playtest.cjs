@@ -10,6 +10,8 @@ assert.equal(options(['--seeds', '0,4294967295']).seeds.length, 2);
 for (const args of [['--delay', '0'], ['--max-turns', 'NaN'], ['--seeds', '-1'], ['--seeds', '1,1'], ['--viewport', '390'], ['--dungeon', 'missing'], ['--scenarios', 'missing'], ['--unknown', 'x']])
   assert.throws(() => options(args));
 assert.equal(options(['--scenarios', 'only']).scenarios, 'only');
+assert.equal(options(['--motion', 'on']).motion, 'on');
+assert.throws(() => options(['--motion', 'missing']));
 
 // Unknown terrain, offscreen enemies, hidden traps, RNG and unidentified effects cannot inform decisions.
 const game = new DungeonEngine(101, 'depths', true);

@@ -19,10 +19,13 @@ function load(commonJS) {
     },
     document: {createElement(tag) {
       assert.equal(tag, 'canvas');
-      const texture = {getContext() {
-        return {set filter(value) { texture.filter = value; }, drawImage(image, x, y, w, h) {
+      const texture = {draws: [], getContext() {
+        const stack = []; let filter = 'none';
+        return {save() {stack.push(filter);}, restore() {filter = stack.pop();}, translate() {}, rotate() {},
+          set filter(value) { filter = texture.filter = value; }, drawImage(image, x, y, w, h, ...destination) {
           assert(x >= 0 && y >= 0 && x + w <= image.naturalWidth && y + h <= image.naturalHeight);
           texture.frame = [image.source, x, y, w, h];
+          texture.draws.push({frame: texture.frame, destination, filter});
         }};
       }};
       textures.push(texture);
@@ -52,19 +55,20 @@ function load(commonJS) {
   assert.equal(await withoutDOM.itemsReady, false);
   assert.equal(await withoutDOM.walkReady, false);
   assert.equal(await withoutDOM.sideWalkReady, false);
+  assert.equal(await withoutDOM.directionWalkReady, false);
   assert.equal(withoutDOM.hasAtlas(), false, 'CommonJS remains usable without images or DOM');
   const before = JSON.stringify(data.MONSTERS);
   for (const commonJS of [false, true]) {
     const {factory, context, calls, images, textures, settle} = load(commonJS);
     const art = factory();
-    assert.equal(images.length, 4);
+    assert.equal(images.length, 5);
     assert.equal(art.hasAtlas(), false);
     assert.equal(art.paintedSprite(context, 'hero', 4, 5, 2, .4, false), false);
     art.sprite(context, 'heroRight', 4, 5, 2, .4, true);
     assert(calls.some(call => call[0] === 'pixel'), 'Unloaded art falls back immediately');
     assert(calls.some(call => call[0] === 'scale' && call[1] === -1), 'Fallback left views are mirrored');
     assert.equal(context.globalAlpha, .4);
-    settle(images[0], true); settle(images[1], true); settle(images[2], true); settle(images[3], true);
+    settle(images[0], true); settle(images[1], true); settle(images[2], true); settle(images[3], true); settle(images[4], true);
     assert.equal(await art.ready, true); assert.equal(await art.itemsReady, true);
     assert.equal(await art.walkReady, true);
     assert.equal(await art.sideWalkReady, true);
@@ -94,13 +98,13 @@ function load(commonJS) {
     art.sprite(context, 'lantern', 0, 0, 2);
     assert.equal(calls.at(-1)[1].frame[0], 'art/lantern-items.png', 'Items retain atlas priority');
     const second = factory();
-    settle(images[4], true); settle(images[5], true); settle(images[6], true); settle(images[7], true);
+    settle(images[5], true); settle(images[6], true); settle(images[7], true); settle(images[8], true); settle(images[9], true);
     second.sprite(context, 'heroRight', 0, 0, 2);
     assert.notEqual(calls.at(-1)[1], firstHeroRight, 'Renderer instances own their textures');
 
     for (const [characterOK, itemOK, walkOK] of [[false, false, false], [true, false, false], [false, true, false], [true, true, false]]) {
-      const failed = factory(), pair = images.slice(-4);
-      settle(pair[0], characterOK); settle(pair[1], itemOK); settle(pair[2], walkOK); settle(pair[3], false);
+      const failed = factory(), pair = images.slice(-5);
+      settle(pair[0], characterOK); settle(pair[1], itemOK); settle(pair[2], walkOK); settle(pair[3], false); settle(pair[4], false);
       assert.equal(await failed.ready, characterOK); assert.equal(await failed.itemsReady, itemOK);
       assert.equal(failed.hasAtlas(), characterOK);
       calls.length = 0;
@@ -119,21 +123,60 @@ function load(commonJS) {
         calls.length = 0;
         art.sprite(context, art.heroSprite(direction), 0, 0, 3, 1, direction[0] < 0, null, frame);
         const texture = calls.at(-1)[1];
-        assert.equal(texture.frame[0], direction[1] === 0 ? 'art/hero-side-walk.png' : 'art/hero-walk.png');
-        strides.add(texture.frame.join(':'));
+        assert.equal(texture.frame[0], direction[1] === 0 ? 'art/hero-side-rig.png' : 'art/hero-direction-rig.png');
+        strides.add(texture);
         const [x,y,w,h] = calls.at(-1).slice(2);
         assert(x >= 0 && y >= 0 && x + w <= 48.001 && y + h <= 54.001, 'Walking keeps hat, boots and lantern inside the sprite');
         assert.equal(calls.some(call => call[0] === 'scale'), direction[0] < 0, 'Left walking mirrors the corresponding right view');
       }
     }
-    assert.equal(strides.size, 22, 'Horizontal walking has six footfalls; other directions keep four mirrored strides');
-    const sideFailed = factory(), fallbackImages = images.slice(-4);
-    for (let i = 0; i < 4; i++) settle(fallbackImages[i], i !== 3);
+    assert.equal(strides.size, 30, 'Five canonical views have six poses each, mirrored for the other three directions');
+    const feet = [];
+    for (let frame = 0; frame < 6; frame++) {
+      art.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, frame);
+      const draws = calls.at(-1)[1].draws;
+      const boots = draws.filter(draw => draw.frame[1] === 1285);
+      assert.equal(boots.length, 2, 'Every pose must draw exactly two boots');
+      assert.equal(boots[0].filter, 'brightness(.65)', 'The far leg keeps its visual identity');
+      assert.equal(boots[1].filter, 'none', 'The near leg keeps its visual identity');
+      feet.push(boots.map(boot => boot.destination));
+      assert(draws.at(-1).frame[1] === 203, 'The body covers both hip joints');
+    }
+    assert(feet[0][1][0] > feet[0][0][0], 'Near boot leads on the first contact');
+    assert(feet[3][1][0] < feet[3][0][0], 'Far boot leads on the opposite contact');
+    for (const frame of [1,2]) {
+      assert.equal(feet[frame][1][1], feet[0][1][1], 'Near sole stays grounded during support');
+      assert(feet[frame][0][1] < feet[frame][1][1] - 20, 'Far foot lifts during its forward swing');
+      assert.equal(feet[frame+3][0][1], feet[3][0][1], 'Far sole stays grounded on the next step');
+      assert(feet[frame+3][1][1] < feet[frame+3][0][1] - 20, 'Near foot lifts on the next step');
+    }
+    assert(feet[1][1][0] > feet[2][1][0] && feet[4][0][0] > feet[5][0][0],
+      'Each supporting foot travels backward, instead of sliding forward with the torso');
+    for (const type of ['hero', 'heroDownRight', 'heroUpRight', 'heroUp']) {
+      const contacts = [0,3].map(frame => {
+        art.sprite(context, type, 0, 0, 3, 1, false, null, frame);
+        return calls.at(-1)[1].draws.filter(draw => draw.frame[1] === 381 || draw.frame[1] === 961);
+      });
+      assert(contacts.every(boots => boots.length === 2));
+      const axis = type === 'hero' || type === 'heroUp' ? 1 : 0;
+      const lead = boots => Math.sign(boots[1].destination[axis] - boots[0].destination[axis]);
+      assert.notEqual(lead(contacts[0]), 0);
+      assert.equal(lead(contacts[0]), -lead(contacts[1]), `${type} must exchange its leading foot`);
+    }
+    const sideFailed = factory(), fallbackImages = images.slice(-5);
+    for (let i = 0; i < 5; i++) settle(fallbackImages[i], i !== 3);
     assert.equal(await sideFailed.sideWalkReady, false);
     for (let frame = 0; frame < 6; frame++) {
       sideFailed.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, frame);
       assert.equal(calls.at(-1)[1].frame[0], 'art/hero-walk.png', 'A failed side sheet must not make the final two footfalls disappear');
     }
+    const directionFailed = factory(), remaining = images.slice(-5);
+    for (let i = 0; i < 5; i++) settle(remaining[i], i !== 4);
+    assert.equal(await directionFailed.directionWalkReady, false);
+    directionFailed.sprite(context, 'hero', 0, 0, 3, 1, false, null, 5);
+    assert.equal(calls.at(-1)[1].frame[0], 'art/hero-walk.png');
+    directionFailed.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, 5);
+    assert.equal(calls.at(-1)[1].frame[0], 'art/hero-side-rig.png', 'A failed direction sheet cannot disable the side rig');
   }
   assert.equal(JSON.stringify(data.MONSTERS), before, 'Sprite rendering cannot mutate species definitions');
   console.log('PASS: browser/CommonJS sprite loading, readiness/failure, direction identity, tint/cache, item priority and pixel fallback.');

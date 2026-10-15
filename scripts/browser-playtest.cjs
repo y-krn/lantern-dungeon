@@ -33,6 +33,7 @@ function markdownReport(report) {
       `判断理由: ${JSON.stringify(m.reasons)}。`,
       `検証: ${JSON.stringify(run.checks)}。実行エラー: ${run.error || 'なし'}。`, '',
       `[詳細](${dir}/run.json) / [初期セーブ](${dir}/initial-save.json)` + (m.actions ? ` / [行動履歴](${dir}/actions.jsonl)` : ''), '');
+    if (run.motionFrames) lines.push(`動きの記録: ${run.motionFrames}フレーム。[時刻・向き・画像の対応](${dir}/motion.jsonl)。通常速度と低速で再生して目視確認するための資料で、歩行の自然さを自動判定するものではありません。`, '');
     if (run.artifacts.includes(`${dir}/end.png`)) lines.push(`![終了状態](${dir}/end.png)`, '');
   }
   if (report.scenarios.length) {
@@ -59,7 +60,7 @@ function markdownReport(report) {
 }
 
 function options(args) {
-  const result = { seeds: [101, 102, 103], maxTurns: 600, maxActions: 1000, delay: 120, viewport: [390, 844], dungeon: 'tutorial', out: 'output/playtest', scenarios: 'off' };
+  const result = { seeds: [101, 102, 103], maxTurns: 600, maxActions: 1000, delay: 120, viewport: [390, 844], dungeon: 'tutorial', out: 'output/playtest', scenarios: 'off', motion: 'off' };
   for (let i = 0; i < args.length; i += 2) {
     const name = args[i], value = args[i + 1];
     if (!value) throw new Error(`Missing value: ${name}`);
@@ -68,6 +69,7 @@ function options(args) {
     else if (name === '--dungeon') result.dungeon = value;
     else if (name === '--out') result.out = value;
     else if (name === '--scenarios') result.scenarios = value;
+    else if (name === '--motion') result.motion = value;
     else if (['--max-turns', '--max-actions', '--delay'].includes(name))
       result[{ '--max-turns': 'maxTurns', '--max-actions': 'maxActions', '--delay': 'delay' }[name]] = Number(value);
     else throw new Error(`Unknown option: ${name}`);
@@ -76,6 +78,7 @@ function options(args) {
   if (result.viewport.length !== 2 || result.viewport.some(n => !Number.isInteger(n) || n < 240 || n > 3000)) throw new Error('Invalid viewport');
   if (!['tutorial', 'depths'].includes(result.dungeon)) throw new Error('Invalid dungeon');
   if (!['off', 'only', 'with-play'].includes(result.scenarios)) throw new Error('Invalid scenarios mode');
+  if (!['off', 'on'].includes(result.motion)) throw new Error('Invalid motion capture mode');
   for (const k of ['maxTurns', 'maxActions', 'delay']) if (!Number.isInteger(result[k]) || result[k] < (k === 'delay' ? 110 : 1) || result[k] > (k === 'delay' ? 5000 : 100000)) throw new Error(`Invalid ${k}`);
   return result;
 }
@@ -158,8 +161,8 @@ async function main(args = process.argv.slice(2)) {
   try {
     report.revision = (await exec('git', ['rev-parse', 'HEAD'], { cwd: root })).stdout.trim();
     report.dirty = !!(await exec('git', ['status', '--porcelain'], { cwd: root })).stdout.trim();
-    report.sourceHashes = Object.fromEntries(['dist', 'scripts'].flatMap(dir => fs.readdirSync(path.join(root, dir))
-      .filter(file => /\.(js|cjs|css|html)$/.test(file)).map(file => {
+    report.sourceHashes = Object.fromEntries(['dist', 'scripts', 'dist/art'].flatMap(dir => fs.readdirSync(path.join(root, dir))
+      .filter(file => /\.(js|cjs|css|html)$/.test(file) || (dir === 'dist/art' && /^hero.*\.png$/.test(file))).map(file => {
         const relative = `${dir}/${file}`;
         return [relative, createHash('sha256').update(fs.readFileSync(path.join(root, relative))).digest('hex')];
       })));
@@ -169,8 +172,8 @@ async function main(args = process.argv.slice(2)) {
       fs.mkdirSync(dir, { recursive: false });
       const ab = async (...cmd) => {
         let stdout;
-        try { ({ stdout } = await exec('agent-browser', ['--session', session, '--json', ...cmd], { env, timeout: 45000, maxBuffer: 16 * 1024 * 1024 })); }
-        catch (error) { throw new Error([error.message, error.stdout, error.stderr].filter(Boolean).join('\n')); }
+        try { ({ stdout } = await exec('agent-browser', ['--session', session, '--json', ...cmd], { env, timeout: 45000, maxBuffer: 64 * 1024 * 1024 })); }
+        catch (error) { throw new Error([error.message, error.stderr?.slice(0, 1000)].filter(Boolean).join('\n')); }
         const response = JSON.parse(stdout);
         if (!response.success) throw new Error(response.error || JSON.stringify(response));
         return response.data;
@@ -220,10 +223,41 @@ async function main(args = process.argv.slice(2)) {
         }
         await evaluate(`window.__playtest = { policy: (${createPolicy.toString()})(DungeonData), memory: {}, actions: 0, stalls: 0 }; true`);
         write('initial-observation.json', await evaluate('window.__playtest.policy.observe(window.lanternGame.snapshot().state)'));
+        if (config.motion === 'on') {
+          fs.mkdirSync(path.join(dir, 'motion'));
+          await evaluate(`(() => {
+            const source = document.getElementById('game'), canvas = document.createElement('canvas');
+            canvas.width = ${config.viewport[0]}; canvas.height = Math.round(source.height * canvas.width / source.width);
+            const context = canvas.getContext('2d');
+            const capture = window.__motion = { frames: [], active: true, start: performance.now(), last: -Infinity };
+            function frame(now) {
+              if (!capture.active) return;
+              if (now - capture.last >= 30) {
+                context.drawImage(source, 0, 0, canvas.width, canvas.height);
+                const state = window.lanternGame.snapshot().state;
+                capture.frames.push({ time: now - capture.start, turn: state.turn, floor: state.floor,
+                  x: state.player.x, y: state.player.y, facing: state.player.facing, imageData: canvas.toDataURL('image/jpeg', .85) });
+                capture.last = now;
+              }
+              requestAnimationFrame(frame);
+            }
+            requestAnimationFrame(frame); return true;
+          })()`);
+        }
+        let motionIndex = 0;
         if (config.scenarios === 'only') run.stop = 'scenario-only';
         while (!run.stop) {
-          const batchSize = Math.min(25, Math.max(1, Math.floor(15000 / (config.delay + 600))));
+          const batchSize = Math.min(config.motion === 'on' ? 4 : 25, Math.max(1, Math.floor(15000 / (config.delay + 600))));
           const batch = await evaluate(`(${playBatch.toString()})(${batchSize}, ${config.delay}, ${config.maxTurns}, ${config.maxActions})`);
+          if (config.motion === 'on') {
+            const captured = await evaluate('window.__motion.frames.splice(0)');
+            for (const frame of captured) {
+              const name = `motion/${String(motionIndex++).padStart(5, '0')}.jpg`;
+              fs.writeFileSync(path.join(dir, name), Buffer.from(frame.imageData.split(',')[1], 'base64'));
+              delete frame.imageData;
+              fs.appendFileSync(path.join(dir, 'motion.jsonl'), JSON.stringify({ ...frame, image: name }) + '\n');
+            }
+          }
           for (const row of batch.rows) {
             fs.appendFileSync(path.join(dir, 'actions.jsonl'), JSON.stringify(row) + '\n');
             const m = run.metrics, a = row.after, b = row.before;
@@ -251,6 +285,11 @@ async function main(args = process.argv.slice(2)) {
           }
           run.stop = batch.stop;
           if (batch.error) throw new Error(batch.error);
+        }
+        if (config.motion === 'on') {
+          await evaluate('window.__motion.active = false');
+          run.motionFrames = motionIndex;
+          run.artifacts.push(`${config.dungeon}-${seed}/motion.jsonl`);
         }
         const final = await evaluate('window.lanternGame.snapshot()');
         write('final-save.json', final);

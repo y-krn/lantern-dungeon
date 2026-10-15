@@ -21,7 +21,7 @@ function scene(reduced = false) {
     requestAnimationFrame:callback => frames.push(callback),
     createSpriteRenderer:() => ({ready:Promise.resolve(true), itemsReady:Promise.resolve(true), walkReady:Promise.resolve(true),
       sprite:(...args) => sprites.push(args), paintedSprite:() => false,
-      heroSprite:() => 'heroRight', walkFrameCount:() => 6, walkCycleDistance:() => 1, hasAtlas:() => true}),
+      heroSprite:() => 'heroRight', walkFrameCount:() => 6, walkCycleDistance:() => 2, hasAtlas:() => true}),
   });
   vm.runInContext(fs.readFileSync(require.resolve('../dist/renderer.js'), 'utf8'), env);
   const renderer = env.createDungeonRenderer({canvas, minimap:canvas, viewport:canvas, getEngine:() => game, reduced});
@@ -58,6 +58,8 @@ const reduced = scene(true); reduced.move(1000);
 assert.equal(reduced.draw(1000).stride, null); assert.equal(reduced.draw(1000).x, 23);
 assert.equal(reduced.renderer.remaining(), 0, 'Reduced motion has neither travel animation nor an input wait');
 const single = scene(); single.move(1000);
-assert.equal(new Set([1005,1035,1060,1085,1115,1145].map(at => single.draw(at).stride)).size, 6,
-  'A single horizontal step must show the entire six-frame contact/support/passing cycle, not just two similar drawings');
+assert.deepEqual([1005,1060,1115].map(at => single.draw(at).stride), [0,1,2]);
+single.draw(1160); single.move(1200);
+assert.deepEqual([1205,1260,1315].map(at => single.draw(at).stride), [3,4,5],
+  'The second step must use the opposite supporting leg, including after a pause');
 console.log('PASS: alternating walking poses, continuous input, stopping/attack/reset, reduced motion and game/save isolation.');
