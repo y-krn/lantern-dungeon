@@ -7,6 +7,7 @@ const { execFile } = require('node:child_process');
 const { promisify, isDeepStrictEqual } = require('node:util');
 const exec = promisify(execFile);
 const createPolicy = require('./playtest-policy.cjs');
+const runScenarios = require('./playtest-scenarios.cjs');
 require('../dist/engine.js');
 const root = path.resolve(__dirname, '..');
 
@@ -28,29 +29,37 @@ function markdownReport(report) {
     const m = run.metrics, dir = `${run.dungeon}-${run.seed}`;
     lines.push(`## シード ${run.seed}`, '',
       `停止: ${run.stop}。${run.final ? `${run.final.floor}階 / ${run.final.turn}ターン / HP ${run.final.hp} / 満腹度 ${run.final.hunger}。` : ''}`,
-      `行動 ${m.actions}、再訪移動 ${m.revisitedMoves}、低HPターン ${m.lowHpTurns}、空腹ターン ${m.starvingTurns}、入力停滞 ${m.stalledInputs}。`,
+      `行動 ${m.actions}、再訪移動 ${m.revisitedMoves}、進展のない往復 ${m.oscillationMoves}、低HPターン ${m.lowHpTurns}、空腹ターン ${m.starvingTurns}、入力停滞 ${m.stalledInputs}。`,
       `判断理由: ${JSON.stringify(m.reasons)}。`,
       `検証: ${JSON.stringify(run.checks)}。実行エラー: ${run.error || 'なし'}。`, '',
       `[詳細](${dir}/run.json) / [初期セーブ](${dir}/initial-save.json)` + (m.actions ? ` / [行動履歴](${dir}/actions.jsonl)` : ''), '');
     if (run.artifacts.includes(`${dir}/end.png`)) lines.push(`![終了状態](${dir}/end.png)`, '');
   }
+  if (report.scenarios.length) {
+    lines.push('## 条件別ブラウザ検証', '');
+    for (const scenario of report.scenarios) lines.push(`- ${scenario.name}: ${scenario.error ? `失敗 — ${scenario.error}` : '通過'}。`);
+    lines.push('', '条件別検証は専用セーブから開始します。通常探索での到達・クリア率とは分けて集計します。',
+      `[条件別の操作履歴](${report.config.dungeon}-${report.config.seeds[0]}/scenarios.json)`, '');
+  }
   lines.push('## 結果の読み方', '',
     '- dead / won はゲームの結果です。turn-limit / action-limit は打切りで、クリア失敗の判定ではありません。',
     '- no-known-route は方策の限界です。既知の罠を避けると通れない経路もあり、生成不具合とは断定できません。',
+    '- scenario-only は条件別検証だけを実行した結果です。通常探索の成績ではありません。',
     '- driver-error / input-stalled / 検証不一致 / ブラウザエラーは実行失敗です。終了コード1で通知します。',
     '- 再訪移動は寄り道や帰路も含みます。行動履歴の判断理由と合わせて確認してください。',
+    '- 進展のない往復は、発見・敵HPや位置・所持品・経験値などに変化がないABABA移動です。戦術上必要な動きも含むため、不具合件数には読み替えません。',
     '- netHpLoss は行動前後のHP減少の合計です。同一ターンの回復で相殺されるため、被ダメージ総量ではありません。',
     '', '## 次に調べる改善点', '',
     '1. 探索と階段の選択: 再訪が多い箇所の行動履歴を見て、補給のための寄り道と方策の往復を分けます。',
     '2. 戦闘と補給: 死亡直前のHP・満腹度・残った道具・予告回避を確認し、方策の使い残しを除いてから配置や数値を比較します。',
-    '3. 条件付きUI: 満杯、鑑定取消、呪い、モンスターハウス、死亡、勝利、深淵解放は専用シナリオを追加します。未到達の状態を検証済みにはしません。',
+    '3. 条件付きUI: --scenarios only で満杯、鑑定取消、呪い、モンスターハウス、死亡、勝利、深淵解放を独立検証します。専用セーブによる通過と通常探索の結果を混ぜません。',
     '4. 体験評価: 選択の納得感、敵の見分け、演出の読みやすさは通常速度の人間プレイで確認します。自動到達率だけでは評価できません。',
     '', '[機械可読サマリー](summary.json)', '');
   return lines.join('\n');
 }
 
 function options(args) {
-  const result = { seeds: [101, 102, 103], maxTurns: 600, maxActions: 1000, delay: 120, viewport: [390, 844], dungeon: 'tutorial', out: 'output/playtest' };
+  const result = { seeds: [101, 102, 103], maxTurns: 600, maxActions: 1000, delay: 120, viewport: [390, 844], dungeon: 'tutorial', out: 'output/playtest', scenarios: 'off' };
   for (let i = 0; i < args.length; i += 2) {
     const name = args[i], value = args[i + 1];
     if (!value) throw new Error(`Missing value: ${name}`);
@@ -58,6 +67,7 @@ function options(args) {
     else if (name === '--viewport') result.viewport = value.split('x').map(Number);
     else if (name === '--dungeon') result.dungeon = value;
     else if (name === '--out') result.out = value;
+    else if (name === '--scenarios') result.scenarios = value;
     else if (['--max-turns', '--max-actions', '--delay'].includes(name))
       result[{ '--max-turns': 'maxTurns', '--max-actions': 'maxActions', '--delay': 'delay' }[name]] = Number(value);
     else throw new Error(`Unknown option: ${name}`);
@@ -65,6 +75,7 @@ function options(args) {
   if (!result.seeds.length || result.seeds.length > 100 || new Set(result.seeds).size !== result.seeds.length || result.seeds.some(n => !Number.isInteger(n) || n < 0 || n > 0xffffffff)) throw new Error('Use 1–100 distinct comma-separated uint32 seeds');
   if (result.viewport.length !== 2 || result.viewport.some(n => !Number.isInteger(n) || n < 240 || n > 3000)) throw new Error('Invalid viewport');
   if (!['tutorial', 'depths'].includes(result.dungeon)) throw new Error('Invalid dungeon');
+  if (!['off', 'only', 'with-play'].includes(result.scenarios)) throw new Error('Invalid scenarios mode');
   for (const k of ['maxTurns', 'maxActions', 'delay']) if (!Number.isInteger(result[k]) || result[k] < (k === 'delay' ? 110 : 1) || result[k] > (k === 'delay' ? 5000 : 100000)) throw new Error(`Invalid ${k}`);
   return result;
 }
@@ -106,6 +117,7 @@ async function playBatch(limit, delay, maxTurns, maxActions) {
         const row = button?.closest('details');
         if (row && !row.open) row.querySelector('summary').click();
         click(selector);
+        if (action.target !== undefined) click(`[data-target="${action.target}"]`);
         if (document.querySelector('#modal').open) click('#modal [data-close]');
       } else throw new Error(`Unknown action: ${action.type}`);
       const after = t.policy.observe(window.lanternGame.snapshot().state);
@@ -142,7 +154,7 @@ async function main(args = process.argv.slice(2)) {
   const url = `http://127.0.0.1:${server.address().port}/`;
   const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-playtest-'));
   const env = { ...process.env, AGENT_BROWSER_SOCKET_DIR: runtime };
-  const report = { schemaVersion: 1, policyVersion: 2, createdAt: new Date().toISOString(), config, url, runs: [] };
+  const report = { schemaVersion: 2, policyVersion: 3, createdAt: new Date().toISOString(), config, url, runs: [], scenarios: [] };
   try {
     report.revision = (await exec('git', ['rev-parse', 'HEAD'], { cwd: root })).stdout.trim();
     report.dirty = !!(await exec('git', ['status', '--porcelain'], { cwd: root })).stdout.trim();
@@ -152,7 +164,7 @@ async function main(args = process.argv.slice(2)) {
         return [relative, createHash('sha256').update(fs.readFileSync(path.join(root, relative))).digest('hex')];
       })));
     report.agentBrowser = (await exec('agent-browser', ['--version'], { env })).stdout.trim();
-    for (const seed of config.seeds) {
+    for (const seed of config.scenarios === 'only' ? config.seeds.slice(0, 1) : config.seeds) {
       const session = `lantern-${process.pid}-${seed}`, dir = path.join(out, `${config.dungeon}-${seed}`);
       fs.mkdirSync(dir, { recursive: false });
       const ab = async (...cmd) => {
@@ -165,8 +177,9 @@ async function main(args = process.argv.slice(2)) {
       };
       const evaluate = async code => (await ab('eval', '-b', Buffer.from(code).toString('base64'))).result;
       const write = (name, value) => fs.writeFileSync(path.join(dir, name), JSON.stringify(value, null, 2) + '\n');
-      const run = { seed, dungeon: config.dungeon, artifacts: [], checks: {}, metrics: { actions: 0, netHpLoss: 0, starvingTurns: 0, lowHpTurns: 0, turnlessActions: 0, stalledInputs: 0, revisitedMoves: 0, reasons: {}, floors: {} } };
+      const run = { seed, dungeon: config.dungeon, artifacts: [], checks: {}, metrics: { actions: 0, netHpLoss: 0, starvingTurns: 0, lowHpTurns: 0, turnlessActions: 0, stalledInputs: 0, revisitedMoves: 0, oscillationMoves: 0, reasons: {}, floors: {} } };
       const visitedPositions = new Set();
+      const moves = [];
       report.runs.push(run);
       const screenshot = async name => {
         await evaluate('window.scrollTo(0, 0); true');
@@ -207,6 +220,7 @@ async function main(args = process.argv.slice(2)) {
         }
         await evaluate(`window.__playtest = { policy: (${createPolicy.toString()})(DungeonData), memory: {}, actions: 0, stalls: 0 }; true`);
         write('initial-observation.json', await evaluate('window.__playtest.policy.observe(window.lanternGame.snapshot().state)'));
+        if (config.scenarios === 'only') run.stop = 'scenario-only';
         while (!run.stop) {
           const batchSize = Math.min(25, Math.max(1, Math.floor(15000 / (config.delay + 600))));
           const batch = await evaluate(`(${playBatch.toString()})(${batchSize}, ${config.delay}, ${config.maxTurns}, ${config.maxActions})`);
@@ -223,6 +237,13 @@ async function main(args = process.argv.slice(2)) {
               const position = `${a.floor}:${a.player.x},${a.player.y}`;
               m.revisitedMoves += Number(visitedPositions.has(position));
               visitedPositions.add(position);
+              const progress = JSON.stringify([a.explored, a.player.gold, a.player.exp, a.player.bag, a.player.equipment,
+                a.visibleEnemies.map(e => [e.species, e.x, e.y, e.hp])]);
+              moves.push({ position, progress });
+              if (moves.length > 5) moves.shift();
+              if (moves.length === 5 && moves[0].position === moves[2].position && moves[2].position === moves[4].position
+                && moves[1].position === moves[3].position && moves[0].position !== moves[1].position
+                && moves.every(move => move.progress === progress)) m.oscillationMoves++;
             }
             m.reasons[row.action.reason] = (m.reasons[row.action.reason] || 0) + 1;
             m.floors[a.floor] = { turn: a.turn, hp: a.player.hp, hunger: a.player.hunger, explored: a.explored };
@@ -243,6 +264,10 @@ async function main(args = process.argv.slice(2)) {
         if (!run.checks.reload) throw new Error('Save/reload state mismatch');
         if (!run.checks.noHorizontalOverflow) throw new Error('Horizontal overflow');
         if (run.metrics.stalledInputs) throw new Error(`UI input made no progress ${run.metrics.stalledInputs} times`);
+        if (config.scenarios !== 'off' && seed === config.seeds[0]) {
+          report.scenarios = await runScenarios({ ab, evaluate, screenshot, write, resumedSave });
+          if (report.scenarios.some(scenario => scenario.error)) throw new Error('Conditional browser scenarios failed');
+        }
       } catch (error) {
         run.error = error.message; run.stop ||= 'driver-error';
         try { await screenshot('failure.png'); } catch { /* Browser startup can fail before a page exists. */ }
