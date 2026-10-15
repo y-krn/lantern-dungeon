@@ -88,7 +88,7 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   browser.Image = class {
     complete = true; naturalWidth = atlasWidth;
     set src(value) {
-      assert(['art/lantern-atlas.png', 'art/lantern-items.png', 'art/hero-walk.png'].includes(value));
+      assert(['art/lantern-atlas.png', 'art/lantern-items.png', 'art/hero-walk.png', 'art/hero-side-walk.png'].includes(value));
       const file = fs.readFileSync(path.join(__dirname, '../dist', value));
       this.source = value; this.naturalWidth = file.readUInt32BE(16); this.naturalHeight = file.readUInt32BE(20);
       this.onload();

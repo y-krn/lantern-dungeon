@@ -1,5 +1,29 @@
 # 主人公の歩行画像
 
+## 横方向の足運び修正
+
+横歩行は `dist/art/hero-side-walk.png` の専用6コマを使用します。接地で足を開き、体重移動で支持脚を体の下へ送り、反対の足を持ち上げて前に通します。左右の横歩行は同じ画像を反転して使用し、それ以外の方向は従来の4コマを維持します。横移動は1マスの移動中に6コマをすべて再生し、一歩の途中で支持・通過の姿勢が省略されることを防ぎます。
+
+前の画像は切り出し領域が別でも脚の姿勢が似ており、画像の識別だけでは確認が不足していました。`tests/check-footfall-art.cjs` はPNGの足元の透過形状を調べ、接地で開いた足、片足支持、支持した靴が体の下を後ろへ動く違いを検証します。確認画面の「足運びだけ（拡大）」「ゆっくり」「次のコマ」でも、画面上の移動を止めて確認できます。
+
+専用画像は既存の主人公を参照して組み込み `image_gen` で生成しました。採用画像の生成プロンプト:
+
+```text
+Use case: identity-preserve. Production GAME WALK CYCLE sprite sheet, ONLY SIX frames of the SAME right-facing character. Reference is the attached existing game atlas; use its third figure on the top row (right-facing side view) as the exact girl identity. Ignore all other creatures.
+Create one HORIZONTAL ROW of 6 equally spaced sprites, exactly 6 columns x 1 row. Wide canvas 1536x512 preferred. True transparent alpha. Fully isolated sprites with transparent margins, no text, numbers, arrows, grid, background, floor or shadows. All faces point EXACTLY to the RIGHT. Same scale, same hat, same upper-body position and same feet ground baseline across all 6.
+PRIMARY TASK: GENUINELY DIFFERENT FOOTFALLS, NOT SIX COPIES AND NOT TWO POSES REPEATED. Preserve torso/head/cape/lantern as much as possible; change LEGS and BOOTS visibly. Girl has exactly TWO LEGS and TWO BOOTS. Use a normal grounded WALK, not running, jumping, or skating.
+Column 1: CONTACT A. Near/camera-side leg straight FORWARD with heel touching ground at x=hip+32px. Far leg extends BACKWARD at x=hip-32px, back heel raised.
+Column 2: WEIGHT/DOWN A. Near planted boot has moved BACK to x=hip+10px under the body; far leg is bent behind and lifting off. Knees flex slightly. This must be much NARROWER than column1.
+Column 3: PASSING A. Near support leg now nearly vertical at x=hip-12px, sole grounded. FAR leg swings forward with bent knee; its boot is lifted about 30px ABOVE the baseline beside the grounded leg. Both feet clustered under hip, not a repeated wide split.
+Column 4: CONTACT B, OPPOSITE LEG of col1. FAR leg straight FORWARD at hip+32, heel contacting ground. NEAR/camera-side leg extends BACKWARD at hip-32, toe behind with heel lifted. The overlap of thighs and boot order must visibly swap from col1. Do NOT repeat col1.
+Column 5: WEIGHT/DOWN B. FAR foot planted at hip+10; NEAR leg bent behind and lifting. Narrower stance than col4. The opposite leg is supporting compared with col2.
+Column 6: PASSING B, OPPOSITE support of col3. FAR supporting leg nearly vertical at hip-12 with sole on ground. NEAR leg knee bends FORWARD, and near boot lifted 30px off the floor beside grounded foot. Do NOT repeat col3.
+Feet travel BACKWARD on the ground relative to the moving torso while planted, then swing FORWARD off the ground. Strong clear lower-body silhouette changes, wide contacts versus narrow passing poses. No front leg permanently stretched forward. Keep thigh/calf lengths consistent. Both boots visible and separated in all frames.
+Identity locked to reference: small friendly brown-eyed brown-haired girl, brown floppy wide-brim pointed hat with leaves, twin braids, cream blouse, short green cape with golden speckles, brown shorts and belt pouches, brown lace-up ankle boots, brown leather backpack with tan blanket roll, glowing amber lantern held consistently forward in the same hand. Warm watercolor storybook paint and crisp fine dark outlines, NOT pixel art, NOT photoreal, NOT a new costume. Cape/lantern swing subtle; character must not turn camera between frames. Upper-body should be nearly identical so the visible animation comes from genuine alternating legs. Keep hat and lantern entirely in the cell. Character occupies 80% of canvas height, consistent cell width. No extra character, no props from the monster rows.
+```
+
+## 初回の8方向歩行画像
+
 `dist/art/hero-walk.png` は、既存の `dist/art/lantern-atlas.png` を参照し、組み込みの `image_gen` で生成した透過画像です。既存の立ち姿、敵、アイテムの画像は置き換えていません。
 
 下、右下、右、右上、上の5方向に各4コマを用意し、左側の3方向は対応する右側の画像を反転して描きます。帽子、マント、ブーツ、ランタンを含む範囲を切り出し、方向ごとに同じ大きさのキャンバスと接地位置を使います。コマ番号は描画上の移動距離に同期し、停止時には元の立ち姿に戻します。

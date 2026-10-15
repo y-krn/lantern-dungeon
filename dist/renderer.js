@@ -28,7 +28,7 @@
       pendingEffects = [],
       busyUntil = 0;
     let closeView = true;
-    const { ready, itemsReady, walkReady, paintedSprite, sprite, heroSprite, hasAtlas } =
+    const { ready, itemsReady, walkReady, sideWalkReady, walkFrameCount, walkCycleDistance, paintedSprite, sprite, heroSprite, hasAtlas } =
       createSpriteRenderer();
     function hash(x, y, s = 0) {
       const engine = getEngine();
@@ -355,7 +355,8 @@
         walkDistance = playerTween.start + playerTween.distance * t;
         if (t === 1) playerTween = null;
         else {
-          walkFrame = Math.floor(walkDistance * 2) % 4;
+          const type = heroSprite(p.facing), count = walkFrameCount(type);
+          walkFrame = Math.floor(walkDistance * count / walkCycleDistance(type)) % count;
           stepLift = Math.sin((walkDistance % 1) * Math.PI) * tile * .025;
         }
       }
@@ -753,8 +754,12 @@
       ready,
       itemsReady,
       walkReady,
+      sideWalkReady,
       setCloseView(value) { closeView = value; resize(); },
       sprite,
+      heroSprite,
+      walkFrameCount,
+      walkCycleDistance,
       drawMinimap,
       resize,
       reset,

@@ -15,6 +15,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid #a13645; outline-offs
 .stage { position: relative; overflow: hidden; border: 1px solid #b19b7b; border-radius: 12px; background: #11191c; }
 #viewport { height: min(46vh, 400px); min-height: 220px; }
 #scene { display: block; width: 100%; height: 100%; }
+#gait-review { display: block; width: 100%; height: 100%; }
+#scene[hidden], #gait-review[hidden] { display: none; }
 #minimap { position: absolute; top: 12px; right: 12px; width: 90px; height: 60px; border: 1px solid #a6926a; border-radius: 4px; }
 .stage-label { position: absolute; bottom: 14px; left: 14px; right: 14px; padding: 8px 10px; color: #fff1bb; background: #11191cdd; border-radius: 5px; font-size: 12px; }
 .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
