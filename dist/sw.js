@@ -1,6 +1,6 @@
 'use strict';
 
-const VERSION = '07ff886f2f9678e4';
+const VERSION = '18e67dc4c6f23442';
 const PREFIX = `lantern-dungeon:${self.registration.scope}:`;
 const CACHE = PREFIX + VERSION;
 const ASSETS = [

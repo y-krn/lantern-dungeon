@@ -180,7 +180,11 @@
         const data = EQUIPMENT[equipmentKind(item)],
           old = this.player.equipment[kind];
         const delta = this.equipmentPower(item) - this.equipmentPower(old);
-        return `${data.description} ${item.identified ? `補正値 ${item.bonus > 0 ? "+" : ""}${item.bonus}。${item.cursed ? "呪われています。装備すると外せません。" : "呪いはありません。"}${item !== old ? ` 現在の装備との差：${delta >= 0 ? "+" : ""}${delta}。` : ""}` : "補正値と呪いは未鑑定です。装備するか、真名の灯札で鑑定すると判明します。"}`;
+        const stat = kind === "weapon" ? "攻撃力" : "防御力";
+        if (!item.identified)
+          return `${data.description} 本当の力と呪いの有無は、まだ分かりません。装備するか、真名の灯札で鑑定すると判明します。`;
+        const power = this.equipmentPower(item);
+        return `${stat} ${power >= 0 ? "+" : ""}${power}。${data.description.replace(/^(攻撃力|防御力) [^。]+。/, "")} ${item.cursed ? "呪われています。装備すると外せません。" : "呪いはありません。"}${item !== old ? ` 現在の装備より${stat} ${delta >= 0 ? "+" : ""}${delta}。` : ""}`;
       }
       return SCROLLS.includes(kind) && !this.identification.known.includes(kind)
         ? "効果はまだ分かりません。かざすか、真名の灯札で鑑定すると、同じ種類の灯札も識別されます。"
@@ -773,7 +777,7 @@
         this.player.hp--;
         if (this.turn % 4 === 0)
           this.say(
-            "お腹が空いて、体力が減っている。パンを食べよう！",
+            "お腹が空いて、体力が減っている。",
             "danger",
           );
         this.effect("damage", this.player.x, this.player.y, 1);
@@ -801,7 +805,7 @@
           this.status = "won";
           if (this.dungeon === "tutorial") this.tutorialCleared = true;
           this.say(
-            `${this.dungeonInfo().treasure}を手に入れた！ ${this.dungeon === "tutorial" ? "チュートリアル完了。「深淵の迷宮」が解放された。" : "30階の深淵を踏破した！"}`,
+            `${this.dungeonInfo().treasure}を手に入れた！ ${this.dungeon === "tutorial" ? "灯りの迷宮を踏破した。「深淵の迷宮」への道が開かれた。" : "30階の深淵を踏破した！"}`,
             "good",
           );
           this.effect("won", this.player.x, this.player.y, 0);

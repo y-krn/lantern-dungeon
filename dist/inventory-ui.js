@@ -86,7 +86,7 @@
         else if (old) notes.push(`持ち替えると、${engine.itemName(old)}を足元に置きます。`);
       }
       if (engine.inventoryCount() >= INVENTORY_CAPACITY && item.kind !== "gold" && !(item.kind === "arrow" && engine.arrowCount()))
-        notes.push("持ち物がいっぱいです。交換なら枠は増えません。");
+        notes.push("持ち物がいっぱいです。拾う品と手放す品を交換できます。");
       if (engine.onStairs() && item.kind !== "gold") notes.push("階段の上では交換できません。");
       return notes.length ? `<p class="item-note">${notes.map(escapeHTML).join("<br>")}</p>` : "";
     }
@@ -124,7 +124,7 @@
       const engine = getEngine();
       const item = engine.groundItem();
       if (engine.status !== "playing" || !item) return;
-      openModal("ground", `<div class="modal-inner bag-modal ground-modal">${modalHeader("足元の品")}<div class="ground-detail"><h3>${escapeHTML(itemLabel(item))}</h3><p>${escapeHTML(engine.itemDescription(item))}</p>${groundNote()}<div class="bag-actions">${groundButtons()}</div></div><p class="bag-turn-hint">見る・命名は時間が進みません。その他の操作は1ターン。</p><button class="secondary-button" data-close>冒険に戻る</button></div>`);
+      openModal("ground", `<div class="modal-inner bag-modal ground-modal">${modalHeader("足元の品")}<div class="ground-detail"><h3>${escapeHTML(itemLabel(item))}</h3><p>${escapeHTML(engine.itemDescription(item))}</p>${groundNote()}<div class="bag-actions">${groundButtons()}</div></div><button class="secondary-button" data-close>冒険に戻る</button></div>`);
       bindItemActions(showGround);
     }
     function revealBagRow(row) {
@@ -155,7 +155,7 @@
           (ground && ITEMS[ground.kind] && !engine.onStairs() ? actionButton("exchange", "足元と交換", index) : ""), count, equipped ? "装備中" : "");
       }).join("");
       const groundCard = ground ? bagRow(ground, groundButtons(), 1, "足元", true) : "";
-      openModal("bag", `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong><span>品名を選んで操作</span></div><p class="bag-turn-hint">見る・命名は時間が進みません。その他の操作は1ターン。</p><div class="bag-list" role="region" aria-label="足元と持ち物" tabindex="0">${groundCard}${equippedCards}${bagCards}${!equippedCards && !bagCards ? '<p class="item-note">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備・予備装備・道具は1個につき1枠。矢は1束で1枠です。足元の品は枠に含みません。</p><p>鑑定・交換の対象選択とキャンセルでは時間は進みません。操作を実行すると1ターン進みます。</p><p>足元の品は持たずに使えます。矢の使用は1本、置く・交換は束ごと。階段や品がある場所には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`);
+      openModal("bag", `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong></div><p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本</p><div class="bag-list" role="region" aria-label="足元と持ち物" tabindex="0">${groundCard}${equippedCards}${bagCards}${!equippedCards && !bagCards ? '<p class="item-note">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備・予備装備・道具は1個につき1枠。矢は1束で1枠です。足元の品は枠に含みません。</p><p>足元の品は持たずに使えます。矢の使用は1本、置く・交換は束ごと。階段や品がある場所には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`);
       const rows = $("modal-content").querySelectorAll(".bag-entry");
       if (selected !== null) rows.forEach((row) => {
         if (row.querySelector(`[data-index="${selected}"]`)) {
@@ -190,7 +190,7 @@
         ...(index !== "ground" && engine.groundItem() ? [{target: "ground", item: engine.groundItem(), place: "足元"}] : []),
         ...engine.inventoryEntries().filter((entry) => entry.index !== index).map((entry) => ({target: entry.index, item: engine.player.bag[entry.index], place: "持ち物"})),
       ].filter(({item}) => isUnknown(item));
-      openModal("identify", `<div class="modal-inner bag-modal">${modalHeader("鑑定する品を選ぶ")}<p class="selection-source">使う灯札：${escapeHTML(engine.itemName(sourceItem))}</p><p class="bag-turn-hint">対象を選ぶと1ターン。キャンセルは消費なし。</p><div class="bag-list" role="region" aria-label="鑑定できる品" tabindex="0">${targets.map(({target,item,place}) => targetRow(target,item,place,"target")).join("") || '<p class="item-note">鑑定できる品がありません。</p>'}</div><button class="secondary-button" id="identify-cancel">戻る</button></div>`);
+      openModal("identify", `<div class="modal-inner bag-modal">${modalHeader("鑑定する品を選ぶ")}<p class="selection-source">使う灯札：${escapeHTML(engine.itemName(sourceItem))}</p><p class="item-note">灯札を1枚使います。</p><div class="bag-list" role="region" aria-label="鑑定できる品" tabindex="0">${targets.map(({target,item,place}) => targetRow(target,item,place,"target")).join("") || '<p class="item-note">鑑定できる品がありません。</p>'}</div><button class="secondary-button" id="identify-cancel">戻る</button></div>`);
       $("modal-content").querySelectorAll("[data-target]").forEach((button) => button.addEventListener("click", () => {
         const value = button.dataset.target, target = /^\d+$/.test(value) ? Number(value) : value;
         closeModal();
@@ -202,7 +202,7 @@
       const engine = getEngine();
       const item = engine.groundItem();
       if (!item || engine.onStairs()) return;
-      openModal("exchange", `<div class="modal-inner bag-modal">${modalHeader("交換する持ち物を選ぶ")}<p class="selection-source">拾う品：${escapeHTML(itemLabel(item))}</p><p class="bag-turn-hint">選んだ持ち物を足元に置きます。交換は1ターン。</p><div class="bag-list" role="region" aria-label="交換できる持ち物" tabindex="0">${engine.inventoryEntries().map(({index,count}) => targetRow(index,engine.player.bag[index],"持ち物","exchange",count)).join("")}</div><button class="secondary-button" id="exchange-cancel">戻る</button></div>`);
+      openModal("exchange", `<div class="modal-inner bag-modal">${modalHeader("交換する持ち物を選ぶ")}<p class="selection-source">拾う品：${escapeHTML(itemLabel(item))}</p><p class="item-note">選んだ持ち物を足元に置きます。</p><div class="bag-list" role="region" aria-label="交換できる持ち物" tabindex="0">${engine.inventoryEntries().map(({index,count}) => targetRow(index,engine.player.bag[index],"持ち物","exchange",count)).join("")}</div><button class="secondary-button" id="exchange-cancel">戻る</button></div>`);
       $("modal-content").querySelectorAll("[data-exchange]").forEach((button) => button.addEventListener("click", () => {
         closeModal();
         act(() => getEngine().drop(Number(button.dataset.exchange), true), true);
@@ -225,19 +225,19 @@
       $("name-cancel").addEventListener("click", onReturn);
     }
 
-    function updateGround({ threat, nearest } = {}) {
+    function updateGround({ threat, nearest, danger = false } = {}) {
       const engine = getEngine();
       const ground = engine.groundItem();
       groundContext.hidden = engine.status !== "playing" || !ground;
       groundUseButton.hidden = groundContext.hidden || isEquipment(ground);
       if (!groundContext.hidden) {
-        groundItemButton.innerHTML = `<span class="ground-marker">足元</span><span class="ground-name">${escapeHTML(itemLabel(ground))}</span><span aria-hidden="true">${isEquipment(ground) ? "操作" : "⋯"}</span>`;
-        groundItemButton.setAttribute("aria-label", `${itemLabel(ground)}の操作を開く`);
-        groundUseButton.textContent = isEquipment(ground) ? "操作" : ground.kind === "gold" ? "拾う" : useLabel(ground);
+        groundItemButton.innerHTML = `<span class="ground-marker">足元</span><span class="ground-name">${escapeHTML(itemLabel(ground))}</span><span aria-hidden="true">${isEquipment(ground) ? "調べる" : "⋯"}</span>`;
+        groundItemButton.setAttribute("aria-label", `${itemLabel(ground)}を調べる`);
+        groundUseButton.textContent = isEquipment(ground) ? "調べる" : ground.kind === "gold" ? "拾う" : useLabel(ground);
         groundUseButton.setAttribute("aria-label", `${itemLabel(ground)}：${groundUseButton.textContent}`);
       }
-      $("location-hint").hidden = !groundContext.hidden && !threat && !nearest;
-      $("location-hint").closest(".canvas-caption").hidden = groundContext.hidden && ["灯りの届く先へ、進んでみよう。", "あせらず、一歩ずつ。"].includes($("location-hint").textContent);
+      $("location-hint").hidden = !groundContext.hidden && !threat && !nearest && !danger;
+      $("location-hint").closest(".canvas-caption").hidden = groundContext.hidden && ["", "灯りの届く先へ、進んでみよう。", "あせらず、一歩ずつ。"].includes($("location-hint").textContent);
     }
 
     $("bag-button").addEventListener("click", showBag);

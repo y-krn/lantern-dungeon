@@ -28,7 +28,16 @@
     pickupTimer = setTimeout(clearPickupNotice, 1000);
   }
   const SAVE_KEY = "lantern-dungeon-v1",
-    PROGRESS_KEY = "lantern-dungeon-progress-v1";
+    PROGRESS_KEY = "lantern-dungeon-progress-v1",
+    MONSTERS_KEY = "lantern-dungeon-monsters-v1";
+  const knownMonsters = new Set();
+  try {
+    const saved = JSON.parse(localStorage.getItem(MONSTERS_KEY) || "[]");
+    if (Array.isArray(saved))
+      saved.filter((species) => typeof species === "string" && Object.hasOwn(MONSTERS, species)).forEach((species) => knownMonsters.add(species));
+  } catch {
+    // A damaged field journal does not invalidate the current adventure.
+  }
   let engine,
     storageAvailable = true,
     tutorialCleared = false;
@@ -68,6 +77,8 @@
     updateUI();
   }
   function save() {
+    const notice = $("save-label").closest(".save-status");
+    notice.hidden = false;
     if (!storageAvailable) {
       $("save-label").textContent = "保存無効。このタブで冒険を続けられます";
       return;
@@ -75,6 +86,8 @@
     try {
       if (engine.tutorialCleared) localStorage.setItem(PROGRESS_KEY, "true");
       localStorage.setItem(SAVE_KEY, engine.serialize());
+      localStorage.setItem(MONSTERS_KEY, JSON.stringify([...knownMonsters]));
+      notice.hidden = true;
       $("save-label").textContent = "冒険は自動で保存されます";
     } catch {
       storageAvailable = false;
@@ -131,6 +144,10 @@
   function updateUI() {
     const p = engine.player,
       info = engine.dungeonInfo();
+    for (const enemy of engine.enemies)
+      if (enemy.hp > 0 && engine.visible[engine.key(enemy.x, enemy.y)] &&
+          (MONSTERS[enemy.species]?.trait !== "mimic" || enemy.revealed))
+        knownMonsters.add(enemy.species);
     $("quest-title").textContent = `${info.label} · ${info.name}`;
     $("quest-goal").textContent =
       `地下${engine.maxFloor()}階の「${info.treasure}」を探そう`;
@@ -188,7 +205,7 @@
     $("turn-button").setAttribute("aria-pressed", String(turnOnly));
     $("turn-button").textContent = turnOnly ? "向き変更中" : "向き変更";
     $("direction-help").textContent = turnOnly
-      ? "方向ボタンで向きだけ変更。ターンは進みません。"
+      ? "方向ボタンで向きだけ変更。"
       : portraitUI
         ? "「向き変更」で移動せずに方向を選べます。"
         : "Shift＋方向キーで向きだけ変更。";
@@ -209,39 +226,34 @@
       (e) => e.intent && engine.visible[engine.key(e.x, e.y)],
     );
     const nearest = engine.enemies.find(
-      (e) =>
-        e.hp > 0 && Math.max(Math.abs(e.x - p.x), Math.abs(e.y - p.y)) === 1,
+      (e) => e.hp > 0 && engine.visible[engine.key(e.x, e.y)] &&
+        (MONSTERS[e.species]?.trait !== "mimic" || e.revealed) &&
+        Math.max(Math.abs(e.x - p.x), Math.abs(e.y - p.y)) === 1,
     );
-    $("location-hint").textContent =
-      engine.status === "dead"
-        ? "新しい冒険で、もう一度灯りを。"
-        : engine.status === "won"
-          ? `${info.treasure}を手に入れた！`
-          : threat
-            ? `${threat.name}が攻撃準備。黄色の予告マスから移動！`
-            : p.hunger < 20
-              ? "お腹が空いてきた。持ち物からパンを食べよう。"
-              : p.hp / p.maxHp < 0.3
-                ? "体力が少ない。持ち物から回復草を使おう。"
-                : engine.onStairs()
-                  ? engine.floor === engine.maxFloor()
-                    ? `${info.guardian}を倒してランタンを手に入れよう。`
-                    : "階段を見つけた！ Enter で次の階へ。"
-                  : engine.monsterHouse?.triggered &&
-                      engine.roomAt(p.x, p.y) ===
-                        engine.rooms[engine.monsterHouse.room] &&
-                      engine.enemies.some((e) => e.house && e.hp > 0)
-                    ? "モンスターハウス！ 通路へ退くか、灯札で切り抜けよう。"
-                    : nearest
-                      ? MONSTERS[nearest.species]?.trait === "mimic" &&
-                        !nearest.revealed
-                        ? "怪しい金貨の山が近い。"
-                        : `${nearest.name}が近い。${MONSTERS[nearest.species]?.feature?.split("。")[0] || "敵に向かって移動すると攻撃"}。`
-                      : engine.turn < 8
-                        ? "灯りの届く先へ、進んでみよう。"
-                        : "あせらず、一歩ずつ。";
-    inventoryUI.updateGround({ threat, nearest });
-    if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · ${p.gold}G`;
+    const lowHP = p.hp / p.maxHp < 0.3, lowHunger = p.hunger < 20;
+    const warnings = [
+      lowHP ? "体力が少ない。" : "",
+      lowHunger ? (p.hunger === 0 ? "空腹で体力が減っている。" : "お腹が空いてきた。") : "",
+    ].filter(Boolean).join(" ");
+    const situation = engine.status === "dead"
+      ? "新しい冒険で、もう一度灯りを。"
+      : engine.status === "won"
+        ? `${info.treasure}を手に入れた！`
+        : threat
+          ? `${threat.name}が力をためている。`
+          : engine.onStairs()
+            ? engine.floor === engine.maxFloor()
+              ? `${info.guardian}がランタンを守っている。`
+              : "下へ続く階段がある。"
+            : engine.monsterHouse?.triggered &&
+                engine.roomAt(p.x, p.y) === engine.rooms[engine.monsterHouse.room] &&
+                engine.enemies.some((e) => e.house && e.hp > 0)
+              ? "魔物たちが一斉に目を覚ました！"
+              : nearest ? `${nearest.name}がすぐ近くにいる。` : "";
+    $("location-hint").textContent = engine.status === "playing"
+      ? [warnings, situation].filter(Boolean).join(" ") : situation;
+    inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
+    if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · 矢 ${engine.arrowCount()}本`;
     const list = $("event-log");
     list.replaceChildren();
     for (const event of engine.log.slice(0, portraitUI ? 40 : 5)) {
@@ -321,14 +333,13 @@
   });
 
   function showMonsters() {
+    const entries = Object.entries(MONSTERS).filter(([species]) => knownMonsters.has(species));
     openModal(
       "monsters",
-      `<div class="modal-inner">${modalHeader("魔物図鑑")}<p class="modal-description">全${Object.keys(MONSTERS).length}種。同じ名前の魔物は、階数やダンジョンが変わっても同じ能力です。強い別種は色・紋章・名前で見分けられます。敵の特徴と対処法を確認しましょう。遠距離攻撃と強打は黄色のマスに予告され、次の行動でそのマスから移動すると回避できます。</p><div class="item-list">${Object.entries(
-        MONSTERS,
-      )
+      `<div class="modal-inner">${modalHeader("魔物図鑑")}<p class="modal-description">${entries.length ? `出会った魔物 ${entries.length}種。旅の中で見つけた姿を記しています。` : "まだ魔物の記録はありません。"}</p><div class="item-list">${entries
         .map(
           ([species, m]) =>
-            `<div class="item-card"><canvas data-monster="${species}" width="80" height="80" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p class="monster-story">${m.story}</p><p>${m.color}・${MONSTER_MARKS[m.tier]}<br>HP ${m.hp} ／ 攻撃力 ${m.attack} ／ 経験値 ${m.exp}<br><b>特徴</b>：${m.feature}<br><b>対処</b>：${m.counter}</p></div></div>`,
+            `<div class="item-card"><canvas data-monster="${species}" width="80" height="80" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p class="monster-story">${m.story}</p><p>${m.color}・${MONSTER_MARKS[m.tier]}</p></div></div>`,
         )
         .join(
           "",
@@ -350,14 +361,14 @@
   function showHelp() {
     openModal(
       "help",
-      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を見つけよう。</p><p class="modal-description">あなたが1回行動すると、敵も1回行動します。操作を止めている間、時間は進みません。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃。壁にぶつかってもターンは進みません。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角を斜めにすり抜けることはできません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>Shiftを押しながら移動キーで、その場で向きだけ変更。Tまたは「向き変更」で切り替えると、方向ボタンや迷宮タップでも向きだけ変えられます。ターン・満腹度は変わらず、敵も動きません。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃。空振りも1ターン。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ発射。1本消費し、最初の敵に12ダメージ。</p></div><div class="help-row"><span>. / X</span><p>足踏み。満腹なら7ターンごとに体力が1回復。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床のアイテムは上に乗ると拾います。武器・盾は全階で同じ確率で出現し、拾うだけでは強化されません。持ち物から選んで装備すると、補正値と呪いが判明します。呪われた装備は清めの灯札で解呪するまで外せません。木の矢も持ち物から装備・解除でき、本数にかかわらず1枠です。</p></div><div class="help-row"><span>灯札の識別</span><p>チュートリアルの灯札は識別済み。深淵の迷宮では冒険ごとに仮名が変わり、かざすか真名の灯札で鑑定すると同種すべてが識別されます。「名前」で推測を記録でき、命名や対象選択では時間は進みません。</p></div><div class="help-row"><span>魔物の見分け方</span><p>同じ名前なら能力は同じ。強い別種は色と紋章が変わります。黄色の予告マスから移動すると遠距離攻撃・強打を回避できます。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る（${Object.keys(MONSTERS).length}種）</button><div class="help-row"><span>満腹度・保存</span><p>通常は4ターンで満腹度が1減少。革の盾を装備すると8ターンで1減少。0になると毎ターン体力が減少。冒険はブラウザに自動保存されます。</p></div><p class="modal-description">${engine.dungeonInfo().guardian}を倒し、最深部のランタンにたどり着くとクリア。チュートリアル10階の踏破で、高難度の深淵の迷宮30階が解放されます。倒れたら、新しい迷宮で再出発です。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
+      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を探す旅。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃します。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角はすり抜けられません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>その場で向きだけ変更。「向き変更」でも切り替えられます。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃します。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ放ちます。</p></div><div class="help-row"><span>. / X</span><p>その場で足踏みします。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床の品は上に乗ると拾います。武器・盾は装備すると効果を発揮します。呪われた装備は、清めの灯札で呪いを解くまで外せません。</p></div><div class="help-row"><span>灯札</span><p>灯札をかざすと、その力が現れます。効果が分からない灯札には、推測した名前を付けて記録できます。</p></div><div class="help-row"><span>魔物の記録</span><p>出会った魔物の姿を図鑑に記しています。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る</button><div class="help-row"><span>冒険の保存</span><p>冒険はブラウザに自動保存されます。</p></div><p class="modal-description">灯りの迷宮を踏破すると、地下30階へ続く深淵の迷宮に挑めます。倒れたら、新しい旅の始まりです。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
     );
     if (portraitUI) {
       const rows = $("modal-content").querySelectorAll(".help-row");
       ["方向ボタン", "斜め移動", "向き変更", "攻撃", "矢を放つ", "足踏み", "持ち物・階段"].forEach((label, index) => {
         rows[index].querySelector("span").textContent = label;
       });
-      rows[2].querySelector("p").textContent = "「向き変更」で切り替え、方向ボタンか迷宮タップで向きを選びます。移動・ターン・満腹度は変わらず、敵も動きません。";
+      rows[2].querySelector("p").textContent = "「向き変更」で切り替え、方向ボタンか迷宮タップで向きを選びます。";
       rows[6].querySelector("p").textContent = "持ち物を開く / 階段を降りる。ミニマップは常に表示されます。";
       if (pwaPanel) $("modal-content").querySelector(".modal-inner").append(pwaPanel);
     }
@@ -377,12 +388,12 @@
   function confirmNew() {
     openModal(
       "new",
-      `<div class="modal-inner">${modalHeader("ダンジョンを選ぶ")}<p class="modal-description">挑む迷宮を選んで、地下1階から出発します。現在の冒険の持ち物・レベル・所持金はリセットされます。クリアによる解放は引き継がれます。</p><div class="dungeon-list">${Object.entries(
+      `<div class="modal-inner">${modalHeader("迷宮を選ぶ")}<p class="modal-description">挑む迷宮を選んで、地下1階から出発します。現在の冒険は終了し、持ち物・レベル・所持金は初期状態に戻ります。深淵の迷宮に挑む資格は失われません。</p><div class="dungeon-list">${Object.entries(
         DUNGEONS,
       )
         .map(
           ([id, info]) =>
-            `<button class="dungeon-choice" data-dungeon="${id}" ${id === "depths" && !engine.tutorialCleared ? "disabled" : ""}><span class="dungeon-choice-heading">${info.name}<span>${info.label} · ${info.floors}階</span></span><span class="dungeon-choice-description">${id === "tutorial" ? "移動・戦闘・道具の使い方を覚える10階の冒険。" : engine.tutorialCleared ? "解放済み。敵と罠が増え、パンが少ない30階の冒険。" : "未解放。チュートリアルをクリアすると選べます。"}</span></button>`,
+            `<button class="dungeon-choice" data-dungeon="${id}" ${id === "depths" && !engine.tutorialCleared ? "disabled" : ""}><span class="dungeon-choice-heading">${info.name}<span>${info.label} · ${info.floors}階</span></span><span class="dungeon-choice-description">${id === "tutorial" ? "移動・戦闘・道具の使い方を覚える10階の冒険。" : engine.tutorialCleared ? "敵と罠が増え、食料の乏しい地下30階へ。" : "灯りの迷宮を踏破すると、この先へ進めます。"}</span></button>`,
         )
         .join(
           "",
@@ -404,7 +415,7 @@
       info = engine.dungeonInfo();
     openModal(
       "end",
-      `<div class="modal-inner"><div class="end-symbol">${won ? "✦" : "☾"}</div>${modalHeader(won ? (tutorial ? "チュートリアル完了！" : "深淵の迷宮、踏破！") : "また、灯りをともして。")}<p class="modal-description">${won ? `${info.guardian}を倒し、${info.treasure}を手に入れました。${tutorial ? "高難度の「深淵の迷宮」が解放されました。次は地下30階を目指しましょう。" : "地下30階の冒険を達成しました。灯りは、永遠に。"}` : "ランタンの灯りが消え、リネは森のはずれの村に戻りました。見つけた道も、学んだことも、次の冒険の道しるべ。"}</p><div class="end-stats"><div><strong>${engine.floor}F</strong><span>到達した階</span></div><div><strong>${p.level}</strong><span>レベル</span></div><div><strong>${p.gold}</strong><span>獲得ゴールド</span></div></div><p class="modal-description" style="text-align:center">${engine.turn} ターンの冒険</p><button class="primary-button" id="restart-end">${won && tutorial ? "深淵の迷宮に挑む" : "同じダンジョンに再挑戦"}</button><button class="secondary-button" id="choose-end">ダンジョンを選ぶ</button><button class="secondary-button" data-close>迷宮を振り返る</button></div>`,
+      `<div class="modal-inner"><div class="end-symbol">${won ? "✦" : "☾"}</div>${modalHeader(won ? (tutorial ? "灯りの迷宮、踏破！" : "深淵の迷宮、踏破！") : "また、灯りをともして。")}<p class="modal-description">${won ? `${info.guardian}を倒し、${info.treasure}を手に入れました。${tutorial ? "「深淵の迷宮」への道が開かれました。さらに奥の灯りを探す旅が待っています。" : "地下30階の冒険を達成しました。灯りは、永遠に。"}` : "ランタンの灯りが消え、リネは森のはずれの村に戻りました。見つけた道も、学んだことも、次の冒険の道しるべ。"}</p><div class="end-stats"><div><strong>${engine.floor}F</strong><span>到達した階</span></div><div><strong>${p.level}</strong><span>レベル</span></div><div><strong>${p.gold}</strong><span>獲得ゴールド</span></div></div><p class="modal-description" style="text-align:center">${engine.turn} ターンの冒険</p><button class="primary-button" id="restart-end">${won && tutorial ? "深淵の迷宮に挑む" : "同じ迷宮へ旅立つ"}</button><button class="secondary-button" id="choose-end">迷宮を選ぶ</button><button class="secondary-button" data-close>迷宮を振り返る</button></div>`,
     );
     $("restart-end").addEventListener("click", () =>
       startNew(won && tutorial ? "depths" : engine.dungeon),
@@ -554,7 +565,7 @@
     const choose = $("new-game-button");
     choose.textContent = "迷宮";
     choose.classList.add("header-button");
-    choose.setAttribute("aria-label", "ダンジョン選択");
+    choose.setAttribute("aria-label", "迷宮選択");
     document.querySelector(".site-header nav").prepend(choose);
     $("minimap-toggle").disabled = true;
   }
