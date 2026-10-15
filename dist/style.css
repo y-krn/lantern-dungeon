@@ -3247,7 +3247,8 @@ dialog::backdrop {
   }
 
   #mobile-progress {
-    display: none;
+    color: #fce8b8;
+    white-space: nowrap;
   }
 
   .minimap-panel {

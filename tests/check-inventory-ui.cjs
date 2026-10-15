@@ -78,6 +78,8 @@ for (const factory of [createInventoryUI, browser.createInventoryUI]) {
     const unknown={kind:'shield',variant:'mirrorShield',rank:0,bonus:-2,cursed:true,identified:false};
     p.bag=['bread',known,unknown,'arrow','potion','arrow'];const ui=inventoryUI(engine);
     const saved=engine.serialize();ui.api.showBag();assert.equal(engine.serialize(),saved);assert.equal(ui.rows.length,7);
+    assert(ui.html.includes(`攻撃力 ${engine.attackPower()}`));assert(ui.html.includes(`防御力 ${engine.defense()}`));
+    assert(ui.html.includes(`矢 ${engine.arrowCount()}本`));assert(!/ターン|時間が進|品名を選んで操作/.test(ui.html));
     ui.rows[2].activate();ui.rows[3].activate();assert.equal(ui.rows[2].open,false);assert.equal(ui.rows[3].open,true);
     ui.rows[3].activate();assert(ui.rows.every(row=>!row.open));assert.equal(engine.serialize(),saved);
     const names=[...ui.html.matchAll(/<summary>[\s\S]*?<strong>([^<]+)<\/strong>/g)].map(match=>match[1]);
@@ -95,7 +97,7 @@ for (const factory of [createInventoryUI, browser.createInventoryUI]) {
     assert(ui.html.includes('data-ground-row'));assert(ui.html.includes('鑑定（灯札1枚）'));assert.equal(engine.serialize(),before);
     ui.action('use',0);assert.equal(ui.kind,'identify');
     assert.deepEqual(ui.buttons.filter(button=>button.dataset.target).map(button=>button.dataset.target),['ground','1']);
-    assert(ui.html.includes('足元'));assert(ui.html.includes('持ち物'));assert.equal(engine.serialize(),before);
+    assert(ui.html.includes('足元'));assert(ui.html.includes('持ち物'));assert(!/ターン|時間が進/.test(ui.html));assert.equal(engine.serialize(),before);
     ui.cancel('identify-cancel');assert.equal(ui.kind,'bag');assert.equal(engine.serialize(),before);
     assert(ui.rows.some(row=>row.open),'Cancellation reopens the source item');
     ui.action('use',0);ui.target('ground');assert(gear.identified);assert(gear.cursed);assert.equal(gear.bonus,-2);
@@ -138,7 +140,9 @@ for (const factory of [createInventoryUI, browser.createInventoryUI]) {
       assert(!groundContext.hidden);assert(!hint.hidden);assert(!ui.caption.hidden);assert.equal(engine.serialize(),before);
       if(['scroll','map','identify','uncurse'].includes(kind))assert(!groundItemButton.innerHTML.includes(DungeonData.ITEMS[kind].name));
     }
-    ui.api.updateGround();assert(hint.hidden,'An item replaces generic hints without hiding threats');
+    hint.textContent='';ui.api.updateGround();assert(hint.hidden,'A floor item replaces empty hints');
+    hint.textContent='体力が少ない。 お腹が空いてきた。';
+    ui.api.updateGround({danger:true});assert(!hint.hidden);assert(!ui.caption.hidden,'Survival warnings coexist with floor actions');
     ui.api.updateGround({nearest:{name:'敵'}});assert(!hint.hidden,'Nearby enemies remain visible with a floor item');
     engine.items=[];ui.api.updateGround();assert(groundContext.hidden);assert(groundUseButton.hidden);
     engine.items=[{kind:'bread',x:p.x+1,y:p.y}];ui.api.updateGround();assert(groundContext.hidden);
