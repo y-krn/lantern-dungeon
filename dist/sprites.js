@@ -84,7 +84,7 @@
       const standing = frame === -1;
       const side = type === 'heroRight', frontal = type === 'hero' || type === 'heroUp';
       const back = type === 'heroUp' || type === 'heroUpRight';
-      const projection = side ? [38,0] : frontal ? [0, back ? -12 : 12] : [26, back ? -8 : 8];
+      const projection = side ? [28,0] : frontal ? [0, back ? -9 : 9] : [22, back ? -6 : 6];
       const hipX = back ? 158 : 176, hipY = side || type === 'hero' ? 333 : 347;
       function part(name, x, y, width, height, directional = false) {
         paint.drawImage(directional ? directionAtlas : sideAtlas,
@@ -105,21 +105,23 @@
         const phase = standing ? 0 : (frame / 6 + (far ? .5 : 0)) % 1, swing = phase >= .5;
         const u = (phase % .5) * 2;
         const travel = standing ? 0 : swing ? -1 + 2 * u * u * (3 - 2 * u) : 1 - 2 * u;
-        const hip = {x: hipX + (frontal ? far ? -16 : 16 : 0), y: hipY};
+        const hip = {x: hipX + (frontal ? far ? -22 : 22 : 0), y: hipY};
         const foot = {x: hip.x + projection[0] * travel,
-          y: (side ? 480 : 466) + projection[1] * travel - (swing ? 30 * Math.sin(Math.PI * u) : 0)};
-        const ankle = {x: foot.x, y: foot.y - 40};
+          y: 448 + projection[1] * travel - (swing ? 22 * Math.sin(Math.PI * u) : 0)};
+        const bootHeight = 78;
+        const ankle = {x: foot.x, y: foot.y - bootHeight * .73};
         const dx = ankle.x - hip.x, dy = ankle.y - hip.y, distance = Math.hypot(dx, dy);
-        const bend = Math.sqrt(Math.max(0, 58 * 58 - distance * distance / 4));
+        const bend = Math.sqrt(Math.max(0, 36 * 36 - distance * distance / 4));
         const knee = {x: (hip.x + ankle.x) / 2 + (frontal ? 0 : dy / distance * bend),
           y: (hip.y + ankle.y) / 2 - (frontal ? swing ? 8 : 0 : dx / distance * bend)};
         paint.save(); paint.filter = far ? 'brightness(.65)' : 'none';
-        limb('thigh', hip, knee, 30); limb('shin', knee, ankle, 25);
+        // Short, broad limbs tuck into the coat and boots instead of stretching below the torso.
+        limb('thigh', hip, knee, 64); limb('shin', knee, ankle, 54);
         // Keep the sole level while the knee bends and the planted foot travels backward.
         const boot = side ? sideParts.boot : directionParts[back ? 'backBoot' : 'frontBoot'];
-        const bootWidth = boot[2] * 55 / boot[3];
+        const bootWidth = boot[2] * bootHeight / boot[3];
         part(side ? 'boot' : back ? 'backBoot' : 'frontBoot',
-          foot.x - (side ? 22 : bootWidth / 2), foot.y - 55, bootWidth, 55, !side);
+          foot.x - (side ? bootWidth * .32 : bootWidth / 2), foot.y - bootHeight, bootWidth, bootHeight, !side);
         paint.restore();
       }
       const body = side ? sideParts.body : directionParts[type];

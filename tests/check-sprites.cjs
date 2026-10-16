@@ -142,6 +142,13 @@ function load(commonJS) {
         art.sprite(context, art.heroSprite(direction), 0, 0, 3, 1, direction[0] < 0, null, frame);
         const texture = calls.at(-1)[1];
         assert.equal(texture.frame[0], direction[1] === 0 ? 'art/hero-side-rig.png' : 'art/hero-direction-rig.png');
+        const boot = texture.draws.find(draw => [1285,381,961].includes(draw.frame[1]));
+        for (const limb of texture.draws.filter(draw => [1273,1306].includes(draw.frame[1]))) {
+          assert(limb.destination[2] >= boot.destination[3]*.65,
+            'Thighs and shins retain a broad silhouette relative to the boots');
+          assert(limb.destination[3] <= boot.destination[3],
+            'Each leg segment stays shorter than a boot instead of stretching below the coat');
+        }
         strides.add(texture);
         const [x,y,w,h] = calls.at(-1).slice(2);
         assert(x >= 0 && y >= 0 && x + w <= 48.001 && y + h <= 54.001, 'Walking keeps hat, boots and lantern inside the sprite');
@@ -164,9 +171,9 @@ function load(commonJS) {
     assert(feet[3][1][0] < feet[3][0][0], 'Far boot leads on the opposite contact');
     for (const frame of [1,2]) {
       assert.equal(feet[frame][1][1], feet[0][1][1], 'Near sole stays grounded during support');
-      assert(feet[frame][0][1] < feet[frame][1][1] - 20, 'Far foot lifts during its forward swing');
+      assert(feet[frame][0][1] < feet[frame][1][1] - feet[frame][1][3]*.2, 'Far foot lifts during its forward swing');
       assert.equal(feet[frame+3][0][1], feet[3][0][1], 'Far sole stays grounded on the next step');
-      assert(feet[frame+3][1][1] < feet[frame+3][0][1] - 20, 'Near foot lifts on the next step');
+      assert(feet[frame+3][1][1] < feet[frame+3][0][1] - feet[frame+3][0][3]*.2, 'Near foot lifts on the next step');
     }
     assert(feet[1][1][0] > feet[2][1][0] && feet[4][0][0] > feet[5][0][0],
       'Each supporting foot travels backward, instead of sliding forward with the torso');
