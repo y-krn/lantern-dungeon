@@ -1,10 +1,10 @@
 'use strict';
 
-const VERSION = 'df6f850dbc0fe3ee';
+const VERSION = '73cce21e2ecdbb06';
 const PREFIX = `lantern-dungeon:${self.registration.scope}:`;
 const CACHE = PREFIX + VERSION;
 const ASSETS = [
-  './', 'art/lantern-atlas.png', 'art/lantern-cover.png', 'art/lantern-items.png', 'art/hero-walk.png', 'art/hero-side-walk.png', 'style.css', 'pwa.js', 'manifest.webmanifest',
+  './', 'art/lantern-atlas.png', 'art/lantern-cover.png', 'art/lantern-items.png', 'art/hero-walk.png', 'art/hero-side-rig.png', 'art/hero-direction-rig.png', 'style.css', 'pwa.js', 'manifest.webmanifest',
   'data.js', 'world.js', 'enemies.js', 'save.js', 'engine.js', 'sprites.js', 'renderer.js', 'inventory-ui.js', 'game.js',
   'combat-preview', 'combat-preview.css', 'combat-preview.js',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
