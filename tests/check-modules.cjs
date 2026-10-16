@@ -96,7 +96,7 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   };
   browser.document = {createElement: tag => {
     assert.equal(tag, 'canvas');
-    const texture = {getContext: () => ({drawImage(image, x, y, w, h) {
+    const texture = {getContext: () => ({save() {}, restore() {}, translate() {}, rotate() {}, drawImage(image, x, y, w, h) {
       assert(x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= image.naturalWidth && y + h <= image.naturalHeight);
       texture.frame = image.source + ':' + [x, y, w, h].join(',');
       sources.push([x, y, w, h].join(','));

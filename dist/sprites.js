@@ -80,6 +80,8 @@
       directionAtlas.src = 'art/hero-direction-rig.png';
     }) : Promise.resolve(false);
     function paintWalk(paint, frame, type) {
+      // -1 is a planted standing pose using the same body, scale and ground anchor.
+      const standing = frame === -1;
       const side = type === 'heroRight', frontal = type === 'hero' || type === 'heroUp';
       const back = type === 'heroUp' || type === 'heroUpRight';
       const projection = side ? [38,0] : frontal ? [0, back ? -12 : 12] : [26, back ? -8 : 8];
@@ -100,9 +102,9 @@
       }
       // The far leg is always behind and shaded; its phase is half a cycle ahead.
       for (const far of [true, false]) {
-        const phase = (frame / 6 + (far ? .5 : 0)) % 1, swing = phase >= .5;
+        const phase = standing ? 0 : (frame / 6 + (far ? .5 : 0)) % 1, swing = phase >= .5;
         const u = (phase % .5) * 2;
-        const travel = swing ? -1 + 2 * u * u * (3 - 2 * u) : 1 - 2 * u;
+        const travel = standing ? 0 : swing ? -1 + 2 * u * u * (3 - 2 * u) : 1 - 2 * u;
         const hip = {x: hipX + (frontal ? far ? -16 : 16 : 0), y: hipY};
         const foot = {x: hip.x + projection[0] * travel,
           y: (side ? 480 : 466) + projection[1] * travel - (swing ? 30 * Math.sin(Math.PI * u) : 0)};
@@ -136,28 +138,29 @@
         (type === 'heroRight' || (directionParts[type] && directionAtlas?.complete && directionAtlas.naturalWidth));
       const walking = Number.isInteger(walkFrame) && walkFrame >= 0 && walkFrame < walkFrameCount(type)
         && walkRows[type] !== undefined && (rig || (walkAtlas?.complete && walkAtlas.naturalWidth));
-      const useItem = !walking && !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
-      const row = walking ? walkFrames[walkRows[type]] : null;
-      const sheet = walking ? rig ? sideAtlas : walkAtlas : useItem ? itemAtlas : atlas;
-      const frameBounds = walking ? row[walkFrame % row.length] : useItem ? itemFrames[type] : artFrames[type];
+      const posed = walking || (rig && walkFrame === -1);
+      const useItem = !posed && !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
+      const row = posed ? walkFrames[walkRows[type]] : null;
+      const sheet = posed ? rig ? sideAtlas : walkAtlas : useItem ? itemAtlas : atlas;
+      const frameBounds = posed ? row[Math.max(0, walkFrame) % row.length] : useItem ? itemFrames[type] : artFrames[type];
       if (!sheet?.complete || !sheet.naturalWidth || !frameBounds) return false;
       const m = MONSTERS[species];
-      if (flip && type.startsWith('hero') && !walking) {
+      if (flip && type.startsWith('hero') && !posed) {
         type = {heroRight: 'heroLeft', heroUpRight: 'heroUpLeft', heroDownRight: 'heroDownLeft'}[type] || type;
         flip = false;
       }
-      const key = walking ? `walk:${rig ? 'rig:' : ''}${type}:${rig ? walkFrame : walkFrame % row.length}` : useItem ? `item:${type}` : species || type;
+      const key = posed ? `walk:${rig ? 'rig:' : ''}${type}:${rig ? walkFrame : walkFrame % row.length}` : useItem ? `item:${type}` : species || type;
       if (!paintedSprites.has(key)) {
-        const [sx, sy, width, height] = walking || useItem ? frameBounds : artFrames[type];
+        const [sx, sy, width, height] = posed || useItem ? frameBounds : artFrames[type];
         const image = document.createElement('canvas');
-        image.width = walking && rig ? 338 : walking ? Math.max(...row.map(frame => frame[2])) : width;
-        image.height = walking && rig ? 484 : walking ? Math.max(...row.map(frame => frame[3])) : height;
+        image.width = posed && rig ? 338 : walking ? Math.max(...row.map(frame => frame[2])) : width;
+        image.height = posed && rig ? 484 : walking ? Math.max(...row.map(frame => frame[3])) : height;
         const paint = image.getContext('2d'), base = MONSTERS[baseSpecies[type]];
         if (m && base && m !== base) {
           const target = tone(m.colors[1]), original = tone(base.colors[1]);
           paint.filter = `hue-rotate(${target.hue - original.hue}deg) saturate(${target.saturation / (original.saturation || 1)})`;
         }
-        if (walking && rig) paintWalk(paint, walkFrame, type);
+        if (posed && rig) paintWalk(paint, walkFrame, type);
         else paint.drawImage(sheet, sx, sy, width, height, (image.width - width) / 2, image.height - height, width, height);
         paintedSprites.set(key, image);
       }
