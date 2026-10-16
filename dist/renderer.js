@@ -257,17 +257,25 @@
       frame++;
       ctx.imageSmoothingEnabled = false;
       const p = engine.player;
-      const cols = canvas.width / tile,
-        rows = canvas.height / tile,
-        targetX = Math.max(cols / 2, Math.min(W - cols / 2, p.x + 0.5)),
-        targetY = Math.max(rows / 2, Math.min(H - rows / 2, p.y + 0.5));
-      if (!camera.x || reduced) {
-        camera.x = targetX;
-        camera.y = targetY;
-      } else {
-        camera.x += (targetX - camera.x) * 0.2;
-        camera.y += (targetY - camera.y) * 0.2;
+      let drawX = p.x,
+        drawY = p.y,
+        walkFrame = -1;
+      if (playerTween) {
+        const t = Math.max(0, Math.min(1, (now - playerTween.born) / 160));
+        drawX = playerTween.from.x + (playerTween.to.x - playerTween.from.x) * t;
+        drawY = playerTween.from.y + (playerTween.to.y - playerTween.from.y) * t;
+        walkDistance = playerTween.start + playerTween.distance * t;
+        if (t === 1) playerTween = null;
+        else {
+          const type = heroSprite(p.facing), count = walkFrameCount(type);
+          walkFrame = Math.floor(walkDistance * count / walkCycleDistance(type)) % count;
+        }
       }
+      // Project the same interpolated position for the hero and camera, including at map edges.
+      const cols = canvas.width / tile,
+        rows = canvas.height / tile;
+      camera.x = Math.max(cols / 2, Math.min(W - cols / 2, drawX + 0.5));
+      camera.y = Math.max(rows / 2, Math.min(H - rows / 2, drawY + 0.5));
       const offsetX = Math.round(canvas.width / 2 - camera.x * tile),
         offsetY = Math.round(canvas.height / 2 - camera.y * tile);
       ctx.fillStyle = "#11191c";
@@ -344,22 +352,6 @@
           ctx.lineTo(px + tile * 0.3, py + tile * 0.7);
           ctx.stroke();
         }
-      let drawX = p.x,
-        drawY = p.y,
-        walkFrame = null,
-        stepLift = 0;
-      if (playerTween) {
-        const t = Math.max(0, Math.min(1, (now - playerTween.born) / 160));
-        drawX = playerTween.from.x + (playerTween.to.x - playerTween.from.x) * t;
-        drawY = playerTween.from.y + (playerTween.to.y - playerTween.from.y) * t;
-        walkDistance = playerTween.start + playerTween.distance * t;
-        if (t === 1) playerTween = null;
-        else {
-          const type = heroSprite(p.facing), count = walkFrameCount(type);
-          walkFrame = Math.floor(walkDistance * count / walkCycleDistance(type)) % count;
-          stepLift = Math.sin((walkDistance % 1) * Math.PI) * tile * .025;
-        }
-      }
       const entities = engine.enemies
         .filter((e) => e.hp > 0 && engine.visible[engine.key(e.x, e.y)])
         .map((e) => ({ ...e, isPlayer: false }));
@@ -408,7 +400,7 @@
             const dx = attack.target.x - attack.source.x, dy = attack.target.y - attack.source.y;
             const length = Math.hypot(dx, dy) || 1;
             if (attack.source.id === e.id && age < 160) {
-              if (e.isPlayer) { walkFrame = null; stepLift = 0; }
+              if (e.isPlayer) walkFrame = -1;
               const push = Math.sin(Math.PI * age / 160) * (attack.kind === "melee" ? .18 : .06);
               pushX += dx / length * push; pushY += dy / length * push;
               lean = dx / length * Math.sin(Math.PI * age / 160) * .09;
@@ -427,7 +419,7 @@
             ctx,
             e.isPlayer ? heroSprite(p.facing) : e.type,
             -tile / 2,
-            -tile * .8 - (e.isPlayer ? tile * 0.125 + stepLift : 0) + bob,
+            -tile * .8 - (e.isPlayer ? tile * 0.125 : 0) + bob,
             s,
             opacity,
             e.isPlayer && p.facing[0] < 0,

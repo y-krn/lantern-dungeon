@@ -79,6 +79,21 @@ function load(commonJS) {
       return calls.at(-1)[1].frame.join(':');
     });
     assert.equal(new Set(directions).size, 8, 'Loaded art keeps eight distinct hero views');
+    for (const direction of data.DIRS) {
+      const poses = [-1,0,2,5].map(frame => {
+        calls.length = 0;
+        art.sprite(context, art.heroSprite(direction), 0, 0, 3, 1, direction[0]<0, null, frame);
+        const image = calls.at(-1), texture = image[1];
+        return {body:texture.draws.at(-1), bounds:image.slice(2), width:texture.width, height:texture.height,
+          mirrored:calls.some(call => call[0] === 'scale')};
+      });
+      for (const pose of poses) {
+        assert.deepEqual(pose.body, poses[0].body, 'Idle and walking must preserve the exact same head, torso and lantern');
+        assert.deepEqual(pose.bounds, poses[0].bounds, 'Idle and walking share scale and ground anchor');
+        assert.deepEqual([pose.width,pose.height], [338,484]);
+        assert.equal(pose.mirrored, direction[0]<0, 'Idle and walking use the same mirrored direction');
+      }
+    }
     const count = textures.length;
     art.sprite(context, 'heroRight', 0, 0, 2);
     const firstHeroRight = calls.at(-1)[1];
@@ -116,6 +131,9 @@ function load(commonJS) {
       assert(calls.length > 0, 'A failed atlas never prevents the available art or pixel fallback');
       failed.sprite(context, 'heroRight', 0, 0, 2, 1, false, null, 2);
       assert.equal(await failed.walkReady, false, 'Missing walk art falls back to the normal hero');
+      calls.length = 0;
+      failed.sprite(context, 'heroRight', 0, 0, 2, 1, false, null, -1);
+      assert(calls.length > 0, 'The planted pose retains normal-art/pixel fallback when rig images fail');
     }
     const strides = new Set();
     for (const direction of data.DIRS) {
