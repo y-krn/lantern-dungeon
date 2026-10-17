@@ -60,7 +60,7 @@ function floorWith(field, floor, dungeon = 'tutorial') {
   const bare = floorWith('shrine', 3); bare.player.equipment.weapon = null; bare.shrine.choices = [{id:'whet'}, {id:'vigor'}, {id:'rest'}];
   assert.equal(bare.boonOptions()[0].available, false); assert(!bare.chooseBoon(0));
   const away = floorWith('shrine', 3); away.player.x++; assert.equal(away.boonOptions().length, 0);
-  assert.deepEqual(Object.keys(BOONS).sort(), ['echo', 'insight', 'quiver', 'rest', 'temper', 'vigor', 'whet']);
+  assert.deepEqual(Object.keys(BOONS).sort(), ['echo', 'insight', 'quiver', 'rest', 'temper', 'vigor', 'whet', 'wick']);
 }
 // Stalls on floors 4/8 (both dungeons): wares cost gold and slots, services appraise and cleanse, all free of turns.
 {

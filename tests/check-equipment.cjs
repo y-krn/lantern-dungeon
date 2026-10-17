@@ -92,7 +92,7 @@ for(const slot of ['weapon','shield']){
     const rolls=Array.from({length:1000},()=>g.rollEquipment(slot));
     if(baseline)assert.deepEqual(rolls,baseline);else baseline=rolls;
   }
-  assert.deepEqual([...new Set(baseline)].sort(),Object.keys(EQUIPMENT).filter(k=>EQUIPMENT[k].slot===slot).sort());
+  assert.deepEqual([...new Set(baseline)].sort(),Object.keys(EQUIPMENT).filter(k=>EQUIPMENT[k].slot===slot&&EQUIPMENT[k].weight>0).sort());
 }
 // Sample real generation: weak and rare gear both appear on 1F and the last floor.
 for(const dungeon of ['tutorial','depths'])for(const floor of [1,dungeon==='tutorial'?10:30]){
@@ -101,7 +101,7 @@ for(const dungeon of ['tutorial','depths'])for(const floor of [1,dungeon==='tuto
     const g=new DungeonEngine(seed,dungeon,true);g.floor=floor;g.generateFloor();
     for(const item of g.items)if(item.variant){counts[item.kind]++;kinds.add(item.variant);}
   }
-  assert.equal(kinds.size,16);
+  assert.equal(kinds.size,Object.values(EQUIPMENT).filter(e=>e.weight>0).length);
   for(const count of Object.values(counts))assert(count>300&&count<500);
 }
 

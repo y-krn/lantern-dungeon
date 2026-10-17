@@ -115,8 +115,9 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
     painted.sprite(bookContext, monster.type, 0, 0, 5, 1, false, species);
   assert.equal(sources.length - start, 25, 'All species have a painted sprite');
   assert.equal(new Set(sources.slice(start)).size, 9, 'Nine monster families have distinct silhouettes');
-  // Shaped weapons are drawn as glyphs by the renderer until they get painted art.
-  const itemTypes = ['bread', 'potion', 'scroll', 'arrow', 'gold', ...Object.keys(DungeonData.EQUIPMENT).filter(kind => !DungeonData.WEAPON_SHAPES.includes(kind)), 'lantern'];
+  // Shaped, evolved and bane gear are drawn as glyphs by the renderer until they get painted art.
+  const glyphGear = kind => DungeonData.WEAPON_SHAPES.includes(kind) || DungeonData.EQUIPMENT[kind].shape || DungeonData.EQUIPMENT[kind].bane;
+  const itemTypes = ['bread', 'potion', 'scroll', 'arrow', 'gold', ...Object.keys(DungeonData.EQUIPMENT).filter(kind => !glyphGear(kind)), 'lantern'];
   const itemSources = {};
   const itemContext = {save() {}, restore() {}, drawImage(image, x, y, w, h) {
     assert(x >= -.001 && y >= -.001 && x + w <= 80.001 && y + h <= 80.001, 'An item must fit its tile');

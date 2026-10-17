@@ -106,7 +106,23 @@
     rest: { name: "安らぎの灯", text: "体力と満腹度をすべて回復。" },
     quiver: { name: "矢の灯", text: "木の矢15本。" },
     insight: { name: "真名の灯", text: "未識別の灯札をすべて識別し、持ち物の未鑑定品をすべて鑑定。" },
+    wick: { name: "灯芯の灯", text: "ランタンの灯影の枠が2つになる。" },
   };
+  // Two held echoes of these families add a further effect.
+  const RESONANCES = {
+    meteor: { name: "流星", pair: ["wing", "shot"], text: "灯弾の威力が半分にならない。" },
+    ambush: { name: "奇襲", pair: ["veil", "feast"], text: "まだ気づいていない敵への攻撃が2倍。" },
+    mossShell: { name: "苔むす殻", pair: ["moss", "shell"], text: "苔の灯影が3歩ごとに働く。" },
+    quake: { name: "地鳴り", pair: ["might", "root"], text: "押し出しの衝突ダメージ+3。" },
+  };
+  // A weapon that has felled enough monsters evolves at a shrine while Rine holds the matching echo.
+  const EVOLUTIONS = {
+    lampSpear: { into: "meteorSpear", echo: "shot" },
+    sweepAxe: { into: "gorgeAxe", echo: "feast" },
+    hookSickle: { into: "shadowSickle", echo: "veil" },
+    pushMaul: { into: "quakeMaul", echo: "might" },
+  };
+  const EVOLVE_KILLS = 12;
   // Roadside stalls: wares priced by depth, plus appraisal and uncursing services.
   const SHOP_PRICES = { bread: 60, potion: 80, arrow: 60, waterSkin: 70, oilFlask: 70, emberStone: 80, blastNut: 90, smokeBall: 80, scroll: 120, map: 90, identify: 100, uncurse: 120 };
   const SHOP_SERVICES = { appraise: { name: "鑑定", base: 50 }, cleanse: { name: "解呪", base: 120 } };
@@ -165,7 +181,7 @@
       name: "銅の剣",
       slot: "weapon",
       power: 3,
-      weight: 22,
+      weight: 19,
       description: "攻撃力 +3。扱いやすい剣。",
     },
     ironSword: {
@@ -219,12 +235,69 @@
       weight: 6,
       description: "攻撃力 +2。敵の方向へ進むと、直線2マス以内の最初の敵をその場で攻撃し、2マス先の敵は1マス手前へ引き寄せます。",
     },
+    // Evolved weapons appear only through a shrine (weight 0).
+    meteorSpear: {
+      name: "流星の槍",
+      slot: "weapon",
+      power: 5,
+      weight: 0,
+      shape: "lampSpear",
+      reach: 3,
+      pierce: true,
+      description: "攻撃力 +5。直線3マス以内の敵を突き、その奥の敵1体も貫きます。",
+    },
+    gorgeAxe: {
+      name: "喰らいの大斧",
+      slot: "weapon",
+      power: 7,
+      weight: 0,
+      shape: "sweepAxe",
+      leech: 1,
+      description: "攻撃力 +7。正面と左右斜め前の3マスを薙ぎ、当たった敵1体ごとに体力+1。",
+    },
+    shadowSickle: {
+      name: "影縫いの鎌",
+      slot: "weapon",
+      power: 4,
+      weight: 0,
+      shape: "hookSickle",
+      reach: 3,
+      pull: 2,
+      description: "攻撃力 +4。直線3マス以内の最初の敵を攻撃し、最大2マス手前へ引き寄せます。",
+    },
+    quakeMaul: {
+      name: "崩しの大槌",
+      slot: "weapon",
+      power: 6,
+      weight: 0,
+      shape: "pushMaul",
+      push: 3,
+      impact: 6,
+      description: "攻撃力 +6。当てた敵を3マス押し出します。壁や敵にぶつかると6ダメージ。",
+    },
+    // Bane gear is always cursed: strong, with a cost while the curse holds.
+    baneScythe: {
+      name: "禍つの大鎌",
+      slot: "weapon",
+      power: 10,
+      weight: 3,
+      bane: "famine",
+      description: "攻撃力 +10。必ず呪われていて、呪いがある間は満腹度が2倍の速さで減ります。清めると呪いと代償が消え、攻撃力の基本値が半分になります。",
+    },
     pushMaul: {
       name: "打ち槌",
       slot: "weapon",
       power: 3,
       weight: 6,
       description: "攻撃力 +3。当てた敵を2マス押し出します。壁にぶつかると3ダメージ、敵にぶつかると双方に3ダメージ。罠も発動します。",
+    },
+    baneMirror: {
+      name: "禍つの鏡盾",
+      slot: "shield",
+      power: 5,
+      weight: 3,
+      bane: "reflect",
+      description: "防御力 +5。必ず呪われていて、呪いがある間は遠距離攻撃を跳ね返しますが、回復草の効果が半分になります。清めると呪いと効果が消え、防御力の基本値が半分になります。",
     },
     travelerShield: {
       name: "旅人の盾",
@@ -237,7 +310,7 @@
       name: "銅の盾",
       slot: "shield",
       power: 2,
-      weight: 30,
+      weight: 27,
       description: "防御力 +2。扱いやすい盾。",
     },
     ironShield: {
@@ -294,6 +367,8 @@
     item.bonus <= 99 &&
     typeof item.cursed === "boolean" &&
     typeof item.identified === "boolean" &&
+    (item.kills == null || (Number.isInteger(item.kills) && item.kills >= 0)) &&
+    (item.purified == null || typeof item.purified === "boolean") &&
     (item.variant == null ||
       (Object.hasOwn(EQUIPMENT, item.variant) &&
         EQUIPMENT[item.variant].slot === item.kind));
@@ -837,6 +912,9 @@
     ITEM_ORDER,
     WEAPON_SHAPES,
     BOONS,
+    RESONANCES,
+    EVOLUTIONS,
+    EVOLVE_KILLS,
     SHOP_PRICES,
     SHOP_SERVICES,
     START_KITS,
