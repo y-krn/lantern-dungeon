@@ -191,11 +191,58 @@
       ctx.fillStyle = "#b2c0a1";
       ctx.fillRect(px + s * 4, py + s * 14, s * 8, s);
     }
+    function drawSurface(surface, px, py, now) {
+      const s = tile / 16;
+      ctx.save();
+      if (surface.type === "water") {
+        ctx.fillStyle = "#4f8fb874";
+        ctx.fillRect(px + s, py + s, tile - s * 2, tile - s * 2);
+        ctx.strokeStyle = "#d4eef7aa";
+        ctx.lineWidth = s;
+        ctx.beginPath();
+        ctx.moveTo(px + s * 4, py + s * 6); ctx.lineTo(px + s * 8, py + s * 5);
+        ctx.moveTo(px + s * 7, py + s * 11); ctx.lineTo(px + s * 12, py + s * 10);
+        ctx.stroke();
+      } else if (surface.type === "oil") {
+        ctx.fillStyle = "#2b211c99";
+        ctx.beginPath();
+        ctx.ellipse(px + tile / 2, py + tile / 2, tile * .42, tile * .34, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#c7a46a66";
+        ctx.fillRect(px + s * 5, py + s * 6, s * 3, s);
+      } else if (surface.type === "grass") {
+        ctx.strokeStyle = "#5f9a4ccc";
+        ctx.lineWidth = s * 1.2;
+        ctx.beginPath();
+        for (const [x, h] of [[3, 6], [6, 8], [9, 5], [12, 7]]) {
+          ctx.moveTo(px + s * x, py + s * 14);
+          ctx.lineTo(px + s * (x + 1), py + s * (14 - h));
+        }
+        ctx.stroke();
+      } else if (surface.type === "fog") {
+        ctx.fillStyle = "#e9eef0" + (surface.remaining > 2 ? "8c" : "55");
+        ctx.fillRect(px, py, tile, tile);
+      } else if (surface.type === "fire") {
+        const flicker = reduced ? 0 : Math.sin(now / 90 + surface.x * 3) * s;
+        ctx.fillStyle = "#e0662bcc";
+        ctx.beginPath();
+        ctx.moveTo(px + s * 3, py + s * 14);
+        ctx.quadraticCurveTo(px + s * 4, py + s * 6 + flicker, px + s * 8, py + s * 2);
+        ctx.quadraticCurveTo(px + s * 12, py + s * 6 - flicker, px + s * 13, py + s * 14);
+        ctx.fill();
+        ctx.fillStyle = "#ffd66bdd";
+        ctx.beginPath();
+        ctx.ellipse(px + s * 8, py + s * 11, s * 2.5, s * 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
     function drawItem(item, px, py, now) {
       {
         const kind = equipmentKind(item) || item.kind;
         // Shaped weapons and echo shards have no painted art yet; trial items only exist in the trial.
         const symbols = {lampSpear: "槍", sweepAxe: "斧", hookSickle: "鎌", pushMaul: "槌", echoShard: "✦",
+          waterSkin: "◍", oilFlask: "◉", emberStone: "✺", blastNut: "✹", smokeBall: "☁",
           ...(getEngine().strategyTrial ? {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂"} : {})};
         if (symbols[kind]) {
           ctx.save(); ctx.fillStyle = kind === "echoShard" ? "#c9b6ff" : "#fff2cc"; ctx.strokeStyle = "#3c4935"; ctx.lineWidth = tile * .06;
@@ -356,6 +403,12 @@
           for (const point of points) { const x = point.x * tile + offsetX, y = point.y * tile + offsetY; ctx.strokeRect(x + tile * .12, y + tile * .12, tile * .76, tile * .76); ctx.beginPath(); ctx.moveTo(x + tile * .5, y + tile * .25); ctx.lineTo(x + tile * .5, y + tile * .75); ctx.moveTo(x + tile * .25, y + tile * .5); ctx.lineTo(x + tile * .75, y + tile * .5); ctx.stroke(); }
           ctx.restore();
         }
+      }
+      for (const surface of engine.surfaces || []) {
+        const k = engine.key(surface.x, surface.y);
+        // Fire and fog change every turn, so only cells in view show them.
+        if (!engine.tile(surface.x, surface.y) || !engine.seen[k] || (surface.remaining && !engine.visible[k])) continue;
+        drawSurface(surface, surface.x * tile + offsetX, surface.y * tile + offsetY, now);
       }
       if (engine.seen[engine.key(engine.stairs.x, engine.stairs.y)]) {
         const sx = engine.stairs.x * tile + offsetX,

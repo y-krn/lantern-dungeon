@@ -80,6 +80,7 @@
         if (
           p.x === aim.x &&
           p.y === aim.y &&
+          !game.fogAt(aim.x, aim.y) &&
           game.clearShot(e, aim, aim.kind === "windup" ? 1 : m.range)
         ) {
           game.enemyHit(e, aim.kind === "ranged");
@@ -97,6 +98,7 @@
         m.trait === "ranged" &&
         e.awake &&
         visible &&
+        !game.concealed(p) &&
         game.clearShot(e, p, m.range);
       if ((m.trait === "windup" && adjacent) || shooting) {
         e.intent = { x: p.x, y: p.y, kind: shooting ? "ranged" : "windup" };
@@ -128,7 +130,8 @@
           ([dx, dy]) =>
             game.canStep(e.x, e.y, dx, dy) &&
             !(e.x + dx === p.x && e.y + dy === p.y) &&
-            !game.enemyAt(e.x + dx, e.y + dy),
+            !game.enemyAt(e.x + dx, e.y + dy) &&
+            !game.hazard(e.x + dx, e.y + dy),
         );
         const chase = e.awake
           ? candidates

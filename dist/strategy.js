@@ -205,6 +205,10 @@
     }
     resolveStrategyIntent(e, aim) {
       const range = aim.kind === "windup" ? 1 : MONSTERS[e.species].range;
+      if (this.fogAt(aim.x, aim.y)) {
+        if (this.visible[this.key(e.x, e.y)]) this.say(`${e.name}の攻撃は霧の中で空を切った。`);
+        return;
+      }
       const cells = this.ray(e, aim, range, false);
       if (!cells) return;
       let target;

@@ -20,6 +20,8 @@
     validEquipment,
     ITEM_ORDER,
     WEAPON_SHAPES,
+    THROWN_ITEMS,
+    SURFACES,
     ECHO_SOURCES,
     echoOfSpecies,
   } =
@@ -881,10 +883,27 @@
       }
       if (kind === "scroll") {
         this.say("雷光の灯札をかざした！");
-        for (const e of this.enemies)
-          if (e.hp > 0 && this.visible[this.key(e.x, e.y)])
-            this.hit(e, 18, "magic");
+        const struck = this.enemies.filter((e) => e.hp > 0 && this.visible[this.key(e.x, e.y)]),
+          water = this.conduct(struck);
+        for (const e of struck) this.hit(e, 18, "magic");
+        if (water.size) {
+          this.say("雷が水たまりを伝った！", "danger");
+          for (const e of this.enemies)
+            if (e.hp > 0 && !struck.includes(e) && water.has(this.key(e.x, e.y))) this.hit(e, 18, "magic");
+          if (water.has(this.key(p.x, p.y))) {
+            p.hp -= 18;
+            this.say("水たまりにいたリネも感電した！ 18ダメージ。", "danger");
+            this.effect("damage", p.x, p.y, 18);
+          }
+        }
         this.effect("lightning", p.x, p.y, 0);
+      }
+      if (THROWN_ITEMS.includes(kind)) this.throwItem(kind);
+      if (kind === "smokeBall") {
+        for (let y = p.y - 2; y <= p.y + 2; y++)
+          for (let x = p.x - 2; x <= p.x + 2; x++)
+            if (this.tile(x, y) && this.surfaceAt(x, y)?.type !== "fire") this.setSurface(x, y, "fog", 5);
+        this.say("煙玉から霧が広がった。", "good");
       }
       if (kind === "map") {
         this.seen.fill(true);
@@ -983,6 +1002,7 @@
       } else if (this.turn % 7 === 0 && this.player.hp > 0)
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1);
       if (this.player.hp > 0) this.enemyTurn();
+      if (this.player.hp > 0) this.tickSurfaces();
       this.enemies = this.enemies.filter((e) => e.hp > 0);
       this.reveal();
       if (this.player.hp <= 0) {
@@ -1051,6 +1071,118 @@
     }
     enemyTurn() {
       return runEnemyTurn(this);
+    }
+    surfaceAt(x, y) {
+      return (this.surfaces || []).find((s) => s.x === x && s.y === y) || null;
+    }
+    setSurface(x, y, type, remaining) {
+      if (!this.tile(x, y)) return;
+      this.surfaces = (this.surfaces || []).filter((s) => s.x !== x || s.y !== y);
+      if (type) this.surfaces.push(remaining ? { x, y, type, remaining } : { x, y, type });
+    }
+    ignite(x, y) {
+      const surface = this.surfaceAt(x, y);
+      if (!this.tile(x, y) || surface?.type === "water") return;
+      if (surface?.type === "fire") return;
+      // Oil burns longest, grass briefly, bare stone only for the moment of the spark.
+      this.setSurface(x, y, "fire", surface?.type === "oil" ? 3 : surface?.type === "grass" ? 2 : 1);
+    }
+    concealed(actor) {
+      const type = this.surfaceAt(actor.x, actor.y)?.type;
+      return type === "grass" || type === "fog";
+    }
+    fogAt(x, y) {
+      return this.surfaceAt(x, y)?.type === "fog";
+    }
+    hazard(x, y) {
+      return this.surfaceAt(x, y)?.type === "fire";
+    }
+    // Lightning runs through every water cell connected to a struck cell.
+    conduct(sources) {
+      const seen = new Set(),
+        queue = sources.filter((v) => this.surfaceAt(v.x, v.y)?.type === "water");
+      for (const v of queue) seen.add(this.key(v.x, v.y));
+      for (let i = 0; i < queue.length; i++)
+        for (const [dx, dy] of DIRS) {
+          const x = queue[i].x + dx,
+            y = queue[i].y + dy,
+            k = this.key(x, y);
+          if (!seen.has(k) && this.surfaceAt(x, y)?.type === "water") {
+            seen.add(k);
+            queue.push({ x, y });
+          }
+        }
+      return seen;
+    }
+    throwLanding() {
+      const p = this.player,
+        [dx, dy] = p.facing;
+      let x = p.x,
+        y = p.y;
+      for (let i = 0; i < 4 && this.canStep(x, y, dx, dy); i++) {
+        x += dx;
+        y += dy;
+        if (this.enemyAt(x, y)) break;
+      }
+      return { x, y };
+    }
+    throwItem(kind) {
+      const p = this.player,
+        land = this.throwLanding(),
+        area = [[0, 0], ...DIRS].map(([dx, dy]) => ({ x: land.x + dx, y: land.y + dy })).filter((v) => this.tile(v.x, v.y));
+      this.effect("arrow", land.x, land.y, 0, undefined, this.attackVisual(p, land, "arrow"));
+      if (kind === "waterSkin") {
+        for (const v of area) this.setSurface(v.x, v.y, "water");
+        this.say("水袋が弾け、周りが水たまりになった。", "good");
+      }
+      if (kind === "oilFlask") {
+        for (const v of area) if (this.surfaceAt(v.x, v.y)?.type !== "fire") this.setSurface(v.x, v.y, "oil");
+        this.say("油瓶が割れ、油が床に広がった。", "good");
+      }
+      if (kind === "emberStone") {
+        this.say("火種が弾けた！", "good");
+        this.ignite(land.x, land.y);
+        const e = this.enemyAt(land.x, land.y);
+        if (e) this.hit(e, 10, "magic");
+      }
+      if (kind === "blastNut") {
+        this.say("爆ぜ実が炸裂した！", "danger");
+        for (const v of area) {
+          const type = this.surfaceAt(v.x, v.y)?.type;
+          if (type === "oil" || type === "grass") this.ignite(v.x, v.y);
+          const e = this.enemyAt(v.x, v.y);
+          if (e) this.hit(e, 15, "magic");
+          if (same(v, p)) {
+            p.hp -= 15;
+            this.say("爆風に巻き込まれた！ 15ダメージ。", "danger");
+            this.effect("damage", p.x, p.y, 15);
+          }
+        }
+      }
+    }
+    tickSurfaces() {
+      const p = this.player,
+        fires = (this.surfaces || []).filter((s) => s.type === "fire");
+      for (const fire of fires) {
+        const e = this.enemyAt(fire.x, fire.y);
+        if (e) this.hit(e, 4, "magic");
+        if (same(fire, p) && p.hp > 0) {
+          p.hp -= 4;
+          this.say("炎に焼かれた！ 4ダメージ。", "danger");
+          this.effect("damage", p.x, p.y, 4);
+        }
+      }
+      // Flames spread to touching oil and grass before burning down.
+      const spread = [];
+      for (const fire of fires)
+        for (const [dx, dy] of DIRS) {
+          const type = this.surfaceAt(fire.x + dx, fire.y + dy)?.type;
+          if (type === "oil" || type === "grass") spread.push({ x: fire.x + dx, y: fire.y + dy });
+        }
+      for (const s of this.surfaces || [])
+        if (s.remaining && !spread.some((v) => same(v, s))) s.remaining--;
+      this.surfaces = (this.surfaces || []).filter((s) => s.remaining == null || s.remaining > 0);
+      for (const v of spread) this.ignite(v.x, v.y);
     }
     blink() {
       const p = this.player,
