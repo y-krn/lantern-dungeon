@@ -38,3 +38,6 @@ if (weapons.status !== 0) process.exit(weapons.status ?? 1);
 const variations = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-enemy-variations.cjs')], {stdio: 'inherit'});
 if (variations.error) throw variations.error;
 if (variations.status !== 0) process.exit(variations.status ?? 1);
+const elite = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-elite.cjs')], {stdio: 'inherit'});
+if (elite.error) throw elite.error;
+if (elite.status !== 0) process.exit(elite.status ?? 1);

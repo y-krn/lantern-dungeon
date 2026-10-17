@@ -24,6 +24,7 @@ function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, 
       stairs: s.seen[key(s.stairs.x, s.stairs.y)] ? { ...s.stairs } : null,
       enemies: enemies.filter(e => !mimics.includes(e)).map(e => ({
         x: e.x, y: e.y, species: e.species, hp: e.hp, intent: e.intent && { ...e.intent },
+        ...(e.elite ? {elite: true} : {}),
       })),
       items: s.items.filter(i => i.discovered).map(i => ({ ...known(i), x: i.x, y: i.y }))
         .concat(mimics.map(e => ({ kind: 'gold', x: e.x, y: e.y }))),
@@ -89,7 +90,8 @@ function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, 
       if (o.enemies.length === 1 && threats.length === 1 && adjacent.includes(threats[0]) && MONSTERS[threats[0].species].stationary
         && !exits.some(([dx, dy]) => canStep(o, p.x + dx, p.y + dy, threats[0].x - p.x - dx, threats[0].y - p.y - dy)
           && Math.max(Math.abs(threats[0].x - p.x - dx), Math.abs(threats[0].y - p.y - dy)) === 1)) {
-        const maxHit = Math.max(1, MONSTERS[threats[0].species].attack - power(p.equipment.shield));
+        const attack = MONSTERS[threats[0].species].attack;
+        const maxHit = Math.max(1, (threats[0].elite ? Math.ceil(attack * 1.2) : attack) - power(p.equipment.shield));
         if (p.hp > Math.max(p.maxHp * .5, maxHit * 2))
           return { ...move(threats[0].x - p.x, threats[0].y - p.y, 'trade-hit'), maxIncomingDamage: maxHit };
       }

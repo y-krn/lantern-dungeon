@@ -266,11 +266,13 @@
       const tier = monsterTier(game.floor, game.dungeon),
         pool = MONSTER_POOLS[tier];
       const species = tier === 0 ? pool[0] : pool[game.int(0, pool.length - 1)];
+      const elite = game.floor + (hard ? 2 : 0) >= 5 && i >= houseSpots.length && game.int(1, 100) <= 6,
+        stats = monsterStats(species, elite);
       game.enemies.push({
         ...pos,
         id: i,
-        ...monsterStats(species),
-        hp: MONSTERS[species].hp,
+        ...stats,
+        hp: stats.maxHp,
         awake: false,
         house: i < houseSpots.length,
       });

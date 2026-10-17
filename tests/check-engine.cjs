@@ -13,7 +13,10 @@ const {W,H,DIRS,ITEMS}=DungeonData;
         const m=MONSTERS[e.species];assert(m);encountered.add(e.species);
         const stats=[e.maxHp,e.attack,e.exp];
         if(statsByName.has(e.name))assert.deepEqual(stats,statsByName.get(e.name));else statsByName.set(e.name,stats);
-        assert.equal(e.name,m.name);assert.equal(e.type,m.type);assert.equal(e.hp,m.hp);
+        assert.equal(e.name,e.elite ? `灯冠の${m.name}` : m.name);assert.equal(e.type,m.type);
+        assert.equal(e.maxHp,e.elite ? Math.ceil(m.hp*1.5) : m.hp);
+        assert.equal(e.attack,e.elite ? Math.ceil(m.attack*1.2) : m.attack);
+        assert.equal(e.exp,e.elite ? m.exp*2 : m.exp);assert.equal(e.hp,e.maxHp);
       }
       const raw=game.serialize(),restored=DungeonEngine.restore(raw);assert(restored);assert.equal(restored.serialize(),raw);
     }
@@ -25,6 +28,7 @@ const {W,H,DIRS,ITEMS}=DungeonData;
     // Use a legacy enemy family explicitly; new random rolls may change the first modern species.
     [saved.state.enemies[0],saved.state.enemies[legacyIndex]]=[saved.state.enemies[legacyIndex],saved.state.enemies[0]];
     const legacy=saved.state.enemies[0];
+    Object.assign(legacy,DungeonData.monsterStats(legacy.species),{hp:MONSTERS[legacy.species].hp});delete legacy.elite;
     const species=legacy.species;delete legacy.species;
     legacy.name=legacy.type==='slime'?'苔スライム':legacy.type==='bat'?'洞窟コウモリ':'灯りの亡霊';
     legacy.maxHp+=4;legacy.hp=legacy.maxHp-5;legacy.attack+=2;
@@ -556,7 +560,7 @@ for(let seed=1;seed<=100;seed++){
     assert.equal(game.enemies.length,6+Math.floor(floor*.75)+(floor===30?1:0));
     assert.equal(game.traps.length,Math.min(floor+2,8));assert(game.traps.every(t=>!game.isRoomEntrance(t.x,t.y)));
     const enemies=game.enemies.filter(e=>e.type!=='guardian');
-    for(const e of enemies){const m=DungeonData.MONSTERS[e.species];assert.equal(e.maxHp,m.hp);assert.equal(e.attack,m.attack);assert(DungeonData.MONSTER_POOLS[DungeonData.monsterTier(floor,'depths')].includes(e.species));}
+    for(const e of enemies){const m=DungeonData.monsterStats(e.species,e.elite);assert.equal(e.maxHp,m.maxHp);assert.equal(e.attack,m.attack);assert(DungeonData.MONSTER_POOLS[DungeonData.monsterTier(floor,'depths')].includes(e.species));}
     assert.equal(game.enemies.some(e=>e.type==='guardian'),floor===30);
     if(floor===30||floor===11){const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.equal(restored.floor,floor);assert.deepEqual(restored.enemies,game.enemies);}
   }

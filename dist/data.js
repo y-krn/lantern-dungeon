@@ -1066,15 +1066,17 @@
                 ? 5
                 : 6;
   }
-  function monsterStats(species) {
+  function monsterStats(species, elite = false) {
     const m = MONSTERS[species];
+    if (elite && m.type === "guardian") throw new RangeError("Guardians cannot be elite");
     return {
       species,
       type: m.type,
-      name: m.name,
-      maxHp: m.hp,
-      attack: m.attack,
-      exp: m.exp,
+      name: elite ? `灯冠の${m.name}` : m.name,
+      maxHp: elite ? Math.ceil(m.hp * 1.5) : m.hp,
+      attack: elite ? Math.ceil(m.attack * 1.2) : m.attack,
+      exp: elite ? m.exp * 2 : m.exp,
+      ...(elite ? {elite: true} : {}),
     };
   }
   const data = {

@@ -301,6 +301,7 @@
       game.player.ammo = game.arrowCount() ? (game.player.ammo ?? null) : null;
       game.traps = game.traps.filter((t) => !game.isRoomEntrance(t.x, t.y));
       for (const e of game.enemies) {
+        if ((e.elite != null && typeof e.elite !== "boolean") || (e.elite && (e.house || e.spawned || e.species == null))) return null;
         if (e.species == null) {
           if (!Number.isFinite(e.hp) || !Number.isFinite(e.maxHp)) return null;
           const tier = monsterTier(game.floor, dungeon);
@@ -324,17 +325,12 @@
             alive = e.hp > 0;
           Object.assign(e, monsterStats(e.species));
           e.hp = alive ? Math.max(1, e.maxHp - damage) : e.hp;
-        } else if (
-          !Object.hasOwn(MONSTERS, e.species) ||
-          e.type !== MONSTERS[e.species].type ||
-          e.name !== MONSTERS[e.species].name ||
-          e.maxHp !== MONSTERS[e.species].hp ||
-          e.attack !== MONSTERS[e.species].attack ||
-          e.exp !== (e.spawned ? 1 : MONSTERS[e.species].exp) ||
-          !Number.isFinite(e.hp) ||
-          e.hp > e.maxHp
-        )
-          return null;
+        } else {
+          if (!Object.hasOwn(MONSTERS, e.species)) return null;
+          const stats = monsterStats(e.species, e.elite);
+          if (e.type !== stats.type || e.name !== stats.name || e.maxHp !== stats.maxHp || e.attack !== stats.attack ||
+            e.exp !== (e.spawned ? 1 : stats.exp) || !Number.isFinite(e.hp) || e.hp > e.maxHp) return null;
+        }
         if (
           e.intent != null &&
           ((e.intent.kind === "ranged"

@@ -613,11 +613,28 @@
           );
           ctx.restore();
         }
+        const crowned = !e.isPlayer && e.elite && !(MONSTERS[e.species]?.trait === "mimic" && !e.revealed);
+        if (crowned) {
+          ctx.fillStyle = "#f9d576";
+          ctx.strokeStyle = "#604219";
+          ctx.lineWidth = Math.max(1, tile / 32);
+          ctx.beginPath();
+          ctx.moveTo(px + tile * .28, py - tile * .18);
+          ctx.lineTo(px + tile * .25, py - tile * .34);
+          ctx.lineTo(px + tile * .40, py - tile * .25);
+          ctx.lineTo(px + tile * .50, py - tile * .39);
+          ctx.lineTo(px + tile * .60, py - tile * .25);
+          ctx.lineTo(px + tile * .75, py - tile * .34);
+          ctx.lineTo(px + tile * .72, py - tile * .18);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
         if (e.intent) {
           ctx.fillStyle = "#ffdf85";
           ctx.font = `bold ${Math.round(tile * 0.5)}px sans-serif`;
           ctx.textAlign = "center";
-          ctx.fillText("!", px + tile / 2, py - tile * 0.05);
+          ctx.fillText("!", px + tile * (crowned ? .88 : .5), py - tile * 0.05);
         }
         if (!e.isPlayer && !e.defeated && e.hp < e.maxHp) {
           ctx.fillStyle = "#10171ee0";
