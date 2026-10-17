@@ -61,7 +61,7 @@ try {
   const normal=evaluate(`localStorage.getItem('lantern-dungeon-v1')`);
   browser('open',new URL('?trial=strategy',url).href);
   browser('set','viewport','390','844');
-  assert.equal(evaluate(`document.querySelectorAll('[data-kit]').length`),2,'Only spear and current gear remain');
+  assert.equal(evaluate(`document.querySelectorAll('[data-kit]').length`),5,'Four weapons and current gear are offered');
   assert(!evaluate(`document.getElementById('modal-content').textContent.includes('鐘打ちの槌') || document.getElementById('modal-content').textContent.includes('返しの盾')`));
   click('[data-kit="lampSpear"]');ready();assert(state().kitChosen);assert.equal(state().floor,1);
   screenshot('trial-start-390.png');checkLayout();

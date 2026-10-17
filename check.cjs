@@ -26,3 +26,6 @@ if (strategy.status !== 0) process.exit(strategy.status ?? 1);
 const echoes = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-echoes.cjs')], {stdio: 'inherit'});
 if (echoes.error) throw echoes.error;
 if (echoes.status !== 0) process.exit(echoes.status ?? 1);
+const weapons = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-weapons.cjs')], {stdio: 'inherit'});
+if (weapons.error) throw weapons.error;
+if (weapons.status !== 0) process.exit(weapons.status ?? 1);

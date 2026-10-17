@@ -194,7 +194,7 @@
     function drawItem(item, px, py, now) {
       if (getEngine().strategyTrial) {
         const kind = equipmentKind(item) || item.kind;
-        const symbols = {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂", lampSpear: "↗"};
+        const symbols = {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂", lampSpear: "↗", sweepAxe: "斧", hookSickle: "鎌", pushMaul: "槌"};
         if (kind === "echoShard") symbols.echoShard = "✦";
         if (symbols[kind]) {
           ctx.save(); ctx.fillStyle = kind === "echoShard" ? "#c9b6ff" : "#fff2cc"; ctx.strokeStyle = "#3c4935"; ctx.lineWidth = tile * .06;

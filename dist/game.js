@@ -381,7 +381,7 @@
     else updateUI();
   }
   function chooseTrialKit() {
-    openModal("trial-kit", `<div class="modal-inner">${modalHeader("分け灯の旅支度")}<p class="modal-description">灯種と札を携え、五つの回廊へ。灯守りの槍を携えるか、今の装備で出発できます。</p><div class="dungeon-list"><button class="dungeon-choice" data-kit="lampSpear"><strong>${DungeonData.EQUIPMENT.lampSpear.name}</strong><span class="dungeon-choice-description">${DungeonData.EQUIPMENT.lampSpear.description}</span></button></div><button class="secondary-button" data-kit="none">今の装備で出発する</button></div>`);
+    openModal("trial-kit", `<div class="modal-inner">${modalHeader("分け灯の旅支度")}<p class="modal-description">灯種と札を携え、五つの回廊へ。武器を一つ選ぶか、今の装備で出発できます。ほかの武器も道中で見つかります。</p><div class="dungeon-list">${Object.keys(StrategyEngine.GEAR).map(kind => `<button class="dungeon-choice" data-kit="${kind}"><strong>${DungeonData.EQUIPMENT[kind].name}</strong><span class="dungeon-choice-description">${DungeonData.EQUIPMENT[kind].description}</span></button>`).join("")}</div><button class="secondary-button" data-kit="none">今の装備で出発する</button></div>`);
     $("modal-content").querySelectorAll("[data-kit]").forEach(button => button.addEventListener("click", () => {
       engine.chooseKit(button.dataset.kit); closeModal(); updateUI(); save();
     }));
