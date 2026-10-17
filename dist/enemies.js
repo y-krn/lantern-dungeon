@@ -22,13 +22,16 @@
         queue.push([nx, ny]);
       }
     }
+    game.enemies.sort((a, b) => a.id - b.id);
     for (const e of game.enemies) {
+      if (p.hp <= 0) break;
       if (e.hp <= 0 || (e.house && !e.awake && !game.monsterHouse?.triggered))
         continue;
       const m = MONSTERS[e.species] || {},
         dist = Math.max(Math.abs(e.x - p.x), Math.abs(e.y - p.y)),
         visible = game.visible[game.key(e.x, e.y)];
-      if (dist <= (game.wakeRange ? game.wakeRange() : 7) && visible) e.awake = true;
+      if (dist <= (game.wakeRange ? game.wakeRange() : 7) && visible) game.wakeEnemy(e);
+      if (e.stunned) { delete e.stunned; continue; }
       if (m.trait === "mimic" && !e.revealed) {
         if (dist === 1 && game.canStep(e.x, e.y, p.x - e.x, p.y - e.y)) {
           e.revealed = true;
@@ -72,6 +75,10 @@
       if (e.intent) {
         const aim = e.intent;
         delete e.intent;
+        if (aim.kind === "charge") {
+          game.resolveCharge(e, aim);
+          continue;
+        }
         if (typeof game.resolveStrategyIntent === "function") {
           game.resolveStrategyIntent(e, aim);
           if (p.hp <= 0) break;
@@ -94,8 +101,52 @@
       }
       const adjacent =
         dist === 1 && game.canStep(e.x, e.y, p.x - e.x, p.y - e.y);
+      const bound = e.bindUntil >= game.turn;
+      const steps = () => DIRS.filter(([dx, dy]) => game.canStep(e.x, e.y, dx, dy) &&
+        !(e.x + dx === p.x && e.y + dy === p.y) && !game.enemyAt(e.x + dx, e.y + dy) && !game.hazard(e.x + dx, e.y + dy));
+      const walk = (step) => {
+        const origin = {x: e.x, y: e.y};
+        e.x += step[0]; e.y += step[1]; e.direction = step;
+        if (m.trait === "mudTrail" && !(origin.x === game.stairs.x && origin.y === game.stairs.y) && !game.surfaceAt(origin.x, origin.y)) game.setSurface(origin.x, origin.y, "water");
+        if (typeof game.strategyLanding === "function") game.strategyLanding(e);
+      };
+      if (e.stolen) {
+        if (!bound) for (let i = 0; i < 2; i++) {
+          const step = steps().sort((a, b) =>
+            Math.max(Math.abs(e.x + b[0] - p.x), Math.abs(e.y + b[1] - p.y)) -
+            Math.max(Math.abs(e.x + a[0] - p.x), Math.abs(e.y + a[1] - p.y)))[0];
+          if (!step) break;
+          walk(step);
+          if (e.hp <= 0 || e.bindUntil >= game.turn) break;
+        }
+        continue;
+      }
+      if ((m.trait === "kite" || m.trait === "mend") && adjacent && !bound) {
+        const step = steps().find(([dx, dy]) => Math.max(Math.abs(e.x + dx - p.x), Math.abs(e.y + dy - p.y)) >= 2);
+        if (step) { walk(step); continue; }
+      }
+      if (m.trait === "mend" && e.awake) {
+        const target = game.enemies.filter(other => other !== e && other.hp > 0 && other.hp < other.maxHp &&
+          Math.max(Math.abs(other.x - e.x), Math.abs(other.y - e.y)) <= 3)
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp || a.id - b.id)[0];
+        if (target) {
+          target.hp = Math.min(target.maxHp, target.hp + 8);
+          if (visible && game.visible[game.key(target.x, target.y)]) {
+            game.say(`${e.name}が${target.name}を癒した。体力+8。`);
+            game.effect("heal", target.x, target.y, 8);
+          }
+          continue;
+        }
+      }
+      if (m.trait === "charge" && !bound && e.awake && visible && game.clearShot(e, p, m.range)) {
+        e.intent = {kind: "charge", x: p.x, y: p.y, dx: Math.sign(p.x - e.x), dy: Math.sign(p.y - e.y), length: dist};
+        game.say(`${e.name}が突進の構え！ 予告の直線から横へ避けよう。`, "danger");
+        game.effect("warning", p.x, p.y, 0);
+        continue;
+      }
       const shooting =
-        m.trait === "ranged" &&
+        ["ranged", "snare", "kite"].includes(m.trait) &&
+        !(m.trait === "kite" && adjacent) &&
         e.awake &&
         visible &&
         !game.concealed(p) &&
@@ -115,7 +166,7 @@
         continue;
       }
       if (m.stationary || (m.cadence && game.turn % m.cadence !== 0)) continue;
-      if (typeof game.strategyLanding === "function" && e.bindUntil >= game.turn) continue;
+      if (bound) continue;
       for (
         let stepIndex = 0;
         stepIndex < (e.awake ? m.speed || 1 : 1);
@@ -153,13 +204,8 @@
         const wander = forward.length ? forward : candidates,
           step = chase || wander[game.int(0, Math.max(0, wander.length - 1))];
         if (step) {
-          e.x += step[0];
-          e.y += step[1];
-          e.direction = step;
-          if (typeof game.strategyLanding === "function") {
-            game.strategyLanding(e);
-            if (e.hp <= 0 || e.bindUntil >= game.turn) break;
-          }
+          walk(step);
+          if (e.hp <= 0 || e.bindUntil >= game.turn) break;
         } else break;
       }
     }

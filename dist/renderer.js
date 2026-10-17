@@ -500,24 +500,29 @@
           drawItem(item, item.x * tile + offsetX, item.y * tile + offsetY, now);
       for (const e of engine.enemies)
         if (e.hp > 0 && e.intent && engine.visible[engine.key(e.x, e.y)]) {
-          const px = e.intent.x * tile + offsetX,
-            py = e.intent.y * tile + offsetY;
-          ctx.fillStyle = "#f5c66e40";
-          ctx.fillRect(px, py, tile, tile);
-          ctx.strokeStyle = "#ffdf85";
-          ctx.lineWidth = tile / 12;
-          ctx.strokeRect(
-            px + tile / 12,
-            py + tile / 12,
-            (tile * 5) / 6,
-            (tile * 5) / 6,
-          );
-          ctx.beginPath();
-          ctx.moveTo(px + tile * 0.3, py + tile * 0.3);
-          ctx.lineTo(px + tile * 0.7, py + tile * 0.7);
-          ctx.moveTo(px + tile * 0.7, py + tile * 0.3);
-          ctx.lineTo(px + tile * 0.3, py + tile * 0.7);
-          ctx.stroke();
+          const aim = e.intent;
+          const cells = aim.kind === "charge" ? Array.from({length: aim.length}, (_, i) => ({x: e.x + aim.dx * (i + 1), y: e.y + aim.dy * (i + 1)})) : [aim];
+          for (const cell of cells) {
+            if (!engine.visible[engine.key(cell.x, cell.y)]) continue;
+            const px = cell.x * tile + offsetX,
+              py = cell.y * tile + offsetY;
+            ctx.fillStyle = "#f5c66e40";
+            ctx.fillRect(px, py, tile, tile);
+            ctx.strokeStyle = "#ffdf85";
+            ctx.lineWidth = tile / 12;
+            ctx.strokeRect(
+              px + tile / 12,
+              py + tile / 12,
+              (tile * 5) / 6,
+              (tile * 5) / 6,
+            );
+            ctx.beginPath();
+            ctx.moveTo(px + tile * 0.3, py + tile * 0.3);
+            ctx.lineTo(px + tile * 0.7, py + tile * 0.7);
+            ctx.moveTo(px + tile * 0.7, py + tile * 0.3);
+            ctx.lineTo(px + tile * 0.3, py + tile * 0.7);
+            ctx.stroke();
+          }
         }
       const entities = engine.enemies
         .filter((e) => e.hp > 0 && engine.visible[engine.key(e.x, e.y)])
@@ -592,6 +597,8 @@
           ctx.translate(px + tile / 2 + pushX * tile, py + tile * .8 + pushY * tile);
           ctx.rotate(lean);
           ctx.scale(scaleX, scaleY);
+          if (!e.isPlayer && MONSTERS[e.species]?.trait === "burst" && e.hp <= e.maxHp / 2)
+            ctx.filter = `brightness(${reduced ? 1.35 : 1.35 + (Math.sin(now / 150) + 1) * .35})`;
           sprite(
             ctx,
             e.isPlayer ? heroSprite(p.facing) : e.type,

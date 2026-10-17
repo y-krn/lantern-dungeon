@@ -6,6 +6,7 @@ require('../dist/engine.js');
 function arena(hp = 80) {
   const game = new DungeonEngine(73);
   game.tiles.fill(1); game.items = []; game.traps = []; game.monsterHouse = null;
+  game.rooms[0] = {x:1,y:1,w:32,h:24,cx:17,cy:13};
   game.player.x = 15; game.player.y = 10; game.player.facing = [1, 0];
   game.player.hp = game.player.maxHp = 100; game.effects = [];
   game.enemies = [{...DungeonData.monsterStats('mossSlime'), id: 1, x: 16, y: 10, hp, maxHp: hp, awake: true}];

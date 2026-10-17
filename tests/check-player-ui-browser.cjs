@@ -39,7 +39,9 @@ try {
   browser('click', '#world-button');
   browser('click', '#world-monsters');
   assert(text().includes('苔スライム'));
-  assert(!/ミミック|番人|HP|攻撃力|経験値|対処|ターン/.test(text()), 'The journal must not reveal unseen identities or strategy');
+  assert(!/ミミック|番人|HP|攻撃力|経験値/.test(text()), 'The journal must not reveal unseen identities or raw stats');
+  assert(text().includes(evaluate('DungeonData.MONSTERS.mossSlime.feature')));
+  assert(text().includes(evaluate('DungeonData.MONSTERS.mossSlime.counter')));
   close();
   fixture('');
   browser('click', '#world-button'); browser('click', '#world-monsters');

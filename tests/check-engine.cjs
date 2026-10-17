@@ -35,7 +35,7 @@ const {W,H,DIRS,ITEMS}=DungeonData;
     legacy.hp=1;assert.equal(DungeonEngine.restore(JSON.stringify(saved)).enemies[0].hp,1);
     legacy.species='unknown';assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);
   }
-  console.log('PASS: all 25 species encountered in 4,000 floors; same-name stats fixed across dungeons; exact save round-trip and damaged/dead legacy migration checked.');
+  console.log('PASS: all 37 species encountered in 4,000 floors; same-name stats fixed across dungeons; exact save round-trip and damaged/dead legacy migration checked.');
 }
 
 {
@@ -254,6 +254,8 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 }
 {
   const game=DungeonEngine.restore(houseSave),house=game.monsterHouse,r=game.rooms[house.room],pack=game.enemies.filter(e=>e.house);
+  // Isolate house activation from theft, calling and other species-specific actions.
+  for(const e of pack)Object.assign(e,DungeonData.monsterStats('mossSlime'),{hp:9});
   let entry;
   for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)for(const[dx,dy]of [[0,-1],[1,0],[0,1],[-1,0]]){
     if(game.tile(x+dx,y+dy)&&roomAt(game,{x:x+dx,y:y+dy})!==r)entry={x,y,dx:-dx,dy:-dy,outside:{x:x+dx,y:y+dy}};
@@ -274,6 +276,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 }
 {
   const game=DungeonEngine.restore(houseSave),r=game.rooms[game.monsterHouse.room],pack=game.enemies.filter(e=>e.house);
+  for(const e of pack)Object.assign(e,DungeonData.monsterStats('mossSlime'),{hp:9});
   game.hit(pack[0],1);assert(pack[0].awake);assert(pack.slice(1).every(e=>!e.awake));assert.equal(game.monsterHouse.triggered,false);
   game.enemies=[];game.items=[];game.traps=[];game.player.x=r.cx;game.player.y=r.cy;game.wait();
   assert.equal(game.monsterHouse.triggered,true);assert(!game.log.some(e=>e.text.startsWith('モンスターハウス！')),'An empty house must not announce sleeping monsters');
