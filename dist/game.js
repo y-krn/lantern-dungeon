@@ -249,6 +249,7 @@
     );
     const lowHP = p.hp / p.maxHp < 0.3, lowHunger = p.hunger < 20;
     const warnings = [
+      p.bindUntil >= engine.turn + 1 ? "蔓で移動できない。攻撃や道具は使える。" : "",
       lowHP ? "体力が少ない。" : "",
       lowHunger ? (p.hunger === 0 ? "空腹で体力が減っている。" : "お腹が空いてきた。") : "",
     ].filter(Boolean).join(" ");
@@ -279,7 +280,7 @@
     $("location-hint").textContent = engine.status === "playing"
       ? [warnings, situation].filter(Boolean).join(" ") : situation;
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
-    if (portraitUI) $("mobile-progress").textContent = [`Lv.${p.level}`, `矢 ${engine.arrowCount()}本${infusion ? `(${infusion.name[0]}${infusion.shots})` : ""}`, echoInfo.short ? `灯影:${echoInfo.short}` : ""].filter(Boolean).join(" · ");
+    if (portraitUI) $("mobile-progress").textContent = [p.bindUntil >= engine.turn + 1 ? "移動不可" : `Lv.${p.level}`, `矢 ${engine.arrowCount()}本${infusion ? `(${infusion.name[0]}${infusion.shots})` : ""}`, echoInfo.short ? `灯影:${echoInfo.short}` : ""].filter(Boolean).join(" · ");
     if (trial) {
       const echo = engine.echo();
       const states = [echo ? `灯影「${echo.short}」${echo.text}` : "", engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);
@@ -455,7 +456,7 @@
       `<div class="modal-inner">${modalHeader("魔物図鑑")}<p class="modal-description">${entries.length ? `出会った魔物 ${entries.length}種。旅の中で見つけた姿を記しています。` : "まだ魔物の記録はありません。"}</p><div class="item-list">${entries
         .map(
           ([species, m]) =>
-            `<div class="item-card"><canvas data-monster="${species}" width="80" height="80" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p class="monster-story">${m.story}</p><p>${m.color}・${MONSTER_MARKS[m.tier]}</p>${DungeonData.echoOfSpecies(species) ? `<p>${DungeonData.echoOfSpecies(species).name}：${DungeonData.echoOfSpecies(species).text}</p>` : ""}</div></div>`,
+            `<div class="item-card"><canvas data-monster="${species}" width="80" height="80" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p class="monster-story">${m.story}</p><p>${m.feature}</p><p>${m.counter}</p><p>${m.color}・${MONSTER_MARKS[m.tier]}</p>${DungeonData.echoOfSpecies(species) ? `<p>${DungeonData.echoOfSpecies(species).name}：${DungeonData.echoOfSpecies(species).text}</p>` : ""}</div></div>`,
         )
         .join(
           "",

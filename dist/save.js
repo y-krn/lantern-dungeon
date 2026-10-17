@@ -3,6 +3,7 @@
   const {
     W,
     H,
+    DIRS,
     DUNGEONS,
     LAYOUT_NAMES,
     ITEMS,
@@ -329,7 +330,7 @@
           e.name !== MONSTERS[e.species].name ||
           e.maxHp !== MONSTERS[e.species].hp ||
           e.attack !== MONSTERS[e.species].attack ||
-          e.exp !== MONSTERS[e.species].exp ||
+          e.exp !== (e.spawned ? 1 : MONSTERS[e.species].exp) ||
           !Number.isFinite(e.hp) ||
           e.hp > e.maxHp
         )
@@ -337,9 +338,11 @@
         if (
           e.intent != null &&
           ((e.intent.kind === "ranged"
-            ? MONSTERS[e.species].trait !== "ranged"
+            ? !["ranged", "snare", "kite"].includes(MONSTERS[e.species].trait)
             : e.intent.kind === "windup"
               ? MONSTERS[e.species].trait !== "windup"
+              : e.intent.kind === "charge"
+                ? MONSTERS[e.species].trait !== "charge"
               : true) ||
             !Number.isInteger(e.intent.x) ||
             !Number.isInteger(e.intent.y) ||
@@ -347,12 +350,25 @@
             !game.tile(e.intent.x, e.intent.y))
         )
           return null;
+        if (e.intent?.kind === "charge") {
+          const a = e.intent;
+          if (!DIRS.some(([dx, dy]) => dx === a.dx && dy === a.dy) || !Number.isInteger(a.length) || a.length < 1 || a.length > 4) return null;
+        }
         if (
           (e.revealed != null && typeof e.revealed !== "boolean") ||
-          (e.blinkPending != null && typeof e.blinkPending !== "boolean")
+          (e.blinkPending != null && typeof e.blinkPending !== "boolean") ||
+          ["split", "spawned", "stunned"].some(key => e[key] != null && typeof e[key] !== "boolean") ||
+          ((e.split || e.spawned) && e.species !== "bubbleSlime") ||
+          (e.spawned && !e.split) ||
+          (e.stunned && MONSTERS[e.species].trait !== "charge") ||
+          (e.stolen != null && (MONSTERS[e.species].trait !== "steal" || typeof e.stolen !== "string" || e.stolen === "arrow" ||
+            !Object.hasOwn(ITEMS, e.stolen) || Object.hasOwn(EQUIPMENT_NAMES, e.stolen)))
         )
           return null;
       }
+      for (const actor of [p, ...game.enemies])
+        for (const key of ["bindUntil", "resistUntil"])
+          if (actor[key] != null && (!Number.isInteger(actor[key]) || actor[key] < 0 || actor[key] > game.turn + 2)) return null;
       if (!game.restoreIdentification()) return null;
       game.effects = [];
       game.reveal();

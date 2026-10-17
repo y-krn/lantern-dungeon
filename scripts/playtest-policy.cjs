@@ -59,11 +59,15 @@ function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, 
     if (p.hp <= p.maxHp * .5 && source('potion') !== -1) return use(source('potion'), 'heal');
     if (p.hunger <= 50 && source('bread') !== -1) return use(source('bread'), 'eat');
     const adjacent = o.enemies.filter(e => distance(e) === 1 && canStep(o, p.x, p.y, e.x - p.x, e.y - p.y));
-    const danger = (x, y) => o.enemies.some(e => e.intent?.x === x && e.intent?.y === y);
-    const exposure = (x, y) => o.enemies.filter(e => MONSTERS[e.species]?.trait === 'ranged'
+    const aimed = (e, x, y) => e.intent?.kind === 'charge'
+      ? Array.from({length:e.intent.length}, (_, i) => i + 1).some(i => e.x + e.intent.dx * i === x && e.y + e.intent.dy * i === y)
+      : e.intent?.x === x && e.intent?.y === y;
+    const danger = (x, y) => o.enemies.some(e => aimed(e, x, y));
+    const exposure = (x, y) => o.enemies.filter(e => ['ranged', 'snare', 'kite'].includes(MONSTERS[e.species]?.trait)
       && clearShot(o, e, { x, y }, MONSTERS[e.species].range)).length;
-    const threats = o.enemies.filter(e => e.intent?.x === p.x && e.intent?.y === p.y);
-    if (danger(p.x, p.y)) {
+    const threats = o.enemies.filter(e => aimed(e, p.x, p.y));
+    const bound = p.bindUntil >= o.turn + 1;
+    if (danger(p.x, p.y) && !bound) {
       const weaponTrait = EQUIPMENT[equipmentKind(p.equipment.weapon)]?.trait;
       const lethal = adjacent.find(e => {
         const monster = MONSTERS[e.species];
@@ -100,7 +104,7 @@ function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, 
       return move(adjacent[0].x - p.x, adjacent[0].y - p.y, 'melee');
     }
     if (p.ammo === 'arrow') {
-      const target = o.enemies.find(e => clearShot(o, p, e, 7));
+      const target = o.enemies.find(e => MONSTERS[e.species]?.trait !== 'mirror' && clearShot(o, p, e, 7));
       if (target) {
         const dx = Math.sign(target.x - p.x), dy = Math.sign(target.y - p.y);
         return p.facing[0] === dx && p.facing[1] === dy
@@ -108,6 +112,7 @@ function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, 
           : { type: 'face', dx, dy, reason: 'aim' };
       }
     }
+    if (bound) return { type: 'button', selector: '#wait-button', reason: 'bound' };
     const lure = memory.lastDodge;
     if (lure && lure.waits < 2 && o.enemies.some(e => e.x === lure.x && e.y === lure.y && !e.intent
       && MONSTERS[e.species]?.trait === 'windup' && distance(e) === 2 && clearShot(o, e, p, 2))) {

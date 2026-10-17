@@ -113,7 +113,7 @@ assert.deepEqual(Array.from(renderer.directionAt({clientX: bounds.width / 2 + 48
   }};
   for (const [species, monster] of Object.entries(DungeonData.MONSTERS))
     painted.sprite(bookContext, monster.type, 0, 0, 5, 1, false, species);
-  assert.equal(sources.length - start, 25, 'All species have a painted sprite');
+  assert.equal(sources.length - start, Object.keys(DungeonData.MONSTERS).length, 'All species have a painted sprite');
   assert.equal(new Set(sources.slice(start)).size, 9, 'Nine monster families have distinct silhouettes');
   // Shaped, evolved and bane gear are drawn as glyphs by the renderer until they get painted art.
   const glyphGear = kind => DungeonData.WEAPON_SHAPES.includes(kind) || DungeonData.EQUIPMENT[kind].shape || DungeonData.EQUIPMENT[kind].bane;

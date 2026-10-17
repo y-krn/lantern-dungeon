@@ -199,6 +199,7 @@
       }
     }
     resolveStrategyIntent(e, aim) {
+      if (aim.kind === "charge") return this.resolveCharge(e, aim);
       const range = aim.kind === "windup" ? 1 : MONSTERS[e.species].range;
       if (this.fogAt(aim.x, aim.y)) {
         if (this.visible[this.key(e.x, e.y)]) this.say(`${e.name}の攻撃は霧の中で空を切った。`);

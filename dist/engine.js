@@ -10,6 +10,7 @@
     LAYOUT_NAMES,
     DUNGEONS,
     MONSTERS,
+    monsterStats,
     SCROLLS,
     SCROLL_NAMES,
     EQUIPMENT_NAMES,
@@ -432,7 +433,7 @@
       const p = this.player,
         infusion = p.infusion;
       if (!infusion) return;
-      if (infusion.kind === "thunder" && enemy) {
+      if (infusion.kind === "thunder" && enemy && MONSTERS[enemy.species]?.trait !== "mirror") {
         const water = this.conduct([enemy]);
         if (!water.size) {
           if (enemy.hp > 0) this.hit(enemy, 6, "magic");
@@ -603,6 +604,7 @@
         ((shape === "lampSpear" || shape === "hookSickle") && this.spearTarget(dx, dy).enemy)
       )
         return this.attack();
+      if (p.bindUntil >= this.turn + 1) return false;
       // The wing echo folds a second step into the same turn while no enemy is in view.
       const echo = this.echoFor("wing"),
         steps = echo && this.calm(echo.tier) ? 2 : 1;
@@ -820,7 +822,7 @@
       return { percent: 15, pity: 4 };
     }
     dropEcho(enemy) {
-      if (!ECHO_SOURCES[enemy.species] || enemy.type === "guardian") return;
+      if (!ECHO_SOURCES[enemy.species] || enemy.type === "guardian" || enemy.spawned) return;
       const p = this.player,
         pity = p.echoPity || 0,
         rule = this.echoDropRule();
@@ -866,6 +868,18 @@
       if (strike && root && p.lastStrike === this.turn - 1) damage += root.tier ? 5 : 3;
       // The ambush resonance doubles blows on monsters that have not noticed Rine.
       if (strike && !enemy.awake && this.resonance("ambush")) damage *= 2;
+      const monster = MONSTERS[enemy.species];
+      if (monster?.trait === "mirror" && (kind === "arrow" || this.lanternShot)) {
+        const reflected = Math.ceil(Math.max(1, damage) / 2);
+        p.hp -= reflected;
+        if (this.visible[this.key(enemy.x, enemy.y)]) {
+          this.say(`${enemy.name}に${this.lanternShot ? "灯弾" : "矢"}が跳ね返った！ ${reflected}ダメージ。`, "danger");
+          this.effect("damage", p.x, p.y, reflected, undefined, this.attackVisual(enemy, p, "ranged"));
+        }
+        this.wakeEnemy(enemy);
+        return;
+      }
+      if (monster?.trait === "ward" && (kind === "melee" || kind === "arrow" || this.lanternShot)) damage = Math.ceil(damage / 2);
       this.strike(enemy, damage, kind);
       if (strike) p.lastStrike = this.turn;
       if (enemy.hp <= 0) {
@@ -874,8 +888,29 @@
           p.hp = Math.min(p.maxHp, p.hp + 3);
           this.say("金灯の灯影が体力を3回復した。", "good");
         }
+        if (enemy.stolen) {
+          const spot = [[0, 0], ...DIRS].map(([dx, dy]) => ({x: enemy.x + dx, y: enemy.y + dy}))
+            .find(v => this.tile(v.x, v.y) && !same(v, this.stairs) && !this.items.some(i => same(i, v))) || {x: enemy.x, y: enemy.y};
+          if (spot) {
+            this.items.push({...spot, kind: enemy.stolen, amount: 1, discovered: !!this.visible[this.key(spot.x, spot.y)]});
+            delete enemy.stolen;
+          }
+        }
         this.dropEcho(enemy);
+        if (monster?.trait === "burst") this.burst(enemy);
         return;
+      }
+      if (monster?.trait === "split" && !enemy.split && enemy.hp >= 4) {
+        const spot = DIRS.filter(([dx, dy]) => this.canStep(enemy.x, enemy.y, dx, dy))
+          .map(([dx, dy]) => ({x: enemy.x + dx, y: enemy.y + dy}))
+          .find(v => !this.enemyAt(v.x, v.y) && !same(v, p) && !same(v, this.stairs));
+        if (spot) {
+          const hp = Math.floor(enemy.hp / 2), id = Math.max(...this.enemies.map(e => e.id)) + 1;
+          enemy.hp -= hp;
+          enemy.split = true;
+          this.enemies.push({...spot, ...monsterStats(enemy.species), hp, exp: 1, id, awake: true, split: true, spawned: true});
+          if (this.visible[this.key(enemy.x, enemy.y)]) this.say(`${enemy.name}が二つに分かれた！`, "warning");
+        }
       }
       if (kind !== "melee") return;
       const feast = this.echoFor("feast"),
@@ -885,6 +920,7 @@
     }
     strike(enemy, damage, kind) {
       const m = MONSTERS[enemy.species],
+        visible = !!this.visible[this.key(enemy.x, enemy.y)],
         trait = EQUIPMENT[equipmentKind(this.player.equipment.weapon)]?.trait;
       if (kind === "melee" && trait === "ghost" && enemy.type === "ghost")
         damage *= 2;
@@ -898,28 +934,68 @@
       if (m?.trait === "mimic") enemy.revealed = true;
       enemy.hp -= damage;
       if (m?.trait === "blink" && enemy.hp > 0) enemy.blinkPending = true;
-      enemy.awake = true;
-      this.say(`${enemy.name}に${damage}ダメージ。`);
-      this.effect("hit", enemy.x, enemy.y, damage, undefined,
+      this.wakeEnemy(enemy);
+      if (visible) this.say(`${enemy.name}に${damage}ダメージ。`);
+      if (visible) this.effect("hit", enemy.x, enemy.y, damage, undefined,
         ["melee", "arrow"].includes(kind) ? this.attackVisual(this.player, enemy, kind) : undefined);
       if (enemy.hp <= 0) {
-        this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`, "good");
+        if (visible) this.say(`${enemy.name}を倒した。経験値 +${enemy.exp}`, "good");
         this.player.exp += enemy.exp;
-        this.player.gold += this.int(3, 12) * this.floor;
-        this.effect("kill", enemy.x, enemy.y, 0);
+        if (!enemy.spawned) this.player.gold += this.int(3, 12) * this.floor;
+        if (visible) this.effect("kill", enemy.x, enemy.y, 0);
         while (this.player.exp >= this.player.nextExp) {
           this.player.exp -= this.player.nextExp;
           this.player.level++;
           this.player.nextExp = Math.floor(this.player.nextExp * 1.35) + 3;
           this.player.maxHp += 6;
-          this.player.hp = Math.min(this.player.maxHp, this.player.hp + 12);
-          this.say(
+          if (this.player.hp > 0) this.player.hp = Math.min(this.player.maxHp, this.player.hp + 12);
+          if (visible) this.say(
             `レベル${this.player.level}になった！ 体力と攻撃力が上がった。`,
             "good",
           );
-          this.effect("level", this.player.x, this.player.y, this.player.level);
+          if (visible) this.effect("level", this.player.x, this.player.y, this.player.level);
         }
       }
+    }
+    // Wake transitions are shared by sight, attacks, alarms and monster houses.
+    wakeEnemy(enemy) {
+      if (enemy.awake) return;
+      const queue = [enemy];
+      for (let i = 0; i < queue.length; i++) {
+        const e = queue[i];
+        if (e.awake) continue;
+        e.awake = true;
+        if (e.hp <= 0 || MONSTERS[e.species]?.trait !== "call") continue;
+        const room = this.roomAt(e.x, e.y);
+        if (this.visible[this.key(e.x, e.y)]) this.say(`${e.name}の呼び声で仲間が目を覚ました！`, "warning");
+        for (const other of this.enemies)
+          if (!other.awake && other.hp > 0 && ((room && this.roomAt(other.x, other.y) === room) || distance(e, other) <= 3)) queue.push(other);
+      }
+    }
+    // Nested deaths append to one queue, so a chain never recurses through explosions.
+    burst(enemy) {
+      if (this.burstQueue) { this.burstQueue.push(enemy); return; }
+      const queue = this.burstQueue = [enemy];
+      try {
+        for (let i = 0; i < queue.length; i++) {
+          const at = queue[i], p = this.player;
+          if (this.visible[this.key(at.x, at.y)]) {
+            this.say(`${at.name}が爆ぜた！ 周囲に10ダメージ。`, "danger");
+            this.effect("burst", at.x, at.y, 10);
+          }
+          if (distance(p, at) <= 1) {
+            p.hp -= 10;
+            this.say("爆散に巻き込まれた！ 10ダメージ。", "danger");
+            this.effect("damage", p.x, p.y, 10);
+          }
+          for (const [dx, dy] of [[0, 0], ...DIRS]) {
+            const x = at.x + dx, y = at.y + dy, surface = this.surfaceAt(x, y)?.type;
+            if (surface === "oil" || surface === "grass") this.ignite(x, y);
+            const target = this.enemyAt(x, y);
+            if (target) this.hit(target, 10, "magic");
+          }
+        }
+      } finally { delete this.burstQueue; }
     }
     collect() {
       const p = this.player,
@@ -1031,7 +1107,7 @@
           tell("武器が錆びて、補正値が1下がった。");
         } else tell("錆びるものはなかった。", "normal");
       } else if (type === "alarm") {
-        for (const e of this.enemies) if (e.hp > 0) e.awake = true;
+        for (const e of this.enemies) if (e.hp > 0) this.wakeEnemy(e);
         tell("鐘の音が響き、魔物たちが目を覚ました！");
       } else if (type === "fire") {
         tell("炎が噴き上がった！ 6ダメージ。");
@@ -1191,7 +1267,7 @@
         house.triggered = true;
         const pack = this.enemies.filter((e) => e.house && e.hp > 0);
         if (pack.length) {
-          for (const e of pack) e.awake = true;
+          for (const e of pack) this.wakeEnemy(e);
           this.say(
             "モンスターハウス！ 眠っていた魔物たちが一斉に目を覚ました！",
             "danger",
@@ -1269,10 +1345,10 @@
       }
       return true;
     }
-    enemyHit(e, ranged = false) {
+    enemyHit(e, ranged = false, power = e.attack, knock = null) {
       const p = this.player,
         m = MONSTERS[e.species],
-        base = Math.max(1, e.attack - this.defense() + this.int(-1, 1)),
+        base = Math.max(1, power - this.defense() + this.int(-1, 1)),
         d =
           ranged &&
           EQUIPMENT[equipmentKind(p.equipment.shield)]?.trait === "ranged"
@@ -1287,16 +1363,63 @@
       p.hp -= d;
       const loss = m?.hunger ? Math.min(p.hunger, m.hunger) : 0;
       p.hunger -= loss;
+      if (!ranged && m?.trait === "corrode") {
+        const shield = p.equipment.shield;
+        if (shield && shield.bonus > -3) {
+          shield.bonus--;
+          shield.identified = true;
+          if (this.visible[this.key(e.x, e.y)]) this.say("盾が錆びて、補正値が1下がった。", "danger");
+        }
+      }
+      if (!ranged && m?.trait === "steal" && !e.stolen) {
+        const eligible = p.bag.map((item, i) => typeof item === "string" && item !== "arrow" ? i : -1).filter(i => i >= 0);
+        if (eligible.length) {
+          const index = eligible[this.int(0, eligible.length - 1)];
+          e.stolen = p.bag.splice(index, 1)[0];
+          if (this.visible[this.key(e.x, e.y)]) this.say(`${e.name}が${this.itemName(e.stolen)}を盗んだ！`, "danger");
+        }
+      }
+      if (ranged && m?.trait === "snare") p.bindUntil = Math.max(p.bindUntil || 0, this.turn + 1);
       this.say(
         `${e.name}の攻撃。${d}ダメージ。${loss ? ` 満腹度 −${loss}。` : ""}`,
         "danger",
       );
       this.effect("damage", p.x, p.y, d, undefined,
         this.attackVisual(e, p, ranged ? "ranged" : "melee"));
+      if (knock && p.hp > 0) {
+        const [dx, dy] = knock, x = p.x + dx, y = p.y + dy;
+        if (this.canStep(p.x, p.y, dx, dy) && !this.enemyAt(x, y)) {
+          Object.assign(p, {x, y});
+          this.landing(p);
+        }
+      }
       this.blink();
     }
     enemyTurn() {
       return runEnemyTurn(this);
+    }
+    resolveCharge(e, aim) {
+      for (let i = 0; i < aim.length + 1 && e.hp > 0; i++) {
+        const x = e.x + aim.dx, y = e.y + aim.dy;
+        if (!this.canStep(e.x, e.y, aim.dx, aim.dy)) {
+          this.hit(e, 6, "magic");
+          if (e.hp > 0) e.stunned = true;
+          return;
+        }
+        if (same({x, y}, this.player)) {
+          this.enemyHit(e, false, Math.ceil(e.attack * 1.5), [aim.dx, aim.dy]);
+          return;
+        }
+        const other = this.enemyAt(x, y);
+        if (other) {
+          this.hit(e, 8, "magic");
+          this.hit(other, 8, "magic");
+          return;
+        }
+        Object.assign(e, {x, y, direction: [aim.dx, aim.dy]});
+        this.landing(e);
+        if (e.x !== x || e.y !== y || e.bindUntil >= this.turn) return;
+      }
     }
     surfaceAt(x, y) {
       return (this.surfaces || []).find((s) => s.x === x && s.y === y) || null;
