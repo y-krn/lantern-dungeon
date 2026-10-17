@@ -239,6 +239,8 @@
         counter = (value, max) => value == null || (Number.isInteger(value) && value >= 0 && value <= max);
       if (
         (p.echo != null && !Object.hasOwn(ECHO_SOURCES, p.echo)) ||
+        (p.echoSlots != null && p.echoSlots !== 1 && p.echoSlots !== 2) ||
+        (p.echo2 != null && (!Object.hasOwn(ECHO_SOURCES, p.echo2) || p.echoSlots !== 2 || p.echo == null)) ||
         !counter(p.echoSteps, 4) ||
         !counter(p.echoPity, 9) ||
         (p.lastStrike != null && (!Number.isInteger(p.lastStrike) || p.lastStrike > s.turn)) ||

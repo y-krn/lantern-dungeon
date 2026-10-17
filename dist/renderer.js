@@ -277,6 +277,7 @@
         const kind = equipmentKind(item) || item.kind;
         // Shaped weapons and echo shards have no painted art yet; trial items only exist in the trial.
         const symbols = {lampSpear: "槍", sweepAxe: "斧", hookSickle: "鎌", pushMaul: "槌", echoShard: "✦",
+          meteorSpear: "槍", gorgeAxe: "斧", shadowSickle: "鎌", quakeMaul: "槌", baneScythe: "禍", baneMirror: "禍",
           waterSkin: "◍", oilFlask: "◉", emberStone: "✺", blastNut: "✹", smokeBall: "☁",
           ...(getEngine().strategyTrial ? {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂"} : {})};
         if (symbols[kind]) {

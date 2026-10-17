@@ -210,7 +210,7 @@
     const infusion = engine.infusionInfo();
     $("ammo-name").textContent = (p.ammo === "arrow" ? "木の矢" : "未装備") + (infusion ? `（${infusion.name} ${infusion.shots}本）` : "");
     const echoInfo = engine.echoInfo();
-    $("echo-name").textContent = engine.echo()?.name || "灯影なし";
+    $("echo-name").textContent = engine.echoes().map((e) => e.name).join("・") || "灯影なし";
     $("echo-text").textContent = echoInfo.text;
     $("ammo-count").textContent = engine.arrowCount();
     $("shoot-button").disabled =
@@ -277,7 +277,7 @@
     $("location-hint").textContent = engine.status === "playing"
       ? [warnings, situation].filter(Boolean).join(" ") : situation;
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
-    if (portraitUI) $("mobile-progress").textContent = [`Lv.${p.level}`, `矢 ${engine.arrowCount()}本${infusion ? `(${infusion.name[0]}${infusion.shots})` : ""}`, engine.echo() ? `灯影:${engine.echo().short}` : ""].filter(Boolean).join(" · ");
+    if (portraitUI) $("mobile-progress").textContent = [`Lv.${p.level}`, `矢 ${engine.arrowCount()}本${infusion ? `(${infusion.name[0]}${infusion.shots})` : ""}`, echoInfo.short ? `灯影:${echoInfo.short}` : ""].filter(Boolean).join(" · ");
     if (trial) {
       const echo = engine.echo();
       const states = [echo ? `灯影「${echo.short}」${echo.text}` : "", engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);

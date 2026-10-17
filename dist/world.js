@@ -10,6 +10,7 @@
     monsterStats,
     EQUIPMENT_NAMES,
     EQUIPMENT_KEYS,
+    EQUIPMENT,
     SCROLLS,
     TERRAIN_ITEMS,
     BOONS,
@@ -219,7 +220,8 @@
               variant,
               rank: Math.max(0, EQUIPMENT_KEYS[kind].indexOf(variant)),
               bonus: game.int(-1, 3),
-              cursed: game.random() < 1 / 8,
+              // Bane gear is always cursed; the roll still runs so other loot stays put.
+              cursed: game.random() < 1 / 8 || !!EQUIPMENT[variant].bane,
               identified: false,
             }
           : {};

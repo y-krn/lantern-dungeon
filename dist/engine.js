@@ -21,6 +21,10 @@
     validEquipment,
     ITEM_ORDER,
     WEAPON_SHAPES,
+    RESONANCES,
+    EVOLUTIONS,
+    EVOLVE_KILLS,
+    ECHOES,
     THROWN_ITEMS,
     BOONS,
     SHOP_SERVICES,
@@ -153,7 +157,20 @@
       };
     }
     equipmentPower(item) {
-      return item ? EQUIPMENT[equipmentKind(item)].power + item.bonus : 0;
+      if (!item) return 0;
+      const base = EQUIPMENT[equipmentKind(item)].power;
+      return (item.purified ? Math.floor(base / 2) : base) + item.bonus;
+    }
+    // A bane item's effect and cost hold until it is purified.
+    bane(slot) {
+      const item = this.player.equipment[slot];
+      return item && !item.purified ? EQUIPMENT[equipmentKind(item)]?.bane || null : null;
+    }
+    cleanse(item) {
+      if (!item?.cursed) return false;
+      item.cursed = false;
+      if (EQUIPMENT[equipmentKind(item)]?.bane) item.purified = true;
+      return true;
     }
     rollEquipment(slot) {
       const pool = Object.keys(EQUIPMENT).filter(
@@ -254,9 +271,9 @@
       );
     }
     defense() {
-      const echo = this.echo();
+      const echo = this.echoFor("shell");
       return Math.max(0, 1 + this.equipmentPower(this.player.equipment.shield)) +
-        (echo?.id === "shell" ? (echo.tier ? 4 : 2) : 0);
+        (echo ? (echo.tier ? 4 : 2) : 0);
     }
     arrowCount() {
       return this.player.bag.filter((kind) => kind === "arrow").length;
@@ -592,8 +609,8 @@
       )
         return this.attack();
       // The wing echo folds a second step into the same turn while no enemy is in view.
-      const echo = this.echo(),
-        steps = echo?.id === "wing" && this.calm(echo.tier) ? 2 : 1;
+      const echo = this.echoFor("wing"),
+        steps = echo && this.calm(echo.tier) ? 2 : 1;
       for (let step = 0; step < steps; step++) {
         if (step) {
           this.reveal();
@@ -611,21 +628,28 @@
     }
     weaponShape() {
       const kind = equipmentKind(this.player.equipment.weapon);
-      return WEAPON_SHAPES.includes(kind) ? kind : null;
+      return EQUIPMENT[kind]?.shape || (WEAPON_SHAPES.includes(kind) ? kind : null);
     }
-    spearTarget(dx, dy) {
+    spearTarget(dx, dy, skip = null) {
       let { x, y } = this.player;
-      for (let i = 0; i < 2 && this.canStep(x, y, dx, dy); i++) {
+      const reach = EQUIPMENT[equipmentKind(this.player.equipment.weapon)]?.reach || 2;
+      for (let i = 0; i < reach && this.canStep(x, y, dx, dy); i++) {
         x += dx;
         y += dy;
         const enemy = this.enemyAt(x, y);
-        if (enemy) return { x, y, enemy };
+        if (enemy && enemy !== skip) return { x, y, enemy };
+        if (enemy) continue;
       }
       return { x, y, enemy: null };
     }
     meleeTargets(shape, dx, dy) {
       const p = this.player;
-      if (shape === "lampSpear" || shape === "hookSickle") return [this.spearTarget(dx, dy).enemy].filter(Boolean);
+      if (shape === "lampSpear" || shape === "hookSickle") {
+        const first = this.spearTarget(dx, dy).enemy;
+        // A piercing spear also strikes the next enemy in line within reach.
+        const second = first && EQUIPMENT[equipmentKind(p.equipment.weapon)]?.pierce ? this.spearTarget(dx, dy, first).enemy : null;
+        return [first, second].filter(Boolean);
+      }
       const facing = DIRS.findIndex((d) => d[0] === dx && d[1] === dy);
       const dirs = shape === "sweepAxe" ? [facing + 7, facing, facing + 1].map((i) => DIRS[i % 8]) : [[dx, dy]];
       return dirs
@@ -648,15 +672,18 @@
       if (this.status !== "playing") return false;
       const p = this.player,
         [dx, dy] = p.facing,
-        echo = this.echo(),
+        echo = this.echoFor("shot"),
         shape = this.weaponShape(),
+        gear = EQUIPMENT[equipmentKind(p.equipment.weapon)] || {},
         targets = this.meleeTargets(shape, dx, dy);
-      if (!targets.length && echo?.id === "shot") {
+      if (!targets.length && echo) {
         const target = this.shotTarget(echo.tier ? 4 : 3);
         if (target) {
+          // The meteor resonance keeps lantern shots at full strength.
+          const power = this.resonance("meteor") ? this.attackPower() : Math.floor(this.attackPower() / 2);
           this.lanternShot = true;
           try {
-            this.hit(target, Math.max(1, Math.floor(this.attackPower() / 2) + this.int(-1, 1)), "arrow");
+            this.hit(target, Math.max(1, power + this.int(-1, 1)), "arrow");
           } finally {
             delete this.lanternShot;
           }
@@ -666,17 +693,18 @@
       }
       if (!targets.length) {
         const reach = shape === "lampSpear" || shape === "hookSickle" ? this.spearTarget(dx, dy) : { x: p.x + dx, y: p.y + dy };
-        this.say(shape ? `${EQUIPMENT[shape].name}を振るった。届く先に敵はいない。` : "武器を振った。目の前に敵はいない。");
+        this.say(shape ? `${gear.name}を振るった。届く先に敵はいない。` : "武器を振った。目の前に敵はいない。");
         this.effect("swing", reach.x, reach.y, 0, undefined, this.attackVisual(p, reach));
       }
       for (const enemy of targets) {
         if (enemy.hp <= 0) continue;
         this.hit(enemy, this.attackPower() + this.int(-1, 2), "melee");
         if (enemy.hp <= 0) continue;
-        if (shape === "hookSickle" && distance(enemy, p) === 2) this.pull(enemy);
+        if (gear.leech && p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + gear.leech);
+        if (shape === "hookSickle") for (let i = 0; i < (gear.pull || 1) && distance(enemy, p) >= 2 && enemy.hp > 0; i++) this.pull(enemy);
         if (shape === "pushMaul") {
-          const might = echo?.id === "might";
-          this.push(enemy, might ? 3 : 2, 3 + (might ? (echo.tier ? 4 : 2) : 0));
+          const might = this.echoFor("might");
+          this.push(enemy, (gear.push || 2) + (might ? 1 : 0), (gear.impact || 3) + (might ? (might.tier ? 4 : 2) : 0) + (this.resonance("quake") ? 3 : 0));
         }
       }
       this.finishTurn();
@@ -720,13 +748,55 @@
       this.hit(actor, this.int(2, 5), "magic");
     }
     echo() {
-      return this.player.echo ? echoOfSpecies(this.player.echo) : null;
+      return this.echoes()[0] || null;
+    }
+    echoes() {
+      const p = this.player;
+      return [p.echo, p.echo2].filter(Boolean).map(echoOfSpecies);
+    }
+    echoSlots() {
+      return this.player.echoSlots === 2 ? 2 : 1;
+    }
+    // The strongest held echo of a family, so two of a kind never stack.
+    echoFor(id) {
+      return this.echoes().filter((e) => e.id === id).sort((a, b) => b.tier - a.tier)[0] || null;
+    }
+    resonances() {
+      const held = new Set(this.echoes().map((e) => e.id));
+      return Object.entries(RESONANCES)
+        .filter(([, r]) => r.pair.every((id) => held.has(id)))
+        .map(([id, r]) => ({ id, ...r }));
+    }
+    resonance(id) {
+      return this.resonances().some((r) => r.id === id);
     }
     echoInfo() {
-      const echo = this.echo();
-      return echo
-        ? { label: `ランタン：${echo.name}（${MONSTERS[echo.species].name}）`, short: echo.short, text: echo.text }
-        : { label: "ランタン：灯影なし", short: "", text: "倒した魔物が残す灯影の欠片を踏むと、その魔物の力が宿ります。" };
+      const echoes = this.echoes(),
+        resonances = this.resonances(),
+        slots = this.echoSlots();
+      if (!echoes.length)
+        return { label: `ランタン：灯影なし（${slots}枠）`, short: "", text: "倒した魔物が残す灯影の欠片を踏むと、その魔物の力が宿ります。" };
+      return {
+        label: `ランタン：${echoes.map((e) => `${e.name}（${MONSTERS[e.species].name}）`).join("・")}${slots === 2 && echoes.length < 2 ? "・空き1枠" : ""}`,
+        short: echoes.map((e) => e.short).join("・"),
+        text: [...echoes.map((e) => e.text), ...resonances.map((r) => `共鳴「${r.name}」：${r.text}`)].join(" "),
+      };
+    }
+    // With two slots a new echo fills the empty one, else displaces the older.
+    absorbEcho(species) {
+      const p = this.player;
+      let previous = null;
+      if (this.echoSlots() === 2 && p.echo && !p.echo2) p.echo2 = species;
+      else if (this.echoSlots() === 2 && p.echo) {
+        previous = echoOfSpecies(p.echo);
+        p.echo = p.echo2;
+        p.echo2 = species;
+      } else {
+        previous = p.echo ? echoOfSpecies(p.echo) : null;
+        p.echo = species;
+      }
+      p.echoSteps = 0;
+      return previous;
     }
     echoDropRule() {
       return { percent: 15, pity: 4 };
@@ -750,14 +820,14 @@
     }
     echoStep() {
       const p = this.player,
-        echo = this.echo();
-      if (echo?.id !== "moss" || p.hp <= 0) return;
-      p.echoSteps = ((p.echoSteps || 0) + 1) % 5;
+        echo = this.echoFor("moss");
+      if (!echo || p.hp <= 0) return;
+      p.echoSteps = ((p.echoSteps || 0) + 1) % (this.resonance("mossShell") ? 3 : 5);
       if (!p.echoSteps && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + (echo.tier ? 2 : 1));
     }
     wakeRange() {
-      const echo = this.echo();
-      return echo?.id === "veil" ? (echo.tier ? 2 : 3) : 7;
+      const echo = this.echoFor("veil");
+      return echo ? (echo.tier ? 2 : 3) : 7;
     }
     calm(tier) {
       return !this.enemies.some(
@@ -776,13 +846,16 @@
     hit(enemy, damage, kind = "physical") {
       if (enemy.hp <= 0) return;
       const p = this.player,
-        echo = this.echo(),
+        root = this.echoFor("root"),
         strike = kind === "melee" || this.lanternShot;
-      if (strike && echo?.id === "root" && p.lastStrike === this.turn - 1) damage += echo.tier ? 5 : 3;
+      if (strike && root && p.lastStrike === this.turn - 1) damage += root.tier ? 5 : 3;
+      // The ambush resonance doubles blows on monsters that have not noticed Rine.
+      if (strike && !enemy.awake && this.resonance("ambush")) damage *= 2;
       this.strike(enemy, damage, kind);
       if (strike) p.lastStrike = this.turn;
       if (enemy.hp <= 0) {
-        if (echo?.id === "ember" && p.hp > 0 && p.hp < p.maxHp) {
+        if (kind === "melee" && p.equipment.weapon) p.equipment.weapon.kills = (p.equipment.weapon.kills || 0) + 1;
+        if (this.echoFor("ember") && p.hp > 0 && p.hp < p.maxHp) {
           p.hp = Math.min(p.maxHp, p.hp + 3);
           this.say("金灯の灯影が体力を3回復した。", "good");
         }
@@ -790,8 +863,10 @@
         return;
       }
       if (kind !== "melee") return;
-      if (echo?.id === "feast" && p.hunger < 100) p.hunger = Math.min(100, p.hunger + (echo.tier ? 2 : 1));
-      if (echo?.id === "might" && this.weaponShape() !== "pushMaul") this.push(enemy, 1, echo.tier ? 4 : 2);
+      const feast = this.echoFor("feast"),
+        might = this.echoFor("might");
+      if (feast && p.hunger < 100) p.hunger = Math.min(100, p.hunger + (feast.tier ? 2 : 1));
+      if (might && this.weaponShape() !== "pushMaul") this.push(enemy, 1, (might.tier ? 4 : 2) + (this.resonance("quake") ? 3 : 0));
     }
     strike(enemy, damage, kind) {
       const m = MONSTERS[enemy.species],
@@ -835,11 +910,9 @@
       const p = this.player,
         item = this.groundItem();
       if (item?.kind === "echoShard") {
-        const previous = this.echo(),
-          echo = echoOfSpecies(item.species);
+        const echo = echoOfSpecies(item.species);
         this.items.splice(this.items.indexOf(item), 1);
-        p.echo = item.species;
-        p.echoSteps = 0;
+        const previous = this.absorbEcho(item.species);
         this.say(
           `ランタンが${MONSTERS[item.species].name}の灯影を宿した。${echo.name}：${echo.text}${previous ? `（${previous.name}は消えた）` : ""}`,
           "good",
@@ -930,11 +1003,7 @@
       if (kind === "identify") this.identifyItem(target);
       if (kind === "uncurse") {
         let count = 0;
-        for (const item of Object.values(p.equipment))
-          if (item?.cursed) {
-            item.cursed = false;
-            count++;
-          }
+        for (const item of Object.values(p.equipment)) if (this.cleanse(item)) count++;
         this.say(
           count
             ? "装備中の呪いがすべて解けた！"
@@ -950,7 +1019,7 @@
       }
       if (kind === "potion") {
         const before = p.hp;
-        p.hp = Math.min(p.maxHp, p.hp + 25);
+        p.hp = Math.min(p.maxHp, p.hp + (this.bane("shield") === "reflect" ? 12 : 25));
         this.say(`回復草を使った。体力 +${p.hp - before}`, "good");
         this.effect("heal", p.x, p.y, p.hp - before);
       }
@@ -1059,15 +1128,9 @@
           );
         }
       }
-      if (
-        this.turn %
-          (EQUIPMENT[equipmentKind(this.player.equipment.shield)]?.trait ===
-          "hunger"
-            ? 8
-            : 4) ===
-          0 &&
-        this.player.hunger > 0
-      )
+      const famine = this.bane("weapon") === "famine",
+        appetite = famine ? 2 : EQUIPMENT[equipmentKind(this.player.equipment.shield)]?.trait === "hunger" ? 8 : 4;
+      if (this.turn % appetite === 0 && this.player.hunger > 0)
         this.player.hunger--;
       if (this.player.hunger === 0) {
         this.player.hp--;
@@ -1136,6 +1199,12 @@
           EQUIPMENT[equipmentKind(p.equipment.shield)]?.trait === "ranged"
             ? Math.ceil(base / 2)
             : base;
+      if (ranged && this.bane("shield") === "reflect") {
+        this.say(`禍つの鏡盾が${e.name}の攻撃を跳ね返した！`, "good");
+        this.effect("swing", e.x, e.y, 0, undefined, this.attackVisual(p, e, "ranged"));
+        this.hit(e, d, "magic");
+        return;
+      }
       p.hp -= d;
       const loss = m?.hunger ? Math.min(p.hunger, m.hunger) : 0;
       p.hunger -= loss;
@@ -1305,9 +1374,27 @@
           (boon.needs !== "weapon" || !!p.equipment.weapon) &&
           (boon.needs !== "shield" || !!p.equipment.shield) &&
           (choice.id !== "quiver" || this.arrowCount() > 0 || this.inventoryCount() < INVENTORY_CAPACITY) &&
-          (choice.id !== "insight" || this.unknownCount() > 0);
+          (choice.id !== "insight" || this.unknownCount() > 0) &&
+          (choice.id !== "wick" || this.echoSlots() < 2);
         return { ...choice, name: boon.name, text: echo ? `${echo.name}（${MONSTERS[choice.species].name}）を宿す。${echo.text}` : boon.text, available };
-      });
+      }).concat(this.evolution() || []);
+    }
+    // The weapon evolution offer, shown at every shrine while the weapon can evolve at all.
+    evolution() {
+      const weapon = this.player.equipment.weapon,
+        path = EVOLUTIONS[equipmentKind(weapon)];
+      if (!path) return null;
+      const kills = weapon.kills || 0,
+        echo = this.echoFor(path.echo),
+        need = ECHOES[path.echo].name,
+        into = EQUIPMENT[path.into];
+      const missing = [kills < EVOLVE_KILLS ? `あと${EVOLVE_KILLS - kills}体倒す` : "", echo ? "" : `${need}を宿す`].filter(Boolean);
+      return {
+        id: "evolve",
+        name: `武器の進化：${into.name}`,
+        text: `${EQUIPMENT[equipmentKind(weapon)].name}が${into.name}になる。${into.description.replace(/^攻撃力 [^。]+。/, "")}${missing.length ? `（条件：${missing.join("、")}）` : ""}`,
+        available: !missing.length,
+      };
     }
     chooseBoon(index) {
       const option = this.boonOptions()[index];
@@ -1319,9 +1406,13 @@
       }
       if (option.id === "whet") p.equipment.weapon.bonus++;
       if (option.id === "temper") p.equipment.shield.bonus++;
-      if (option.id === "echo") {
-        p.echo = option.species;
-        p.echoSteps = 0;
+      if (option.id === "echo") this.absorbEcho(option.species);
+      if (option.id === "wick") p.echoSlots = 2;
+      if (option.id === "evolve") {
+        const weapon = p.equipment.weapon;
+        weapon.variant = EVOLUTIONS[equipmentKind(weapon)].into;
+        weapon.identified = true;
+        weapon.kills = 0;
       }
       if (option.id === "rest") {
         p.hp = p.maxHp;
@@ -1368,14 +1459,14 @@
       const p = this.player;
       p.gold -= offer.price;
       if (id === "appraise") this.revealAll();
-      if (id === "cleanse") for (const item of Object.values(p.equipment)) if (item) item.cursed = false;
+      if (id === "cleanse") for (const item of Object.values(p.equipment)) this.cleanse(item);
       this.say(id === "appraise" ? `${offer.price}Gで持ち物を鑑定してもらった。` : `${offer.price}Gで装備の呪いを解いてもらった。`, "good");
       return true;
     }
     blink() {
       const p = this.player,
         room = this.roomAt(p.x, p.y);
-      if (this.echo()?.id !== "blink" || p.hp <= 0 || !room || this.int(1, 4) !== 1) return;
+      if (!this.echoFor("blink") || p.hp <= 0 || !room || this.int(1, 4) !== 1) return;
       const spots = [];
       for (let y = room.y; y < room.y + room.h; y++)
         for (let x = room.x; x < room.x + room.w; x++)
