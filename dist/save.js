@@ -245,6 +245,7 @@
         (p.echo2 != null && (!Object.hasOwn(ECHO_SOURCES, p.echo2) || p.echoSlots !== 2 || p.echo == null)) ||
         !counter(p.echoSteps, 4) ||
         !counter(p.echoPity, 9) ||
+        !counter(p.shrineBonus, 2) ||
         (p.lastStrike != null && (!Number.isInteger(p.lastStrike) || p.lastStrike > s.turn)) ||
         s.items.some((i) => i?.kind === "echoShard" && !Object.hasOwn(ECHO_SOURCES, i.species))
       )
@@ -268,7 +269,8 @@
           (!spot(game.shrine) ||
             typeof game.shrine.used !== "boolean" ||
             !Array.isArray(game.shrine.choices) ||
-            game.shrine.choices.length !== 3 ||
+            ![3, 4].includes(game.shrine.choices.length) ||
+            (!game.shrine.used && game.shrine.choices.length === 4 && !p.shrineBonus) ||
             game.shrine.choices.some((c) => !c || !Object.hasOwn(BOONS, c.id) || (c.id === "echo") !== Object.hasOwn(ECHO_SOURCES, c.species ?? "")))) ||
         (game.merchant !== null &&
           (!spot(game.merchant) ||
@@ -331,6 +333,11 @@
           if (e.type !== stats.type || e.name !== stats.name || e.maxHp !== stats.maxHp || e.attack !== stats.attack ||
             e.exp !== (e.spawned ? 1 : stats.exp) || !Number.isFinite(e.hp) || e.hp > e.maxHp) return null;
         }
+        const miniboss = MONSTERS[e.species].miniboss;
+        if (miniboss && (dungeon !== "depths" || game.floor !== miniboss || e.house)) return null;
+        if (e.splitCount != null && (e.species !== "bubbleMother" || e.spawned || !Number.isInteger(e.splitCount) || e.splitCount < 1 || e.splitCount > 3 ||
+          !!e.split !== (e.splitCount === 3))) return null;
+        if (e.species === "bubbleMother" && !e.spawned && e.split && e.splitCount !== 3) return null;
         if (
           e.intent != null &&
           ((e.intent.kind === "ranged"
@@ -354,7 +361,7 @@
           (e.revealed != null && typeof e.revealed !== "boolean") ||
           (e.blinkPending != null && typeof e.blinkPending !== "boolean") ||
           ["split", "spawned", "stunned"].some(key => e[key] != null && typeof e[key] !== "boolean") ||
-          ((e.split || e.spawned) && e.species !== "bubbleSlime") ||
+          ((e.split || e.spawned) && !["bubbleSlime", "bubbleMother"].includes(e.species)) ||
           (e.spawned && !e.split) ||
           (e.stunned && MONSTERS[e.species].trait !== "charge") ||
           (e.stolen != null && (MONSTERS[e.species].trait !== "steal" || typeof e.stolen !== "string" || e.stolen === "arrow" ||
@@ -362,6 +369,7 @@
         )
           return null;
       }
+      if (game.enemies.filter(e => MONSTERS[e.species].miniboss && !e.spawned).length > 1) return null;
       for (const actor of [p, ...game.enemies])
         for (const key of ["bindUntil", "resistUntil"])
           if (actor[key] != null && (!Number.isInteger(actor[key]) || actor[key] < 0 || actor[key] > game.turn + 2)) return null;

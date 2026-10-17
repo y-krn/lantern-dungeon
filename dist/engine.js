@@ -475,7 +475,7 @@
         id: actor === this.player ? "player" : actor.id,
         x: actor.x, y: actor.y, type: actor === this.player ? "hero" : actor.type,
         species: actor.species, hp: actor.hp, maxHp: actor.maxHp,
-        revealed: actor.revealed, elite: actor.elite, facing: actor.facing?.slice(),
+        revealed: actor.revealed, elite: actor.elite, spawned: actor.spawned, facing: actor.facing?.slice(),
         visible: actor === this.player || !!this.visible[this.key(actor.x, actor.y)],
       });
       return { source: capture(source), target: capture(target), kind };
@@ -880,7 +880,7 @@
         this.wakeEnemy(enemy);
         return;
       }
-      if (monster?.trait === "ward" && (kind === "melee" || kind === "arrow" || this.lanternShot)) damage = Math.ceil(damage / 2);
+      if ((monster?.trait === "ward" || monster?.ward) && (kind === "melee" || kind === "arrow" || this.lanternShot)) damage = Math.ceil(damage / 2);
       this.strike(enemy, damage, kind);
       if (strike) p.lastStrike = this.turn;
       if (enemy.hp <= 0) {
@@ -898,6 +898,16 @@
           }
         }
         this.dropEcho(enemy);
+        if (monster?.miniboss && !enemy.spawned) {
+          p.shrineBonus = Math.min(2, (p.shrineBonus || 0) + 1);
+          if (this.shrine && !this.shrine.used && this.shrine.choices.length === 3) {
+            const pool = Object.keys(BOONS).filter(id => !this.shrine.choices.some(c => c.id === id)),
+              id = pool[this.int(0, pool.length - 1)], species = Object.keys(ECHO_SOURCES);
+            this.shrine.choices.push(id === "echo" ? {id, species: species[this.int(0, species.length - 1)]} : {id});
+          }
+          this.say("迷宮の奥から灯りが届いた。次に触れる灯台の候補が一つ増える。", "good");
+          this.effect("level", p.x, p.y, "灯台の灯り");
+        }
         if (monster?.trait === "burst") this.burst(enemy);
         return;
       }
@@ -908,7 +918,9 @@
         if (spot) {
           const hp = Math.floor(enemy.hp / 2), id = Math.max(...this.enemies.map(e => e.id)) + 1;
           enemy.hp -= hp;
-          enemy.split = true;
+          const limit = monster.splitLimit || 1;
+          if (limit > 1) enemy.splitCount = (enemy.splitCount || 0) + 1;
+          enemy.split = (enemy.splitCount || 1) >= limit;
           this.enemies.push({...spot, ...monsterStats(enemy.species), hp, exp: 1, id, awake: true, split: true, spawned: true});
           if (this.visible[this.key(enemy.x, enemy.y)]) this.say(`${enemy.name}が二つに分かれた！`, "warning");
         }
@@ -1628,6 +1640,7 @@
       if (option.id === "quiver") p.bag.push(...Array(15).fill("arrow"));
       if (option.id === "insight") this.revealAll();
       this.shrine.used = true;
+      if (this.shrine.choices.length === 4 && p.shrineBonus) p.shrineBonus--;
       this.say(`灯台の灯りを受け取った。${option.name}：${option.text}`, "good");
       this.effect("level", p.x, p.y, option.name);
       return true;

@@ -39,7 +39,7 @@ const {W,H,DIRS,ITEMS}=DungeonData;
     legacy.hp=1;assert.equal(DungeonEngine.restore(JSON.stringify(saved)).enemies[0].hp,1);
     legacy.species='unknown';assert.equal(DungeonEngine.restore(JSON.stringify(saved)),null);
   }
-  console.log('PASS: all 37 species encountered in 4,000 floors; same-name stats fixed across dungeons; exact save round-trip and damaged/dead legacy migration checked.');
+  console.log('PASS: all 39 species encountered in 4,000 floors; same-name stats fixed across dungeons; exact save round-trip and damaged/dead legacy migration checked.');
 }
 
 {
@@ -560,7 +560,7 @@ for(let seed=1;seed<=100;seed++){
     assert.equal(game.enemies.length,6+Math.floor(floor*.75)+(floor===30?1:0));
     assert.equal(game.traps.length,Math.min(floor+2,8));assert(game.traps.every(t=>!game.isRoomEntrance(t.x,t.y)));
     const enemies=game.enemies.filter(e=>e.type!=='guardian');
-    for(const e of enemies){const m=DungeonData.monsterStats(e.species,e.elite);assert.equal(e.maxHp,m.maxHp);assert.equal(e.attack,m.attack);assert(DungeonData.MONSTER_POOLS[DungeonData.monsterTier(floor,'depths')].includes(e.species));}
+    for(const e of enemies){const m=DungeonData.monsterStats(e.species,e.elite);assert.equal(e.maxHp,m.maxHp);assert.equal(e.attack,m.attack);assert(DungeonData.MONSTERS[e.species].miniboss===floor||DungeonData.MONSTER_POOLS[DungeonData.monsterTier(floor,'depths')].includes(e.species));}
     assert.equal(game.enemies.some(e=>e.type==='guardian'),floor===30);
     if(floor===30||floor===11){const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.equal(restored.floor,floor);assert.deepEqual(restored.enemies,game.enemies);}
   }
