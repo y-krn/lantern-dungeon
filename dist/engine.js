@@ -151,7 +151,8 @@
         appearances: Object.fromEntries(
           SCROLLS.map((kind, i) => [kind, names[i]]),
         ),
-        known: legacy || this.dungeon === "tutorial" ? [...SCROLLS] : [],
+        // The appraisal talisman is always known so it can be used to learn the others.
+        known: legacy || this.dungeon === "tutorial" ? [...SCROLLS] : ["identify"],
         names: {},
       };
     }
