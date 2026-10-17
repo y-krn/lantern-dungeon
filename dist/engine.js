@@ -22,6 +22,9 @@
     ITEM_ORDER,
     WEAPON_SHAPES,
     THROWN_ITEMS,
+    BOONS,
+    SHOP_SERVICES,
+    START_KITS,
     INFUSIONS,
     INFUSION_SHOTS,
     SURFACES,
@@ -1258,6 +1261,116 @@
         if (s.remaining && !spread.some((v) => same(v, s))) s.remaining--;
       this.surfaces = (this.surfaces || []).filter((s) => s.remaining == null || s.remaining > 0);
       for (const v of spread) this.ignite(v.x, v.y);
+    }
+    // Starting kits: offered once, at turn 0 of a fresh adventure.
+    chooseStartKit(id) {
+      if (!this.kitOffered || this.turn !== 0 || this.status !== "playing" || (id !== "none" && !Object.hasOwn(START_KITS, id))) return false;
+      const kit = START_KITS[id],
+        p = this.player;
+      if (kit?.weapon) p.equipment.weapon = { kind: "weapon", variant: kit.weapon, rank: 0, bonus: 0, cursed: false, identified: true };
+      if (kit?.echo) p.echo = kit.echo;
+      if (kit?.items) {
+        p.bag.push(...kit.items);
+        if (kit.items.includes("arrow")) p.ammo = "arrow";
+      }
+      this.kitOffered = false;
+      this.say(kit ? `${kit.name}の支度で出発した。` : "いつもの支度で出発した。", "good");
+      return true;
+    }
+    site() {
+      const p = this.player;
+      if (this.status !== "playing") return null;
+      if (this.shrine && !this.shrine.used && same(this.shrine, p)) return "shrine";
+      if (this.merchant && same(this.merchant, p)) return "merchant";
+      return null;
+    }
+    unknownCount() {
+      const p = this.player,
+        gear = [...p.bag, ...Object.values(p.equipment)].filter((i) => isEquipment(i) && !i.identified).length,
+        scrolls = new Set(p.bag.filter((i) => SCROLLS.includes(i) && !this.identification.known.includes(i))).size;
+      return gear + scrolls;
+    }
+    revealAll() {
+      const p = this.player;
+      for (const item of [...p.bag, ...Object.values(p.equipment)]) if (isEquipment(item)) item.identified = true;
+      for (const kind of p.bag) if (SCROLLS.includes(kind) && !this.identification.known.includes(kind)) this.identification.known.push(kind);
+    }
+    boonOptions() {
+      if (this.site() !== "shrine") return [];
+      const p = this.player;
+      return this.shrine.choices.map((choice) => {
+        const boon = BOONS[choice.id],
+          echo = choice.species && echoOfSpecies(choice.species);
+        const available =
+          (boon.needs !== "weapon" || !!p.equipment.weapon) &&
+          (boon.needs !== "shield" || !!p.equipment.shield) &&
+          (choice.id !== "quiver" || this.arrowCount() > 0 || this.inventoryCount() < INVENTORY_CAPACITY) &&
+          (choice.id !== "insight" || this.unknownCount() > 0);
+        return { ...choice, name: boon.name, text: echo ? `${echo.name}（${MONSTERS[choice.species].name}）を宿す。${echo.text}` : boon.text, available };
+      });
+    }
+    chooseBoon(index) {
+      const option = this.boonOptions()[index];
+      if (!option?.available) return false;
+      const p = this.player;
+      if (option.id === "vigor") {
+        p.maxHp += 8;
+        p.hp = Math.min(p.maxHp, p.hp + 8);
+      }
+      if (option.id === "whet") p.equipment.weapon.bonus++;
+      if (option.id === "temper") p.equipment.shield.bonus++;
+      if (option.id === "echo") {
+        p.echo = option.species;
+        p.echoSteps = 0;
+      }
+      if (option.id === "rest") {
+        p.hp = p.maxHp;
+        p.hunger = 100;
+      }
+      if (option.id === "quiver") p.bag.push(...Array(15).fill("arrow"));
+      if (option.id === "insight") this.revealAll();
+      this.shrine.used = true;
+      this.say(`灯台の灯りを受け取った。${option.name}：${option.text}`, "good");
+      this.effect("level", p.x, p.y, option.name);
+      return true;
+    }
+    shopOffers() {
+      if (this.site() !== "merchant") return { wares: [], services: [] };
+      const p = this.player,
+        scale = (base) => Math.round((base * (1 + this.floor * 0.08)) / 10) * 10,
+        unknown = this.unknownCount(),
+        cursed = Object.values(p.equipment).some((i) => i?.cursed);
+      const wares = this.merchant.stock.map((ware, index) => {
+        const fits = ware.kind === "arrow" ? this.arrowCount() > 0 || this.inventoryCount() < INVENTORY_CAPACITY
+          : this.inventoryCount() < INVENTORY_CAPACITY || this.inventoryEntries().some((e) => e.kind === ware.kind && e.count < STACK_SIZE);
+        return { ...ware, index, name: this.itemName(ware.kind) + (ware.amount > 1 ? ` × ${ware.amount}` : ""), available: !ware.sold && p.gold >= ware.price && fits };
+      });
+      const services = [
+        { id: "appraise", name: unknown ? `${SHOP_SERVICES.appraise.name}（未鑑定 ${unknown}品）` : `${SHOP_SERVICES.appraise.name}（未鑑定の品はありません）`, price: scale(SHOP_SERVICES.appraise.base) * unknown, available: unknown > 0 && p.gold >= scale(SHOP_SERVICES.appraise.base) * unknown },
+        { id: "cleanse", name: cursed ? `${SHOP_SERVICES.cleanse.name}（装備中の呪い）` : `${SHOP_SERVICES.cleanse.name}（呪われた装備はありません）`, price: scale(SHOP_SERVICES.cleanse.base), available: cursed && p.gold >= scale(SHOP_SERVICES.cleanse.base) },
+      ];
+      return { wares, services };
+    }
+    buy(index) {
+      const ware = this.shopOffers().wares[index];
+      if (!ware?.available) return false;
+      const p = this.player;
+      p.gold -= ware.price;
+      p.bag.push(...Array(ware.amount).fill(ware.kind));
+      this.merchant.stock[index].sold = true;
+      this.say(`${ware.name}を${ware.price}Gで買った。`, "good");
+      this.effect("pickup", p.x, p.y, ware.kind, this.log[0].text);
+      return true;
+    }
+    service(id) {
+      const offer = this.shopOffers().services.find((s) => s.id === id);
+      if (!offer?.available) return false;
+      const p = this.player;
+      p.gold -= offer.price;
+      if (id === "appraise") this.revealAll();
+      if (id === "cleanse") for (const item of Object.values(p.equipment)) if (item) item.cursed = false;
+      this.say(id === "appraise" ? `${offer.price}Gで持ち物を鑑定してもらった。` : `${offer.price}Gで装備の呪いを解いてもらった。`, "good");
+      return true;
     }
     blink() {
       const p = this.player,

@@ -191,6 +191,41 @@
       ctx.fillStyle = "#b2c0a1";
       ctx.fillRect(px + s * 4, py + s * 14, s * 8, s);
     }
+    function drawSite(kind, spot, px, py, now) {
+      const s = tile / 16;
+      ctx.save();
+      if (kind === "shrine") {
+        // A stone lantern pillar; its flame goes dark once the boon is taken.
+        ctx.fillStyle = "#8b8a7e";
+        ctx.fillRect(px + s * 5, py + s * 7, s * 6, s * 8);
+        ctx.fillStyle = "#5e5d55";
+        ctx.fillRect(px + s * 3, py + s * 5, s * 10, s * 2);
+        ctx.fillRect(px + s * 4, py + s * 14, s * 8, s * 2);
+        if (!spot.used) {
+          const glow = reduced ? 0 : Math.sin(now / 300) * s * .6;
+          ctx.fillStyle = "#ffd76b55";
+          ctx.beginPath(); ctx.arc(px + s * 8, py + s * 4, s * 4 + glow, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#ffcf4a";
+          ctx.beginPath(); ctx.ellipse(px + s * 8, py + s * 3.5, s * 1.6, s * 2.6, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = spot.used ? "#3b3a35" : "#ffe9a6";
+        ctx.fillRect(px + s * 7, py + s * 9, s * 2, s * 3);
+      } else {
+        // A small stall: striped canopy over a counter.
+        ctx.fillStyle = "#6b4a2c";
+        ctx.fillRect(px + s * 3, py + s * 6, s, s * 9);
+        ctx.fillRect(px + s * 12, py + s * 6, s, s * 9);
+        ctx.fillStyle = "#a8794a";
+        ctx.fillRect(px + s * 2, py + s * 11, s * 12, s * 3);
+        for (let i = 0; i < 4; i++) {
+          ctx.fillStyle = i % 2 ? "#f3e2b8" : "#c2523c";
+          ctx.fillRect(px + s * (2 + i * 3), py + s * 3, s * 3, s * 3);
+        }
+        ctx.fillStyle = "#ffd76b";
+        ctx.beginPath(); ctx.arc(px + s * 8, py + s * 10, s * 1.3, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
     function drawSurface(surface, px, py, now) {
       const s = tile / 16;
       ctx.save();
@@ -410,6 +445,8 @@
         if (!engine.tile(surface.x, surface.y) || !engine.seen[k] || (surface.remaining && !engine.visible[k])) continue;
         drawSurface(surface, surface.x * tile + offsetX, surface.y * tile + offsetY, now);
       }
+      for (const [kind, spot] of [["shrine", engine.shrine], ["merchant", engine.merchant]])
+        if (spot && engine.seen[engine.key(spot.x, spot.y)]) drawSite(kind, spot, spot.x * tile + offsetX, spot.y * tile + offsetY, now);
       if (engine.seen[engine.key(engine.stairs.x, engine.stairs.y)]) {
         const sx = engine.stairs.x * tile + offsetX,
           sy = engine.stairs.y * tile + offsetY;

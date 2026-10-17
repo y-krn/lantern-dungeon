@@ -53,6 +53,8 @@
   }
   const resumed = !!engine;
   engine ||= new Engine();
+  // A brand-new adventure (not a resumed one) starts with the kit offer.
+  if (!resumed && !trial) engine.kitOffered = true;
   engine.tutorialCleared ||= tutorialCleared;
   let sound = false,
     audio = null,
@@ -256,6 +258,10 @@
         ? `${info.treasure}を手に入れた！`
         : threat
           ? `${threat.name}が力をためている。`
+          : engine.site() === "shrine"
+            ? "灯台がある。「灯台に触れる」で、三つの灯りから一つを受け取れる。"
+          : engine.site() === "merchant"
+            ? "灯り売りの露店。「露店を見る」で買い物と鑑定・解呪ができる。"
           : engine.onStairs()
             ? engine.floor === engine.maxFloor()
               ? `${info.guardian}がランタンを守っている。`
@@ -265,6 +271,9 @@
                 engine.enemies.some((e) => e.house && e.hp > 0)
               ? "魔物たちが一斉に目を覚ました！"
               : nearest ? `${nearest.name}がすぐ近くにいる。` : "";
+    const site = engine.site();
+    $("site-button").hidden = !site;
+    $("site-button").textContent = site === "shrine" ? "灯台に触れる" : "露店を見る";
     $("location-hint").textContent = engine.status === "playing"
       ? [warnings, situation].filter(Boolean).join(" ") : situation;
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
@@ -330,6 +339,7 @@
   }
   function closeModal() {
     if (trial && modalKind === "trial-kit" && !engine.kitChosen) { engine.chooseKit("none"); updateUI(); save(); }
+    if (modalKind === "start-kit" && engine.kitOffered) { engine.chooseStartKit("none"); updateUI(); save(); }
     $("modal").close();
     modalKind = "";
     canvas.focus({ preventScroll: true });
@@ -383,6 +393,33 @@
     strategyAim = null; updateAim();
     if (commit) act(() => engine.use(target.index, target, target.mode), true);
     else updateUI();
+  }
+  function offerStartKit() {
+    const kits = DungeonData.START_KITS;
+    openModal("start-kit", `<div class="modal-inner">${modalHeader("旅支度")}<p class="modal-description">どの支度で出発しますか。閉じると、いつもの装備で出発します。</p><div class="dungeon-list">${Object.entries(kits).map(([id, kit]) => `<button class="dungeon-choice" data-start-kit="${id}"><strong>${kit.name}</strong><span class="dungeon-choice-description">${kit.text}</span></button>`).join("")}</div><button class="secondary-button" data-start-kit="none">いつもの装備で出発する</button></div>`);
+    $("modal-content").querySelectorAll("[data-start-kit]").forEach((button) => button.addEventListener("click", () => {
+      engine.chooseStartKit(button.dataset.startKit); closeModal(); updateUI(); save();
+    }));
+  }
+  function showSite() {
+    const site = engine.site();
+    if (site === "shrine") {
+      const options = engine.boonOptions();
+      openModal("shrine", `<div class="modal-inner">${modalHeader("灯台")}<p class="modal-description">三つの灯りから一つを受け取れます。受け取ると灯台の灯りは消えます。ターンは進みません。</p><div class="dungeon-list">${options.map((o, i) => `<button class="dungeon-choice" data-boon="${i}" ${o.available ? "" : "disabled"}><strong>${o.name}</strong><span class="dungeon-choice-description">${o.text}${o.available ? "" : "（今は受け取れません）"}</span></button>`).join("")}</div><button class="secondary-button" data-close>あとで</button></div>`);
+      $("modal-content").querySelectorAll("[data-boon]").forEach((button) => button.addEventListener("click", () => {
+        if (engine.chooseBoon(Number(button.dataset.boon))) { closeModal(); updateUI(); save(); }
+      }));
+    } else if (site === "merchant") {
+      const {wares, services} = engine.shopOffers(), p = engine.player;
+      const row = (attr, value, name, price, available, note) => `<button class="dungeon-choice" data-${attr}="${value}" ${available ? "" : "disabled"}><strong>${name}</strong><span class="dungeon-choice-description">${note || `${price}G${!available && p.gold < price ? "（所持金が足りません）" : ""}`}</span></button>`;
+      openModal("merchant", `<div class="modal-inner">${modalHeader("灯り売りの露店")}<p class="modal-description">所持金 ${p.gold}G。買い物と鑑定・解呪ではターンは進みません。</p><div class="dungeon-list">${wares.map(w => row("ware", w.index, w.name, w.price, w.available, w.sold ? "売り切れ" : !w.available && p.gold >= w.price ? `${w.price}G（持ち物がいっぱい）` : "")).join("")}${services.map(s => row("service", s.id, s.name, s.price, s.available, s.price ? "" : "—")).join("")}</div><button class="secondary-button" data-close>露店を離れる</button></div>`);
+      $("modal-content").querySelectorAll("[data-ware]").forEach((button) => button.addEventListener("click", () => {
+        if (engine.buy(Number(button.dataset.ware))) { updateUI(); save(); showSite(); }
+      }));
+      $("modal-content").querySelectorAll("[data-service]").forEach((button) => button.addEventListener("click", () => {
+        if (engine.service(button.dataset.service)) { updateUI(); save(); showSite(); }
+      }));
+    }
   }
   function chooseTrialKit() {
     openModal("trial-kit", `<div class="modal-inner">${modalHeader("分け灯の旅支度")}<p class="modal-description">灯種と札を携え、五つの回廊へ。武器を一つ選ぶか、今の装備で出発できます。ほかの武器も道中で見つかります。</p><div class="dungeon-list">${Object.keys(StrategyEngine.GEAR).map(kind => `<button class="dungeon-choice" data-kit="${kind}"><strong>${DungeonData.EQUIPMENT[kind].name}</strong><span class="dungeon-choice-description">${DungeonData.EQUIPMENT[kind].description}</span></button>`).join("")}</div><button class="secondary-button" data-kit="none">今の装備で出発する</button></div>`);
@@ -459,8 +496,10 @@
     turnOnly = false;
     renderer.reset();
     updateUI();
+    if (!trial) engine.kitOffered = true;
     save();
     if (trial) chooseTrialKit();
+    else offerStartKit();
   }
   function confirmNew() {
     if (strategyAim) return;
@@ -528,6 +567,9 @@
   $("shoot-button").addEventListener("click", () =>
     act(() => engine.shoot(), true),
   );
+  $("site-button").addEventListener("click", () => {
+    if (!$("modal").open && renderer.remaining() === 0) showSite();
+  });
   $("wait-button").addEventListener("click", () =>
     act(() => engine.wait(), true),
   );
@@ -563,6 +605,7 @@
   );
   $("modal").addEventListener("cancel", () => {
     if (trial && modalKind === "trial-kit" && !engine.kitChosen) { engine.chooseKit("none"); updateUI(); save(); }
+    if (modalKind === "start-kit" && engine.kitOffered) { engine.chooseStartKit("none"); updateUI(); save(); }
     modalKind = "";
     canvas.focus({ preventScroll: true });
   });
@@ -679,6 +722,7 @@
   updateUI();
   save();
   if (trial && !engine.kitChosen) chooseTrialKit();
+  else if (engine.kitOffered && engine.turn === 0) offerStartKit();
   window.addEventListener("pagehide", save);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") save();
