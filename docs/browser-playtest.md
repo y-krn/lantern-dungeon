@@ -13,6 +13,12 @@ node check.cjs
 node scripts/browser-playtest.cjs --seeds 101,102,103 --max-turns 600 --out output/playtest-baseline
 ```
 
+`agent-browser install` がChromeを取得できない環境（ネットワーク制限のあるクラウド環境など）では、既存のChromiumを `AGENT_BROWSER_EXECUTABLE_PATH` で指定します。Playwright同梱のChromiumなら、例えば次のとおりです。
+
+```sh
+export AGENT_BROWSER_EXECUTABLE_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome
+```
+
 ランナーが空いているポートで`dist/`をローカル配信し、専用のブラウザセッションを作成します。普段のブラウザのセーブや公開サイトには接続しません。終了時にセッションとHTTPサーバーを閉じます。出力先の再利用は拒否するため、比較時には別名を指定してください。
 
 ```sh
