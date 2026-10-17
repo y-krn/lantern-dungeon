@@ -14,7 +14,12 @@
   };
   const gear = {
     lampSpear: { name: "灯守りの槍", slot: "weapon", power: 2, weight: 0, description: "攻撃力 +2。敵の方向へ進むと、直線2マス以内の最初の敵をその場で突きます。壁や手前の敵は越えません。" },
+    sweepAxe: { name: "薙ぎの斧", slot: "weapon", power: 4, weight: 0, description: "攻撃力 +4。正面と、その左右斜め前の3マスにいる敵をまとめて攻撃します。" },
+    hookSickle: { name: "鉤の鎌", slot: "weapon", power: 2, weight: 0, description: "攻撃力 +2。敵の方向へ進むと、直線2マス以内の最初の敵をその場で攻撃し、2マス先の敵は1マス手前へ引き寄せます。" },
+    pushMaul: { name: "打ち槌", slot: "weapon", power: 3, weight: 0, description: "攻撃力 +3。当てた敵を2マス押し出します。壁にぶつかると3ダメージ、敵にぶつかると双方に3ダメージ。罠や蔓も発動します。" },
   };
+  // Floors 2-4 each leave one attack shape to pick up mid-run.
+  const FLOOR_GEAR = { 2: "sweepAxe", 3: "hookSickle", 4: "pushMaul" };
   // Lantern echoes: each monster family lends its own trait to Rine's lantern.
   const ECHOES = {
     moss: { name: "苔の灯影", short: "苔", text: ["5歩進むごとに体力+1。", "5歩進むごとに体力+2。"] },
@@ -87,14 +92,16 @@
       });
       if (this.floor > 1) {
         const supplies = ["lightSeed", "vineSeed", "bait", ["pullTalisman", "swapTalisman", "returnTalisman"][(this.floor - 2) % 3]];
-        for (const kind of supplies) {
+        if (FLOOR_GEAR[this.floor]) supplies.push({ kind: "weapon", variant: FLOOR_GEAR[this.floor], rank: 0, bonus: 0, cursed: false, identified: true });
+        for (const supply of supplies) {
+          const kind = supply.kind || supply;
           const spot = this.rooms.flatMap(r => {
             const cells = [];
             for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++)
               if (this.tile(x, y) && !this.enemyAt(x, y) && !same({x, y}, this.player) && !same({x, y}, this.stairs) && !this.items.some(i => same(i, {x, y})) && !this.traps.some(i => same(i, {x, y}))) cells.push({x, y});
             return cells;
           })[0];
-          if (spot) this.items.push({ ...spot, kind, amount: 1 });
+          if (spot) this.items.push({ ...spot, ...(supply.kind ? supply : { kind }), amount: 1 });
         }
       }
       this.reveal();
@@ -209,7 +216,7 @@
       }
       if (kind !== "melee") return;
       if (echo?.id === "feast" && p.hunger < 100) p.hunger = Math.min(100, p.hunger + (echo.tier ? 2 : 1));
-      if (echo?.id === "might") this.shove(enemy, echo.tier ? 4 : 2);
+      if (echo?.id === "might" && this.weaponShape() !== "pushMaul") this.push(enemy, 1, echo.tier ? 4 : 2);
     }
     echo() { return this.player.echo ? echoOfSpecies(this.player.echo) : null; }
     echoInfo() {
@@ -227,14 +234,6 @@
       p.echoPity = 0;
       this.items.push({...spot, kind: "echoShard", species: enemy.species, amount: 1, discovered: !!this.visible[this.key(spot.x, spot.y)]});
       if (this.visible[this.key(spot.x, spot.y)]) this.say(`${enemy.name}の灯影が残った。踏むとランタンに宿る。`, "good");
-    }
-    shove(enemy, impact) {
-      const dx = Math.sign(enemy.x - this.player.x), dy = Math.sign(enemy.y - this.player.y);
-      const x = enemy.x + dx, y = enemy.y + dy;
-      if (this.canStep(enemy.x, enemy.y, dx, dy) && !this.enemyAt(x, y) && !same({x, y}, this.player)) {
-        Object.assign(enemy, {x, y});
-        this.strategyLanding(enemy);
-      } else this.hit(enemy, impact, "magic");
     }
     itemName(item) {
       return item?.kind === "echoShard" ? `${MONSTERS[item.species]?.name || "魔物"}の灯影` : super.itemName(item);
@@ -279,7 +278,9 @@
     }
     move(dx, dy) {
       if (!this.ready() || !DIRS.some(d => d[0] === dx && d[1] === dy) || !this.canStep(this.player.x, this.player.y, dx, dy)) return false;
-      if (equipmentKind(this.player.equipment.weapon) === "lampSpear" && this.spearTarget(dx, dy).enemy) {
+      const shape = this.weaponShape();
+      if (((shape === "lampSpear" || shape === "hookSickle") && this.spearTarget(dx, dy).enemy) ||
+        ((shape === "sweepAxe" || shape === "pushMaul") && this.enemyAt(this.player.x + dx, this.player.y + dy))) {
         this.face(dx, dy);
         return this.attack();
       }
@@ -327,20 +328,62 @@
       try { this.hit(enemy, Math.max(1, Math.floor(this.attackPower() / 2) + this.int(-1, 1)), "arrow"); } finally { delete this.lanternShot; }
       this.finishTurn(); return true;
     }
+    weaponShape() {
+      const kind = equipmentKind(this.player.equipment.weapon);
+      return Object.hasOwn(gear, kind) ? kind : null;
+    }
+    meleeTargets(shape, dx, dy) {
+      const p = this.player;
+      if (shape === "lampSpear" || shape === "hookSickle") return [this.spearTarget(dx, dy).enemy].filter(Boolean);
+      const facing = DIRS.findIndex(d => d[0] === dx && d[1] === dy);
+      const dirs = shape === "sweepAxe" ? [facing + 7, facing, facing + 1].map(i => DIRS[i % 8]) : [[dx, dy]];
+      return dirs.filter(([x, y]) => this.canStep(p.x, p.y, x, y)).map(([x, y]) => this.enemyAt(p.x + x, p.y + y)).filter(Boolean);
+    }
     attack() {
       if (!this.ready()) return false;
-      const p = this.player, [dx, dy] = p.facing, echo = this.echo();
-      const spear = equipmentKind(p.equipment.weapon) === "lampSpear";
-      const reach = spear ? this.spearTarget(dx, dy).enemy : this.canStep(p.x, p.y, dx, dy) && this.enemyAt(p.x + dx, p.y + dy);
-      if (!reach && echo?.id === "shot") {
+      const p = this.player, [dx, dy] = p.facing, echo = this.echo(), shape = this.weaponShape();
+      const targets = this.meleeTargets(shape, dx, dy);
+      if (!targets.length && echo?.id === "shot") {
         const target = this.shotTarget(echo.tier ? 4 : 3);
         if (target) return this.lanternStrike(target);
       }
-      if (!spear) return super.attack();
-      const {x, y, enemy} = this.spearTarget(dx, dy);
-      if (enemy) this.hit(enemy, this.attackPower() + this.int(-1, 2), "melee");
-      else { this.say("槍を突き出した。届く先に敵はいない。"); this.effect("swing", x, y, 0, undefined, this.attackVisual(p, {x, y})); }
+      if (!shape) return super.attack();
+      if (!targets.length) {
+        const {x, y} = shape === "lampSpear" || shape === "hookSickle" ? this.spearTarget(dx, dy) : {x: p.x + dx, y: p.y + dy};
+        this.say(`${gear[shape].name}を振るった。届く先に敵はいない。`);
+        this.effect("swing", x, y, 0, undefined, this.attackVisual(p, {x, y}));
+      }
+      for (const enemy of targets) {
+        if (enemy.hp <= 0) continue;
+        this.hit(enemy, this.attackPower() + this.int(-1, 2), "melee");
+        if (enemy.hp <= 0) continue;
+        if (shape === "hookSickle" && distance(enemy, p) === 2) this.pull(enemy);
+        if (shape === "pushMaul") {
+          const might = echo?.id === "might";
+          this.push(enemy, might ? 3 : 2, 3 + (might ? (echo.tier ? 4 : 2) : 0));
+        }
+      }
       this.finishTurn(); return true;
+    }
+    pull(enemy) {
+      const p = this.player, dx = Math.sign(p.x - enemy.x), dy = Math.sign(p.y - enemy.y);
+      const x = enemy.x + dx, y = enemy.y + dy;
+      if (!this.canStep(enemy.x, enemy.y, dx, dy) || this.enemyAt(x, y) || same({x, y}, p)) return;
+      Object.assign(enemy, {x, y});
+      this.strategyLanding(enemy);
+    }
+    push(enemy, steps, impact) {
+      const dx = Math.sign(enemy.x - this.player.x), dy = Math.sign(enemy.y - this.player.y);
+      for (let i = 0; i < steps && enemy.hp > 0; i++) {
+        const x = enemy.x + dx, y = enemy.y + dy, other = this.enemyAt(x, y);
+        if (!this.canStep(enemy.x, enemy.y, dx, dy) || other || same({x, y}, this.player)) {
+          this.hit(enemy, impact, "magic");
+          if (other) this.hit(other, impact, "magic");
+          return;
+        }
+        Object.assign(enemy, {x, y});
+        this.strategyLanding(enemy);
+      }
     }
     wait() {
       return this.ready() && super.wait();
@@ -449,6 +492,7 @@
       } catch { return null; }
     }
   }
+  StrategyEngine.GEAR = gear;
   StrategyEngine.ECHOES = ECHOES;
   StrategyEngine.ECHO_SOURCES = ECHO_SOURCES;
   root.StrategyEngine = StrategyEngine;
