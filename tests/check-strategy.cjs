@@ -154,9 +154,9 @@ for (const species of ['lanternMoth','eclipseMoth','mossSlime','amberSlime','iro
   assert(g.descend()); assert.equal(g.strategy.lamp,null); assert.equal(g.strategy.vines.length,0); replay(g);
 }
 {
-  const g = arena(); g.player.bag=Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
-  assert.equal(g.inventoryCount(),20); g.items=[{x:10,y:10,kind:'lightSeed',amount:1}];
-  assert(g.useGround({x:13,y:10})); assert.equal(g.inventoryCount(),20); assert.equal(g.items.length,0,'A full bag can use a targeted floor item directly');
+  const g = arena(); g.player.bag=Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
+  assert.equal(g.inventoryCount(),24); g.items=[{x:10,y:10,kind:'lightSeed',amount:1}];
+  assert(g.useGround({x:13,y:10})); assert.equal(g.inventoryCount(),24); assert.equal(g.items.length,0,'A full bag can use a targeted floor item directly');
   assert.equal(DungeonEngine.restore(g.serialize()),null,'Normal games reject the trial save version');
   assert.equal(StrategyEngine.restore(normal[0]),null,'Trials reject normal saves');
   const broken=JSON.parse(g.serialize()); broken.state.strategy.lamp.remaining=-1;

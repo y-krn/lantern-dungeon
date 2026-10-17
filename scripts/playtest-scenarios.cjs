@@ -13,11 +13,11 @@ function fixtures() {
   const entries = [];
   for (const kind of ['bread', 'potion']) {
     const e = make(), p = e.player;
-    p.bag = Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})); p.hp = 5; p.hunger = 20;
+    p.bag = Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})); p.hp = 5; p.hunger = 20;
     e.items = [{ kind, x: p.x, y: p.y, amount: 1, discovered: true }];
     entries.push([`full-capacity-${kind}`, e]);
   }
-  const exchange = make(); exchange.player.bag = Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
+  const exchange = make(); exchange.player.bag = Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
   exchange.items = [{ kind: 'potion', x: exchange.player.x, y: exchange.player.y, amount: 1, discovered: true }];
   entries.push(['full-capacity-exchange', exchange]);
   const identify = make(); identify.player.bag = ['identify', gear(), 'bread'];
@@ -92,7 +92,7 @@ async function runScenarios({ ab, evaluate, screenshot, write, resumedSave }) {
       await ready(); await screenshot(`scenario-${fixture.name}-before.png`);
       const before = await state();
       if (fixture.name === 'full-capacity-bread' || fixture.name === 'full-capacity-potion') {
-        check(before.player.bag.length + 2 === 20, 'capacity-20');
+        check(before.player.bag.length + 2 === 24, 'capacity-24');
         await click('#ground-use-button');
         const after = await state();
         check(after.turn === before.turn + 1 && after.items.length === 0, 'ground-use-one-turn');
@@ -104,7 +104,7 @@ async function runScenarios({ ab, evaluate, screenshot, write, resumedSave }) {
         await click('#exchange-cancel'); same(await state(), before, 'exchange-cancel-free');
         await click('[data-item-action="exchange"][data-index="ground"]'); await click('[data-exchange="0"]');
         const after = await state();
-        check(after.turn === before.turn + 1 && after.player.bag.length === 18, 'exchange-one-turn-capacity');
+        check(after.turn === before.turn + 1 && after.player.bag.length === 22, 'exchange-one-turn-capacity');
         same(after.player.bag, [...before.player.bag.slice(1), 'potion'], 'exchange-preserves-bag-order');
         check(after.items[0].kind === before.player.bag[0].kind && after.items[0].amount === 1, 'exchange-conserves-items');
       } else if (fixture.name === 'identify-cancel-equip') {

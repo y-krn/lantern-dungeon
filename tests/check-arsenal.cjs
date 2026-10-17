@@ -61,7 +61,7 @@ for (const dungeon of ['tutorial', 'depths']) {
 // Absorbing, effects and saves on the ordinary engine, including depths.
 {
   const g = arena(null, null, 'depths'); g.items.push({x:11, y:10, kind:'echoShard', species:'cobaltBeetle', amount:1});
-  const def = g.defense(); g.player.bag = Array.from({length:20},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
+  const def = g.defense(); g.player.bag = Array.from({length:24},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
   assert(g.move(1, 0)); assert.equal(g.player.echo, 'cobaltBeetle', 'A full bag never blocks an echo'); assert.equal(g.defense(), def + 4);
   replay(g);
   const wing = arena(null, 'caveBat'); assert(wing.move(1, 0)); assert.equal(wing.player.x, 12);

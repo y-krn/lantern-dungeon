@@ -64,16 +64,16 @@ function quiet(seed=42,dungeon='depths'){
   assert.equal(game.use(0),false);assert.equal(game.use(0,0),false);assert.equal(game.serialize(),saved);
   assert(game.use(0,1));assert.deepEqual(p.bag,['bread']);
 }
-// Equipped items occupy the same 20 slots; swaps and unequips preserve the count.
+// Equipped items occupy the same 24 slots; swaps and unequips preserve the count.
 {
-  const game=quiet(),p=game.player,item=gear();p.bag=[...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})),item];
-  assert.equal(game.inventoryCount(),20);assert(game.equip(17));assert.equal(game.inventoryCount(),20);
-  assert.equal(p.bag[17].rank,0);assert(game.unequip('weapon'));assert.equal(game.inventoryCount(),20);
-  assert.equal(p.bag.length,19);assert(game.equip(18));assert.equal(game.inventoryCount(),20);
-  assert(game.dropEquipment(17));assert.equal(game.inventoryCount(),19);
+  const game=quiet(),p=game.player,item=gear();p.bag=[...Array.from({length:21},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})),item];
+  assert.equal(game.inventoryCount(),24);assert(game.equip(21));assert.equal(game.inventoryCount(),24);
+  assert.equal(p.bag[21].rank,0);assert(game.unequip('weapon'));assert.equal(game.inventoryCount(),24);
+  assert.equal(p.bag.length,23);assert(game.equip(22));assert.equal(game.inventoryCount(),24);
+  assert(game.dropEquipment(21));assert.equal(game.inventoryCount(),23);
   const dropped=game.items[0];assert.equal(dropped.kind,'weapon');assert.equal(dropped.rank,0);
-  assert(game.unequip('weapon'));assert.equal(game.inventoryCount(),19);
-  game.collect();assert.equal(game.items.length,0);assert.equal(game.inventoryCount(),20);
+  assert(game.unequip('weapon'));assert.equal(game.inventoryCount(),23);
+  game.collect();assert.equal(game.items.length,0);assert.equal(game.inventoryCount(),24);
   const raw=game.serialize();assert.equal(DungeonEngine.restore(raw).serialize(),raw);
 }
 // Legacy strength and known consumables survive migration without inventing curses.

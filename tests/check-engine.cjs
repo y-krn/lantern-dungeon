@@ -335,7 +335,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 {
   const game=arena(22),p=game.player;
   p.bag=['potion','arrow','bread','arrow','potion','arrow'];
-  assert.deepEqual(game.inventoryEntries(),[{kind:'bread',index:2,count:1},{kind:'potion',index:0,count:2},{kind:'arrow',index:1,count:3}]);
+  assert.deepEqual(game.inventoryEntries(),[{kind:'bread',index:2,count:1},{kind:'potion',index:0,count:1},{kind:'potion',index:4,count:1},{kind:'arrow',index:1,count:3}]);
   assert.equal(game.shoot(),false);assert.equal(game.turn,0);
   assert(game.equipArrow());assert.equal(p.ammo,'arrow');assert.equal(game.arrowCount(),3);assert.equal(game.turn,1);assert.equal(p.weapon,0);assert.equal(p.shield,0);
   const restored=DungeonEngine.restore(game.serialize());assert(restored);assert.deepEqual(restored.player,p);assert.equal(restored.arrowCount(),3);
@@ -343,7 +343,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   assert(game.equipArrow());p.facing=[1,0];
   const enemy={x:p.x+2,y:p.y,id:1,type:'slime',name:'苔スライム',hp:30,maxHp:30,attack:1,exp:1};game.enemies=[enemy];game.reveal();
   const turn=game.turn;assert(game.shoot());assert.equal(enemy.hp,18);assert.equal(game.arrowCount(),2);assert.equal(p.ammo,'arrow');assert.equal(game.turn,turn+1);
-  game.enemies=[];assert(game.shoot());assert(game.shoot());assert.equal(p.ammo,null);assert.equal(game.arrowCount(),0);assert.equal(game.inventoryEntries().length,2);
+  game.enemies=[];assert(game.shoot());assert(game.shoot());assert.equal(p.ammo,null);assert.equal(game.arrowCount(),0);assert.equal(game.inventoryEntries().length,3);
   const emptyTurn=game.turn;assert.equal(game.shoot(),false);assert.equal(game.equipArrow(),false);assert.equal(game.turn,emptyTurn);
   const legacy=JSON.parse(game.serialize());delete legacy.state.player.ammo;legacy.state.player.bag=['arrow','bread','arrow'];
   const migrated=DungeonEngine.restore(JSON.stringify(legacy));assert(migrated);assert.equal(migrated.player.ammo,null);assert.equal(migrated.inventoryEntries().length,2);assert.equal(migrated.arrowCount(),2);
@@ -355,7 +355,8 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   p.bag=['map','arrow','potion','scroll','bread','potion','arrow','bread'];p.hunger=20;p.hp=5;
   const bag=[...p.bag],saved=game.serialize();
   assert.deepEqual(game.inventoryEntries(),[
-    {kind:'bread',index:4,count:2},{kind:'potion',index:2,count:2},
+    {kind:'bread',index:4,count:1},{kind:'bread',index:7,count:1},
+    {kind:'potion',index:2,count:1},{kind:'potion',index:5,count:1},
     {kind:'scroll',index:3,count:1},{kind:'map',index:0,count:1},{kind:'arrow',index:1,count:2}
   ]);
   assert.deepEqual(p.bag,bag);assert.equal(game.serialize(),saved);assert.equal(game.turn,0);
@@ -364,7 +365,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
   assert.deepEqual(p.bag,['map','arrow','potion','scroll','potion','arrow','bread']);
   assert(game.use(game.inventoryEntries().find(e=>e.kind==='potion').index));assert.equal(p.hp,30);assert.equal(p.hunger,70);
   game.items=[{x:p.x,y:p.y,kind:'bread',amount:1}];game.collect();
-  assert.deepEqual(game.inventoryEntries().map(e=>e.kind),['bread','potion','scroll','map','arrow']);
+  assert.deepEqual(game.inventoryEntries().map(e=>e.kind),['bread','bread','potion','scroll','map','arrow']);
   p.bag=[];assert.deepEqual(game.inventoryEntries(),[]);
 }
 {
@@ -378,17 +379,17 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
     assert(!restored.items.some(i=>i.kind==='arrow'));assert.equal(restored.inventoryEntries().filter(i=>i.kind==='arrow').length,1);
   }
   assert.deepEqual([...amounts].sort((a,b)=>a-b),[1,2,3,4,5,6,7,8,9,10]);
-  const game=new DungeonEngine(22),p=game.player;p.bag=Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));p.bag.push('arrow');p.ammo='arrow';
+  const game=new DungeonEngine(22),p=game.player;p.bag=Array.from({length:21},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));p.bag.push('arrow');p.ammo='arrow';
   game.items=[{x:p.x,y:p.y,kind:'arrow',amount:10}];game.collect();
-  assert.equal(game.arrowCount(),11);assert.equal(game.inventoryEntries().length,18);assert.equal(p.ammo,'arrow');assert.equal(game.items.length,0);
+  assert.equal(game.arrowCount(),11);assert.equal(game.inventoryEntries().length,22);assert.equal(p.ammo,'arrow');assert.equal(game.items.length,0);
   game.items=[{x:p.x,y:p.y,kind:'arrow'}];game.collect();assert.equal(game.arrowCount(),12);
 }
 {
   const game=new DungeonEngine(22),p=game.player;game.enemies=[];game.traps=[];
-  p.bag=Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));p.bag.push('arrow');
-  game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.arrowCount(),2);assert.equal(game.inventoryEntries().length,18);assert.equal(game.items.length,0);
+  p.bag=Array.from({length:21},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));p.bag.push('arrow');
+  game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.arrowCount(),2);assert.equal(game.inventoryEntries().length,22);assert.equal(game.items.length,0);
   game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(p.bag.includes('potion'),false);
-  p.bag=Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(game.arrowCount(),0);
+  p.bag=Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));game.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];game.collect();assert.equal(game.items.length,1);assert.equal(game.arrowCount(),0);
 }
 {
   const game=new DungeonEngine(22,'depths',true),p=game.player;game.enemies=[];game.traps=[];
@@ -417,7 +418,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
     // Later events in the same turn must not replace the pickup message.
     game.say('足元にトゲの罠！ 3ダメージ。','danger');assert.equal(game.effects[0].text,text);
   }
-  p.bag=Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));game.effects=[];game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();
+  p.bag=Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));game.effects=[];game.items=[{x:p.x,y:p.y,kind:'potion',amount:1}];game.collect();
   assert.equal(game.effects.length,0);assert.equal(game.items.length,1);
 }
 {

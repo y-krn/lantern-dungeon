@@ -4,7 +4,6 @@
     W,
     H,
     INVENTORY_CAPACITY,
-    STACK_SIZE,
     DIRS,
     ITEMS,
     EQUIPMENT,
@@ -285,12 +284,6 @@
         const kind = itemKind(item);
         if (kind === "arrow" && arrows) {
           arrows.count++;
-          return;
-        }
-        // Arrows form one bundle; other consumables stack up to STACK_SIZE per slot.
-        const stack = typeof item === "string" && kind !== "arrow" && entries.find((e) => e.kind === kind && e.count < STACK_SIZE);
-        if (stack) {
-          stack.count++;
           return;
         }
         const entry = { kind, index, count: 1 };
@@ -925,10 +918,7 @@
         p.gold += item.amount;
         this.say(`${item.amount}Gを拾った。`, "good");
       } else {
-        const stacks =
-          item.kind === "arrow"
-            ? this.arrowCount() > 0
-            : !isEquipment(item) && this.inventoryEntries().some((e) => e.kind === item.kind && e.count < STACK_SIZE);
+        const stacks = item.kind === "arrow" && this.arrowCount() > 0;
         if (this.inventoryCount() >= INVENTORY_CAPACITY && !stacks) {
           this.say(
             `持ち物がいっぱい。${this.itemName(item)}は足元に残った。`,
@@ -1433,7 +1423,7 @@
         cursed = Object.values(p.equipment).some((i) => i?.cursed);
       const wares = this.merchant.stock.map((ware, index) => {
         const fits = ware.kind === "arrow" ? this.arrowCount() > 0 || this.inventoryCount() < INVENTORY_CAPACITY
-          : this.inventoryCount() < INVENTORY_CAPACITY || this.inventoryEntries().some((e) => e.kind === ware.kind && e.count < STACK_SIZE);
+          : this.inventoryCount() < INVENTORY_CAPACITY;
         return { ...ware, index, name: this.itemName(ware.kind) + (ware.amount > 1 ? ` × ${ware.amount}` : ""), available: !ware.sold && p.gold >= ware.price && fits };
       });
       const services = [

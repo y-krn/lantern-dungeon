@@ -91,17 +91,17 @@ try {
     assert(evaluate('document.getElementById("strategy-confirm").disabled'),'A self-target without an enemy is invalid');
     click('#strategy-cancel');ready();
     // At capacity, a floor item can still enter targeting and be consumed directly.
-    fixture(`e.player.bag=Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));e.items=[{kind:'lightSeed',x:14,y:12,amount:1}];`);
-    assert.equal(evaluate('window.lanternGame.snapshot().state.player.bag.length'),18);
+    fixture(`e.player.bag=Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));e.items=[{kind:'lightSeed',x:14,y:12,amount:1}];`);
+    assert.equal(evaluate('window.lanternGame.snapshot().state.player.bag.length'),22);
     click('#ground-use-button');click('#strategy-confirm');ready();
-    assert.equal(state().items.length,0);assert(state().strategy.lamp);assert.equal(state().player.bag.length,18);
+    assert.equal(state().items.length,0);assert(state().strategy.lamp);assert.equal(state().player.bag.length,22);
     // Dumplings are food only, in the bag and directly on the floor.
     fixture(`e.player.hunger=50;`);click('#bag-button');
     assert.equal(evaluate(`document.querySelectorAll('[data-item-action="throw"]').length`),0);
     browser('press','Escape');bagUse('bait');ready();assert.equal(state().player.hunger,65);
-    fixture(`e.player.hunger=50;e.player.bag=Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));e.items=[{kind:'bait',x:14,y:12,amount:1}];`);
+    fixture(`e.player.hunger=50;e.player.bag=Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));e.items=[{kind:'bait',x:14,y:12,amount:1}];`);
     click('#ground-item-button');assert.equal(evaluate(`document.querySelectorAll('[data-item-action="throw"]').length`),0);
-    click('[data-item-action="use"][data-index="ground"]');ready();assert.equal(state().player.hunger,65);assert.equal(state().items.length,0);assert.equal(state().player.bag.length,18);
+    click('[data-item-action="use"][data-index="ground"]');ready();assert.equal(state().player.hunger,65);assert.equal(state().items.length,0);assert.equal(state().player.bag.length,22);
     fixture();bagUse('vineSeed');ready();assert.equal(state().strategy.vines.length,1);
     fixture(`e.items=[{kind:'potion',amount:1,x:17,y:12}];`);
     bagUse('pullTalisman');click('[data-direction="1,0"]');click('[data-direction="1,0"]');click('#strategy-confirm');ready();

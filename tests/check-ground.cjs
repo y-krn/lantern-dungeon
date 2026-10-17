@@ -5,7 +5,7 @@ function arena(kind, amount = 1) {
   const game = new DungeonEngine(42), p = game.player;
   const room = game.roomAt(p.x, p.y);
   p.x = room.cx; p.y = room.cy; p.facing = [1, 0];
-  p.bag = Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})); p.hp = 1; p.hunger = 20;
+  p.bag = Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})); p.hp = 1; p.hunger = 20;
   game.enemies = []; game.traps = []; game.monsterHouse = null;
   game.items = [{kind, amount, x: p.x, y: p.y}];
   game.reveal();
@@ -25,11 +25,11 @@ for (const kind of ['bread', 'potion', 'scroll', 'map', 'identify', 'uncurse', '
   }
   const before = structuredClone(ground.player.bag);
   bag.items = []; bag.player.bag.push(kind);
-  assert.equal(ground.inventoryCount(), 20);
+  assert.equal(ground.inventoryCount(), 24);
   assert.equal(ground.scrollNeedsTarget('ground'), kind === 'identify');
-  assert(ground.useGround(target)); assert(bag.use(18, target));
+  assert(ground.useGround(target)); assert(bag.use(22, target));
   assert.equal(ground.turn, 1); assert.equal(ground.items.length, 0);
-  assert.deepEqual(ground.player.bag, before); assert.equal(ground.inventoryCount(), 20);
+  assert.deepEqual(ground.player.bag, before); assert.equal(ground.inventoryCount(), 24);
   assert.deepEqual(ground.player, bag.player);
   assert.deepEqual(ground.enemies, bag.enemies);
   assert.deepEqual(ground.identification, bag.identification);
@@ -42,7 +42,7 @@ for (const kind of ['bread', 'potion', 'scroll', 'map', 'identify', 'uncurse', '
 // A floor arrow stack loses exactly one arrow and preserves equipped bag ammo.
 {
   const game = arena('arrow', 27), p = game.player;
-  p.bag = [...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})), 'arrow', 'arrow']; p.ammo = 'arrow';
+  p.bag = [...Array.from({length:21},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})), 'arrow', 'arrow']; p.ammo = 'arrow';
   const before = [...p.bag];
   assert(game.useGround()); assert.equal(game.items[0].amount, 26);
   assert.equal(game.items.filter(item => item.kind === 'arrow').reduce((sum, item) => sum + item.amount, 0), 27);
@@ -158,10 +158,10 @@ for (const occupied of ['potion', 'stairs']) {
 // Recovered arrows can join an inventory stack even at full capacity.
 {
   const game = shootingArena(), p = game.player;
-  p.bag = [...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})), 'arrow', 'arrow'];
-  assert.equal(game.inventoryCount(), 20); assert(game.shoot());
+  p.bag = [...Array.from({length:21},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})), 'arrow', 'arrow'];
+  assert.equal(game.inventoryCount(), 24); assert(game.shoot());
   for (let i = 0; i < 3; i++) assert(game.move(1, 0));
-  assert.equal(game.arrowCount(), 2); assert.equal(game.inventoryCount(), 20);
+  assert.equal(game.arrowCount(), 2); assert.equal(game.inventoryCount(), 24);
   assert.equal(game.items.length, 0);
 }
 {
@@ -179,7 +179,7 @@ for (const occupied of ['potion', 'stairs']) {
   for (const target of [undefined, -1, 999, 'missing']) {
     assert.equal(game.useGround(target), false); assert.equal(game.serialize(), before);
   }
-  assert(game.useGround(0)); assert.equal(game.player.bag.length, 18);
+  assert(game.useGround(0)); assert.equal(game.player.bag.length, 22);
 }
 for (const setup of [
   game => { game.items = []; },
@@ -210,7 +210,7 @@ for (const setup of [
   assert.equal(game.targetItem('ground'),item);
   assert(game.use(0,'ground'));assert.equal(game.turn,1);
   assert.equal(game.items[0],item);assert(item.identified);assert(item.cursed);assert.equal(item.bonus,-2);
-  assert.equal(game.inventoryCount(),19);assert.deepEqual(p.equipment,equipped);
+  assert.equal(game.inventoryCount(),23);assert.deepEqual(p.equipment,equipped);
   assert(game.identification.known.includes('identify'));
   const saved = game.serialize();assert.equal(DungeonEngine.restore(saved).serialize(),saved);
   // Removing the floor target cannot silently consume a second scroll.
@@ -224,7 +224,7 @@ for (const setup of [
   assert(game.nameScroll('ground','地図かも'));assert.equal(game.turn,0);
   assert(game.itemName(game.groundItem()).includes('地図かも'));
   assert(game.use(0,'ground'));assert(game.identification.known.includes('map'));
-  assert.equal(game.groundItem().kind,'map');assert.equal(game.inventoryCount(),19);
+  assert.equal(game.groundItem().kind,'map');assert.equal(game.inventoryCount(),23);
   const saved=game.serialize();assert.equal(DungeonEngine.restore(saved).serialize(),saved);
   const own=arena('identify'),before=own.serialize();
   assert.equal(own.useGround('ground'),false);assert.equal(own.serialize(),before);
@@ -233,20 +233,20 @@ for (const setup of [
 {
   const game=arena('potion'),p=game.player;
   assert.equal(game.pickup(),false);assert.equal(game.turn,0);assert.equal(game.items.length,1);
-  p.bag.pop();assert(game.pickup());assert.equal(game.turn,1);assert.equal(game.inventoryCount(),20);
+  p.bag.pop();assert(game.pickup());assert.equal(game.turn,1);assert.equal(game.inventoryCount(),24);
   assert.equal(game.items.length,0);assert.equal(p.bag.at(-1),'potion');
   assert.equal(game.pickup(),false);assert.equal(game.turn,1);
 }
 {
   const game=arena('arrow',27);game.player.bag[0]='arrow';game.player.ammo='arrow';
-  assert(game.pickup());assert.equal(game.turn,1);assert.equal(game.arrowCount(),28);assert.equal(game.inventoryCount(),20);
+  assert(game.pickup());assert.equal(game.turn,1);assert.equal(game.arrowCount(),28);assert.equal(game.inventoryCount(),24);
   const saved=game.serialize();assert.equal(DungeonEngine.restore(saved).serialize(),saved);
 }
 // Direct equipment swapping leaves the previous gear on the floor, never in the bag.
 for(const kind of ['weapon','shield']) {
   const game=arena(kind),p=game.player,old=structuredClone(p.equipment[kind]),bag=structuredClone(p.bag);
   game.items=[{...old,bonus:2,cursed:true,identified:false,x:p.x,y:p.y,amount:1}];
-  assert(game.equip('ground'));assert.equal(game.turn,1);assert.equal(game.inventoryCount(),20);
+  assert(game.equip('ground'));assert.equal(game.turn,1);assert.equal(game.inventoryCount(),24);
   assert.deepEqual(p.bag,bag);assert(p.equipment[kind].identified);assert(p.equipment[kind].cursed);
   assert.equal(p.equipment[kind].bonus,2);assert(!Object.hasOwn(p.equipment[kind],'x'));
   assert.deepEqual(game.groundItem(),{...old,x:p.x,y:p.y,amount:1,discovered:true});
@@ -257,10 +257,10 @@ for(const kind of ['weapon','shield']) {
 {
   const game=arena('weapon'),p=game.player;
   game.items=[{...p.equipment.weapon,x:p.x,y:p.y,amount:1,identified:false}];
-  p.equipment.weapon=null;p.weapon=0;p.bag=Array.from({length:19},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
-  assert.equal(game.inventoryCount(),20);assert.equal(game.equip('ground'),false);
+  p.equipment.weapon=null;p.weapon=0;p.bag=Array.from({length:23},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
+  assert.equal(game.inventoryCount(),24);assert.equal(game.equip('ground'),false);
   assert.equal(game.turn,0);assert(!game.groundItem().identified);
-  p.bag.pop();assert(game.equip('ground'));assert.equal(game.turn,1);assert.equal(game.inventoryCount(),20);
+  p.bag.pop();assert(game.equip('ground'));assert.equal(game.turn,1);assert.equal(game.inventoryCount(),24);
   assert.equal(game.items.length,0);assert(p.equipment.weapon.identified);
 }
 for(const status of ['dead','won']){

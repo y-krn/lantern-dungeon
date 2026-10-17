@@ -11,26 +11,26 @@ function arena(){
 
 // Equipped weapons and shields each occupy one of the same 20 slots.
 {
-  const g=arena(),p=g.player;assert.equal(INVENTORY_CAPACITY,20);assert.equal(g.inventoryCount(),5);
-  p.bag=[gear('starSword'),gear('mirrorShield'),'bread',...Array.from({length:14},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}))];
-  assert.equal(g.inventoryCount(),19);g.items=[{x:p.x,y:p.y,kind:'arrow',amount:10}];g.collect();
-  assert.equal(g.inventoryCount(),20);assert.equal(g.arrowCount(),10);
-  assert(g.use(0));assert(g.use(1));assert.equal(g.inventoryCount(),20);
-  assert(g.equipArrow());assert.equal(g.inventoryCount(),20);assert(g.equipArrow());assert.equal(g.inventoryCount(),20);
+  const g=arena(),p=g.player;assert.equal(INVENTORY_CAPACITY,24);assert.equal(g.inventoryCount(),5);
+  p.bag=[gear('starSword'),gear('mirrorShield'),'bread',...Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}))];
+  assert.equal(g.inventoryCount(),23);g.items=[{x:p.x,y:p.y,kind:'arrow',amount:10}];g.collect();
+  assert.equal(g.inventoryCount(),24);assert.equal(g.arrowCount(),10);
+  assert(g.use(0));assert(g.use(1));assert.equal(g.inventoryCount(),24);
+  assert(g.equipArrow());assert.equal(g.inventoryCount(),24);assert(g.equipArrow());assert.equal(g.inventoryCount(),24);
   for(const kind of ['potion','starSword','mirrorShield']){
-    g.items=[{x:p.x,y:p.y,...(EQUIPMENT[kind]?gear(kind):{kind})}];g.collect();assert.equal(g.items.length,1);assert.equal(g.inventoryCount(),20);
+    g.items=[{x:p.x,y:p.y,...(EQUIPMENT[kind]?gear(kind):{kind})}];g.collect();assert.equal(g.items.length,1);assert.equal(g.inventoryCount(),24);
   }
-  g.items=[{x:p.x,y:p.y,kind:'arrow',amount:10}];g.collect();assert.equal(g.inventoryCount(),20);assert.equal(g.arrowCount(),20);
-  const raw=g.serialize(),restored=DungeonEngine.restore(raw);assert(restored);assert.equal(restored.inventoryCount(),20);assert.equal(restored.serialize(),raw);
-  assert(g.use(2));assert.equal(g.inventoryCount(),19);
-  g.items=[{x:p.x,y:p.y,kind:'potion'}];g.collect();assert.equal(g.inventoryCount(),20);
-  g.items=[];assert(g.dropEquipment(0));assert.equal(g.inventoryCount(),19);g.collect();assert.equal(g.inventoryCount(),20);
-  p.bag=Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));g.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];g.collect();assert.equal(g.items.length,1);assert.equal(g.arrowCount(),0);
-  p.bag=[...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})),'arrow'];assert.equal(g.inventoryCount(),20);assert(g.equipArrow());assert(g.shoot());assert.equal(g.inventoryCount(),19);
-  const legacy=JSON.parse(g.serialize());delete legacy.state.identification;delete legacy.state.player.equipment;legacy.state.player.weapon=2;legacy.state.player.shield=1;legacy.state.player.bag=Array.from({length:16},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
-  const old=DungeonEngine.restore(JSON.stringify(legacy));assert(old);assert.equal(old.inventoryCount(),18);
+  g.items=[{x:p.x,y:p.y,kind:'arrow',amount:10}];g.collect();assert.equal(g.inventoryCount(),24);assert.equal(g.arrowCount(),20);
+  const raw=g.serialize(),restored=DungeonEngine.restore(raw);assert(restored);assert.equal(restored.inventoryCount(),24);assert.equal(restored.serialize(),raw);
+  assert(g.use(2));assert.equal(g.inventoryCount(),23);
+  g.items=[{x:p.x,y:p.y,kind:'potion'}];g.collect();assert.equal(g.inventoryCount(),24);
+  g.items=[];assert(g.dropEquipment(0));assert.equal(g.inventoryCount(),23);g.collect();assert.equal(g.inventoryCount(),24);
+  p.bag=Array.from({length:22},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));g.items=[{x:p.x,y:p.y,kind:'arrow',amount:1}];g.collect();assert.equal(g.items.length,1);assert.equal(g.arrowCount(),0);
+  p.bag=[...Array.from({length:21},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})),'arrow'];assert.equal(g.inventoryCount(),24);assert(g.equipArrow());assert(g.shoot());assert.equal(g.inventoryCount(),23);
+  const legacy=JSON.parse(g.serialize());delete legacy.state.identification;delete legacy.state.player.equipment;legacy.state.player.weapon=2;legacy.state.player.shield=1;legacy.state.player.bag=Array.from({length:20},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
+  const old=DungeonEngine.restore(JSON.stringify(legacy));assert(old);assert.equal(old.inventoryCount(),22);
   for(const kind of ['bread','potion','map']){old.items=[{x:old.player.x,y:old.player.y,kind}];old.collect();}
-  assert.equal(old.inventoryCount(),20);assert.equal(old.items.length,1);
+  assert.equal(old.inventoryCount(),24);assert.equal(old.items.length,1);
   const earlier=JSON.parse(g.serialize());delete earlier.state.identification;delete earlier.state.player.equipment;
   earlier.state.player.weapon={kind:'ghostSword',bonus:2};earlier.state.player.shield={kind:'copperShield',bonus:1};
   earlier.state.player.bag=[{kind:'pickaxe',bonus:0},'arrow'];
@@ -57,10 +57,10 @@ for(const [outgoing,incoming]of [
   ['bread',{kind:'arrow',amount:27}],
   ['arrow',{kind:'arrow',amount:4}],
 ]){
-  const g=arena(),p=g.player;p.bag=[outgoing,...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}))];
+  const g=arena(),p=g.player;p.bag=[outgoing,...Array.from({length:21},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}))];
   if(outgoing==='arrow'){p.bag.push(...Array(26).fill('arrow'));p.ammo='arrow';}
-  assert.equal(g.inventoryCount(),20);
-  g.items=[{...incoming,x:p.x,y:p.y}];assert(g.drop(0,true));assert.equal(g.turn,1);assert.equal(g.inventoryCount(),20);
+  assert.equal(g.inventoryCount(),24);
+  g.items=[{...incoming,x:p.x,y:p.y}];assert(g.drop(0,true));assert.equal(g.turn,1);assert.equal(g.inventoryCount(),24);
   assert.equal(g.items.length,1);assert.equal(g.items[0].kind,typeof outgoing==='string'?outgoing:outgoing.kind);
   if(outgoing==='arrow'){
     assert.equal(g.items[0].amount,27);assert.equal(g.arrowCount(),incoming.kind==='arrow'?4:0);
@@ -116,8 +116,8 @@ for(const dungeon of ['tutorial','depths'])for(const floor of [1,dungeon==='tuto
   assert(g.use(3));assert.equal(g.defense(),3);
   const saved=g.serialize(),restored=DungeonEngine.restore(saved);assert(restored);assert.equal(restored.serialize(),saved);
   assert.deepEqual(restored.inventoryEntries(),g.inventoryEntries());assert(restored.use(0));assert.equal(restored.attackPower(),5);
-  p.bag=Array.from({length:18},()=>gear('woodSword'));g.items=[{x:p.x,y:p.y,...gear('starShield')}];g.collect();
-  assert.equal(g.items.length,1);assert.equal(g.inventoryEntries().length,18);assert(g.use(0));assert.equal(g.inventoryEntries().length,18);
+  p.bag=Array.from({length:22},()=>gear('woodSword'));g.items=[{x:p.x,y:p.y,...gear('starShield')}];g.collect();
+  assert.equal(g.items.length,1);assert.equal(g.inventoryEntries().length,22);assert(g.use(0));assert.equal(g.inventoryEntries().length,22);
   const legacy=JSON.parse(g.serialize());delete legacy.state.identification;delete legacy.state.player.equipment;legacy.state.player.weapon=5;legacy.state.player.shield=7;
   legacy.state.items=[{x:p.x,y:p.y,kind:'weapon'},{x:p.x+1,y:p.y,kind:'shield'}];
   const migrated=DungeonEngine.restore(JSON.stringify(legacy));assert(migrated);
@@ -128,11 +128,11 @@ for(const dungeon of ['tutorial','depths'])for(const floor of [1,dungeon==='tuto
   assert.equal(DungeonEngine.restore(migrated.serialize()).serialize(),migrated.serialize());
   migrated.items=[];const turn=migrated.turn;
   assert(migrated.use(0));assert(migrated.dropEquipment(0));assert.equal(migrated.turn,turn+2);
-  assert.equal(migrated.player.bag.length,17);assert.equal(migrated.items[0].bonus,6);
+  assert.equal(migrated.player.bag.length,21);assert.equal(migrated.items[0].bonus,6);
   const dropped=DungeonEngine.restore(migrated.serialize());assert(dropped);dropped.collect();
-  assert.equal(dropped.equipmentPower(dropped.player.bag[17]),15);assert(dropped.use(17));assert.equal(dropped.attackPower(),20);
+  assert.equal(dropped.equipmentPower(dropped.player.bag[21]),15);assert(dropped.use(21));assert.equal(dropped.attackPower(),20);
   const occupiedTurn=dropped.turn;dropped.items=[{x:dropped.player.x,y:dropped.player.y,kind:'bread'}];
-  assert.equal(dropped.dropEquipment(0),false);assert.equal(dropped.turn,occupiedTurn);assert.equal(dropped.player.bag.length,18);
+  assert.equal(dropped.dropEquipment(0),false);assert.equal(dropped.turn,occupiedTurn);assert.equal(dropped.player.bag.length,22);
   const badDrop=JSON.parse(dropped.serialize());badDrop.state.items[0]={...badDrop.state.items[0],...gear('starSword'),bonus:-10};
   assert.equal(DungeonEngine.restore(JSON.stringify(badDrop)),null);
   for(const bad of [gear('missing'),gear('copperSword',-10),gear('copperSword',1.5),gear('copperShield')]){

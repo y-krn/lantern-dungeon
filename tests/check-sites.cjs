@@ -76,7 +76,7 @@ function floorWith(field, floor, dungeon = 'tutorial') {
   const arrows = g.shopOffers().wares.findIndex(w => w.kind === 'arrow'); g.buy(arrows); assert.equal(g.arrowCount(), 10);
   replay(g);
   const full = floorWith('merchant', 4); full.player.gold = 1000;
-  full.player.bag = Array.from({length:18}, () => ({kind:'shield', rank:0, bonus:0, cursed:false, identified:true}));
+  full.player.bag = Array.from({length:22}, () => ({kind:'shield', rank:0, bonus:0, cursed:false, identified:true}));
   assert(full.shopOffers().wares.every(w => !w.available), 'A full bag cannot buy');
   const svc = floorWith('merchant', 8); svc.player.gold = 2000; svc.player.equipment.weapon.cursed = true;
   svc.player.bag.push({kind:'shield', rank:1, bonus:2, cursed:false, identified:false});
