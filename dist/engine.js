@@ -20,6 +20,7 @@
     validEquipment,
     ITEM_ORDER,
     WEAPON_SHAPES,
+    TRAPS,
     RESONANCES,
     EVOLUTIONS,
     EVOLVE_KILLS,
@@ -737,9 +738,7 @@
         return;
       }
       const trap = this.traps.find((t) => same(t, actor));
-      if (!trap) return;
-      if (this.visible[this.key(actor.x, actor.y)]) trap.found = true;
-      this.hit(actor, this.int(2, 5), "magic");
+      if (trap) this.springTrap(trap, actor);
     }
     echo() {
       return this.echoes()[0] || null;
@@ -982,12 +981,68 @@
     triggerTrap() {
       const p = this.player,
         t = this.traps.find((t) => t.x === p.x && t.y === p.y);
-      if (!t) return;
-      t.found = true;
-      const d = this.int(2, 5);
-      p.hp -= d;
-      this.say(`足元にトゲの罠！ ${d}ダメージ。`, "danger");
-      this.effect("damage", p.x, p.y, d);
+      if (t) this.springTrap(t, p);
+    }
+    // One rule set for every trap, whether Rine steps on it or a monster is forced onto it.
+    springTrap(trap, actor) {
+      const p = this.player,
+        player = actor === p,
+        seen = player || !!this.visible[this.key(actor.x, actor.y)],
+        type = trap.type || "spike",
+        name = TRAPS[type].name;
+      if (seen) trap.found = true;
+      const hurt = (d) => {
+        if (player) {
+          p.hp -= d;
+          this.effect("damage", p.x, p.y, d);
+        } else this.hit(actor, d, "magic");
+      };
+      const tell = (text, kind = "danger") => {
+        if (seen) this.say(`${player ? "足元に" : `${actor.name}の足元で`}${name}！ ${text}`, kind);
+      };
+      if (type === "spike") {
+        const d = this.int(2, 5);
+        tell(`${d}ダメージ。`);
+        hurt(d);
+      } else if (type === "pit") {
+        if (player) {
+          tell("3ダメージを受け、下の階へ落ちる！");
+          hurt(3);
+          if (this.floor < this.maxFloor()) this.falling = true;
+        } else {
+          tell(`${actor.name}は穴の底へ消えた。`, "good");
+          actor.hp = 0;
+        }
+      } else if (type === "warp") {
+        const spots = [];
+        for (const room of this.rooms)
+          for (let y = room.y; y < room.y + room.h; y++)
+            for (let x = room.x; x < room.x + room.w; x++)
+              if (this.tile(x, y) && !this.enemyAt(x, y) && !same({ x, y }, p) && !same({ x, y }, this.stairs) && !this.traps.some((t) => same(t, { x, y })))
+                spots.push({ x, y });
+        tell(player ? "どこかへ飛ばされた。" : `${actor.name}がどこかへ消えた。`, player ? "danger" : "good");
+        if (spots.length) Object.assign(actor, spots[this.int(0, spots.length - 1)]);
+        if (player) this.reveal();
+      } else if (type === "rust") {
+        const weapon = player && p.equipment.weapon;
+        if (weapon && weapon.bonus > -3) {
+          weapon.bonus--;
+          weapon.identified = true;
+          tell("武器が錆びて、補正値が1下がった。");
+        } else tell("錆びるものはなかった。", "normal");
+      } else if (type === "alarm") {
+        for (const e of this.enemies) if (e.hp > 0) e.awake = true;
+        tell("鐘の音が響き、魔物たちが目を覚ました！");
+      } else if (type === "fire") {
+        tell("炎が噴き上がった！ 6ダメージ。");
+        this.ignite(actor.x, actor.y);
+        hurt(6);
+      } else if (type === "oil") {
+        for (const [dx, dy] of [[0, 0], ...DIRS])
+          if (this.tile(actor.x + dx, actor.y + dy) && this.surfaceAt(actor.x + dx, actor.y + dy)?.type !== "fire")
+            this.setSurface(actor.x + dx, actor.y + dy, "oil");
+        tell("あたりに油が撒かれた。", "warning");
+      }
     }
     scrollNeedsTarget(index) {
       return itemKind(this.targetItem(index)) === "identify";
@@ -1160,6 +1215,15 @@
       if (this.player.hp > 0) this.enemyTurn();
       if (this.player.hp > 0) this.tickSurfaces();
       this.enemies = this.enemies.filter((e) => e.hp > 0);
+      if (this.falling) {
+        delete this.falling;
+        if (this.player.hp > 0 && this.floor < this.maxFloor()) {
+          this.floor++;
+          this.generateFloor();
+          this.say(`落とし穴の先、地下${this.floor}階「${this.floorName()}」へ落ちた。`, "danger");
+          this.effect("descend", this.player.x, this.player.y, this.floor);
+        }
+      }
       this.reveal();
       if (this.player.hp <= 0) {
         this.player.hp = 0;

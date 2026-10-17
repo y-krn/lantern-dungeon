@@ -1,6 +1,6 @@
 (function (root) {
   "use strict";
-  const { W, H, MONSTERS, equipmentKind } =
+  const { W, H, MONSTERS, TRAPS, equipmentKind } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
       : root.DungeonData;
@@ -463,7 +463,27 @@
         }
       }
       for (const t of engine.traps)
-        if (t.found && engine.seen[engine.key(t.x, t.y)]) {
+        if (t.found && engine.seen[engine.key(t.x, t.y)] && t.type && t.type !== "spike") {
+          // Non-spike traps: a pressure plate with the trap's mark.
+          const px = t.x * tile + offsetX,
+            py = t.y * tile + offsetY,
+            colors = { pit: "#1d1a17", warp: "#7a5bb5", rust: "#9a5a2e", alarm: "#c9a43a", fire: "#c4502c", oil: "#3b2e24" };
+          ctx.save();
+          ctx.fillStyle = colors[t.type] || "#c4976c";
+          ctx.globalAlpha = 0.85;
+          ctx.beginPath();
+          ctx.ellipse(px + tile / 2, py + tile / 2, tile * 0.36, tile * 0.3, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.font = `bold ${tile * 0.36}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#fff2cc";
+          ctx.fillText(TRAPS[t.type].mark, px + tile / 2, py + tile / 2);
+          ctx.restore();
+        }
+      for (const t of engine.traps)
+        if (t.found && engine.seen[engine.key(t.x, t.y)] && (!t.type || t.type === "spike")) {
           const px = t.x * tile + offsetX,
             py = t.y * tile + offsetY;
           ctx.fillStyle = "#c4976c";

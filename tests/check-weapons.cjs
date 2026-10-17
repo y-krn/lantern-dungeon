@@ -72,8 +72,8 @@ for (const [dx, dy] of DungeonData.DIRS) {
     const g = new StrategyEngine(seed); g.chooseKit('none');
     for (const [floor, kind] of [[2, 'sweepAxe'], [3, 'hookSickle'], [4, 'pushMaul']]) {
       g.floor = floor; g.generateFloor();
-      const item = g.items.find(i => i.kind === 'weapon' && i.variant === kind);
-      assert(item && item.identified && !item.cursed && item.bonus === 0, `Floor ${floor} offers ${kind} (seed ${seed})`);
+      // Ordinary loot may also roll the same weapon unidentified; the trial copy is identified.
+      assert(g.items.some(i => i.kind === 'weapon' && i.variant === kind && i.identified && !i.cursed && i.bonus === 0), `Floor ${floor} offers ${kind} (seed ${seed})`);
     }
     replay(g);
   }

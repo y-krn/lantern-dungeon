@@ -129,6 +129,16 @@
     maul: { name: "切り拓く旅", text: "打ち槌と爆ぜ実2個。押し出して道を開く。", weapon: "pushMaul", items: ["blastNut", "blastNut"] },
     shell: { name: "灯を宿す旅", text: "殻の灯影（鉄殻甲虫）と回復草2個。守りを固めて進む。", echo: "ironBeetle", items: ["potion", "potion"] },
   };
+  // Hidden floor traps; the same spring rules apply to Rine and to monsters forced onto them.
+  const TRAPS = {
+    spike: { name: "トゲの罠", weight: 34, mark: "" },
+    pit: { name: "落とし穴", weight: 10, mark: "穴" },
+    warp: { name: "転移の罠", weight: 14, mark: "転" },
+    rust: { name: "錆の罠", weight: 10, mark: "錆" },
+    alarm: { name: "警鐘の罠", weight: 10, mark: "鐘" },
+    fire: { name: "火の罠", weight: 11, mark: "火", minFloor: 3 },
+    oil: { name: "油の罠", weight: 11, mark: "油", minFloor: 3 },
+  };
   // Weapons whose direction input does more than strike the adjacent cell.
   const WEAPON_SHAPES = ["lampSpear", "sweepAxe", "hookSickle", "pushMaul"];
   // Lantern echoes: each monster family lends its own trait to Rine's lantern.
@@ -908,6 +918,7 @@
     validEquipment,
     ITEM_ORDER,
     WEAPON_SHAPES,
+    TRAPS,
     BOONS,
     RESONANCES,
     EVOLUTIONS,

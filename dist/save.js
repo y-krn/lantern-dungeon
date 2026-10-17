@@ -21,6 +21,7 @@
     INFUSIONS,
     INFUSION_SHOTS,
     BOONS,
+    TRAPS,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -276,6 +277,8 @@
             )))
       )
         return null;
+      // Older saves only had spike traps, stored without a type.
+      if (game.traps.some((t) => t.type != null && !Object.hasOwn(TRAPS, t.type))) return null;
       // Terrain; saves from before terrain have none.
       game.surfaces ??= [];
       const timed = { fire: 3, fog: 5 };
