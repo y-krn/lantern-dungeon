@@ -13,11 +13,11 @@ function fixtures() {
   const entries = [];
   for (const kind of ['bread', 'potion']) {
     const e = make(), p = e.player;
-    p.bag = Array(18).fill('bread'); p.hp = 5; p.hunger = 20;
+    p.bag = Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})); p.hp = 5; p.hunger = 20;
     e.items = [{ kind, x: p.x, y: p.y, amount: 1, discovered: true }];
     entries.push([`full-capacity-${kind}`, e]);
   }
-  const exchange = make(); exchange.player.bag = Array(18).fill('bread');
+  const exchange = make(); exchange.player.bag = Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
   exchange.items = [{ kind: 'potion', x: exchange.player.x, y: exchange.player.y, amount: 1, discovered: true }];
   entries.push(['full-capacity-exchange', exchange]);
   const identify = make(); identify.player.bag = ['identify', gear(), 'bread'];
@@ -106,7 +106,7 @@ async function runScenarios({ ab, evaluate, screenshot, write, resumedSave }) {
         const after = await state();
         check(after.turn === before.turn + 1 && after.player.bag.length === 18, 'exchange-one-turn-capacity');
         same(after.player.bag, [...before.player.bag.slice(1), 'potion'], 'exchange-preserves-bag-order');
-        check(after.items[0].kind === 'bread' && after.items[0].amount === 1, 'exchange-conserves-items');
+        check(after.items[0].kind === before.player.bag[0].kind && after.items[0].amount === 1, 'exchange-conserves-items');
       } else if (fixture.name === 'identify-cancel-equip') {
         await item(0); same(await state(), before, 'identify-selection-free');
         await screenshot(`scenario-${fixture.name}-selection.png`);

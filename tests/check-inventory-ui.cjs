@@ -92,7 +92,7 @@ for (const factory of [createInventoryUI, browser.createInventoryUI]) {
   {
     const engine=quietUI(),p=engine.player;
     const gear={...p.equipment.weapon,bonus:-2,cursed:true,identified:false,x:p.x,y:p.y,amount:1};
-    engine.items=[gear];p.bag=['identify',{...p.equipment.shield,identified:false},...Array(16).fill('bread')];
+    engine.items=[gear];p.bag=['identify',{...p.equipment.shield,identified:false},...Array.from({length:16},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}))];
     const ui=inventoryUI(engine),before=engine.serialize();ui.api.showBag();
     assert(ui.html.includes('data-ground-row'));assert(ui.html.includes('鑑定（灯札1枚）'));assert.equal(engine.serialize(),before);
     ui.action('use',0);assert.equal(ui.kind,'identify');
@@ -104,17 +104,17 @@ for (const factory of [createInventoryUI, browser.createInventoryUI]) {
     assert.equal(engine.turn,1);assert.equal(engine.inventoryCount(),19);assert.equal(engine.groundItem(),gear);
     gear.identified=false;p.bag.push('identify');ui.api.showBag();ui.action('appraise');
     assert(gear.identified);assert.equal(engine.turn,2);assert.equal(engine.inventoryCount(),19);
-    p.bag=Array(18).fill('bread');p.hp=1;engine.items=[{kind:'potion',x:p.x,y:p.y}];
+    p.bag=Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));p.hp=1;engine.items=[{kind:'potion',x:p.x,y:p.y}];
     ui.api.showBag();ui.action('use');assert.equal(p.hp,26);assert.equal(engine.turn,3);assert.equal(engine.inventoryCount(),20);
     engine.items=[{...gear,identified:false}];ui.api.useGroundFromField();assert.equal(ui.kind,'ground');
     const beforeExchange=engine.serialize();ui.action('exchange');assert.equal(ui.kind,'exchange');assert.equal(engine.serialize(),beforeExchange);
     ui.cancel('exchange-cancel');assert.equal(ui.kind,'ground');assert.equal(engine.serialize(),beforeExchange);
     ui.action('exchange');ui.buttons.find(button=>button.dataset.exchange==='17').click();
-    assert.equal(engine.groundItem().kind,'bread');assert(p.bag.some(item=>item.cursed&&!item.identified));
+    assert.equal(engine.groundItem().kind,'shield');assert(p.bag.some(item=>item.cursed&&!item.identified));
     assert.equal(engine.inventoryCount(),20);assert.equal(engine.turn,4);
   }
   {
-    const engine=quietUI(),p=engine.player;p.bag=['identify',...Array(17).fill('bread')];engine.identification.known=[];
+    const engine=quietUI(),p=engine.player;p.bag=['identify',...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}))];engine.identification.known=[];
     engine.items=[{kind:'map',x:p.x,y:p.y}];const ui=inventoryUI(engine);ui.api.showGround();
     assert(!ui.html.includes('道しるべの灯札'));assert(!ui.buttons.some(button=>button.dataset.itemAction==='appraise'));
     ui.action('name');ui.control('item-name').value='<script>&地図？';

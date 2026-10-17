@@ -52,7 +52,7 @@ try {
     browser('set', 'viewport', String(width), String(height));
     fixture(`
       p.hp = 8; p.hunger = 15;
-      p.bag = ['identify','map','arrow','arrow',...Array(15).fill('bread')];
+      p.bag = ['identify','map','arrow','arrow',...Array.from({length:15},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}))];
       e.identification.known = ['identify'];
       e.items = [{...p.equipment.weapon, x:p.x, y:p.y, amount:1, identified:false}];
     `);
