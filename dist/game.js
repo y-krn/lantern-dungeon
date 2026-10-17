@@ -266,10 +266,11 @@
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
     if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · 矢 ${engine.arrowCount()}本`;
     if (trial) {
-      const states = [engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);
+      const echo = engine.echo();
+      const states = [echo ? `灯影「${echo.short}」${echo.text}` : "", engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);
       $("strategy-status").textContent = states.join(" · ");
       $("strategy-status").hidden = portraitUI || states.length === 0;
-      if (portraitUI) $("mobile-progress").textContent = [p.bindUntil >= engine.turn + 1 ? "移動不可" : `Lv.${p.level}`, engine.strategy.lamp ? `灯り${engine.strategy.lamp.remaining}手` : `矢 ${engine.arrowCount()}本`].join(" · ");
+      if (portraitUI) $("mobile-progress").textContent = [p.bindUntil >= engine.turn + 1 ? "移動不可" : `Lv.${p.level}`, engine.strategy.lamp ? `灯り${engine.strategy.lamp.remaining}手` : `矢 ${engine.arrowCount()}本`, echo ? `灯影:${echo.short}` : ""].filter(Boolean).join(" · ");
       if (strategyAim) updateAim();
     }
     const list = $("event-log");

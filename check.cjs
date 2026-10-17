@@ -23,3 +23,6 @@ require('./tests/check-playtest.cjs');
 const strategy = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-strategy.cjs')], {stdio: 'inherit'});
 if (strategy.error) throw strategy.error;
 if (strategy.status !== 0) process.exit(strategy.status ?? 1);
+const echoes = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-echoes.cjs')], {stdio: 'inherit'});
+if (echoes.error) throw echoes.error;
+if (echoes.status !== 0) process.exit(echoes.status ?? 1);

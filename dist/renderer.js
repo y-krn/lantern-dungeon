@@ -195,8 +195,9 @@
       if (getEngine().strategyTrial) {
         const kind = equipmentKind(item) || item.kind;
         const symbols = {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂", lampSpear: "↗"};
+        if (kind === "echoShard") symbols.echoShard = "✦";
         if (symbols[kind]) {
-          ctx.save(); ctx.fillStyle = "#fff2cc"; ctx.strokeStyle = "#3c4935"; ctx.lineWidth = tile * .06;
+          ctx.save(); ctx.fillStyle = kind === "echoShard" ? "#c9b6ff" : "#fff2cc"; ctx.strokeStyle = "#3c4935"; ctx.lineWidth = tile * .06;
           ctx.font = `bold ${tile * .55}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
           ctx.strokeText(symbols[kind], px + tile / 2, py + tile / 2);
           ctx.fillText(symbols[kind], px + tile / 2, py + tile / 2); ctx.restore(); return;
