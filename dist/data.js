@@ -97,6 +97,24 @@
     fog: { name: "霧" },
     fire: { name: "炎" },
   };
+  // Lantern shrines: one of three boons, chosen for free.
+  const BOONS = {
+    vigor: { name: "灯りの息吹", text: "最大体力+8、体力+8。" },
+    whet: { name: "刃の灯", text: "装備中の武器の補正値+1。", needs: "weapon" },
+    temper: { name: "盾の灯", text: "装備中の盾の補正値+1。", needs: "shield" },
+    echo: { name: "灯影の授け", text: "灯影を宿す。" },
+    rest: { name: "安らぎの灯", text: "体力と満腹度をすべて回復。" },
+    quiver: { name: "矢の灯", text: "木の矢15本。" },
+    insight: { name: "真名の灯", text: "未識別の灯札をすべて識別し、持ち物の未鑑定品をすべて鑑定。" },
+  };
+  // Roadside stalls: wares priced by depth, plus appraisal and uncursing services.
+  const SHOP_PRICES = { bread: 60, potion: 80, arrow: 60, waterSkin: 70, oilFlask: 70, emberStone: 80, blastNut: 90, smokeBall: 80, scroll: 120, map: 90, identify: 100, uncurse: 120 };
+  const SHOP_SERVICES = { appraise: { name: "鑑定", base: 50 }, cleanse: { name: "解呪", base: 120 } };
+  const START_KITS = {
+    spear: { name: "迎え撃つ旅", text: "灯守りの槍と木の矢10本。近づかれる前に突く。", weapon: "lampSpear", items: Array(10).fill("arrow") },
+    maul: { name: "切り拓く旅", text: "打ち槌と爆ぜ実2個。押し出して道を開く。", weapon: "pushMaul", items: ["blastNut", "blastNut"] },
+    shell: { name: "灯を宿す旅", text: "殻の灯影（鉄殻甲虫）と回復草2個。守りを固めて進む。", echo: "ironBeetle", items: ["potion", "potion"] },
+  };
   // Weapons whose direction input does more than strike the adjacent cell.
   const WEAPON_SHAPES = ["lampSpear", "sweepAxe", "hookSickle", "pushMaul"];
   // Lantern echoes: each monster family lends its own trait to Rine's lantern.
@@ -818,6 +836,10 @@
     validEquipment,
     ITEM_ORDER,
     WEAPON_SHAPES,
+    BOONS,
+    SHOP_PRICES,
+    SHOP_SERVICES,
+    START_KITS,
     THROWN_ITEMS,
     INFUSIONS,
     INFUSION_SHOTS,

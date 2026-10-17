@@ -20,6 +20,7 @@
     SURFACES,
     INFUSIONS,
     INFUSION_SHOTS,
+    BOONS,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -251,6 +252,26 @@
           !Number.isInteger(infusion.shots) ||
           infusion.shots < 1 ||
           infusion.shots > INFUSION_SHOTS)
+      )
+        return null;
+      // Shrines, stalls and the starting-kit offer; older saves have none.
+      game.shrine ??= null;
+      game.merchant ??= null;
+      const spot = (v) => v && Number.isInteger(v.x) && Number.isInteger(v.y) && game.tile(v.x, v.y);
+      if (
+        (s.kitOffered != null && typeof s.kitOffered !== "boolean") ||
+        (game.shrine !== null &&
+          (!spot(game.shrine) ||
+            typeof game.shrine.used !== "boolean" ||
+            !Array.isArray(game.shrine.choices) ||
+            game.shrine.choices.length !== 3 ||
+            game.shrine.choices.some((c) => !c || !Object.hasOwn(BOONS, c.id) || (c.id === "echo") !== Object.hasOwn(ECHO_SOURCES, c.species ?? "")))) ||
+        (game.merchant !== null &&
+          (!spot(game.merchant) ||
+            !Array.isArray(game.merchant.stock) ||
+            game.merchant.stock.some(
+              (w) => !w || !Object.hasOwn(ITEMS, w.kind) || !Number.isInteger(w.price) || w.price < 0 || !Number.isInteger(w.amount) || w.amount < 1 || typeof w.sold !== "boolean",
+            )))
       )
         return null;
       // Terrain; saves from before terrain have none.

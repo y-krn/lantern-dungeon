@@ -12,6 +12,9 @@
     EQUIPMENT_KEYS,
     SCROLLS,
     TERRAIN_ITEMS,
+    BOONS,
+    SHOP_PRICES,
+    ECHO_SOURCES,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -26,6 +29,8 @@
     game.traps = [];
     game.monsterHouse = null;
     game.surfaces = [];
+    game.shrine = null;
+    game.merchant = null;
     const cells = Array.from({ length: 9 }, (_, i) => i);
     for (let i = cells.length - 1; i > 0; i--) {
       const j = game.int(0, i);
@@ -274,6 +279,34 @@
     ) {
       const pos = emptySpot(ordinaryRooms, true);
       if (pos) game.traps.push({ ...pos, found: false });
+    }
+    // Shrines every third floor (fifth in the depths) and stalls every fourth, never on the last floor.
+    const last = game.floor === game.maxFloor();
+    if (!last && game.floor % (hard ? 5 : 3) === 0) {
+      const spot = emptySpot(ordinaryRooms, true);
+      if (spot) {
+        const pool = Object.keys(BOONS).filter((id) => id !== "insight" || hard),
+          choices = [];
+        while (choices.length < 3) {
+          const id = pool.splice(game.int(0, pool.length - 1), 1)[0],
+            species = Object.keys(ECHO_SOURCES);
+          choices.push(id === "echo" ? { id, species: species[game.int(0, species.length - 1)] } : { id });
+        }
+        game.shrine = { ...spot, used: false, choices };
+      }
+    }
+    if (!last && game.floor % 4 === 0) {
+      const spot = emptySpot(ordinaryRooms, true);
+      if (spot) {
+        const scale = (base) => Math.round((base * (1 + game.floor * 0.08)) / 10) * 10,
+          extra = ["waterSkin", "oilFlask", "emberStone", "blastNut", "smokeBall"],
+          scrolls = ["scroll", "map", "identify", "uncurse"],
+          wares = ["bread", "potion", "arrow", extra[game.int(0, extra.length - 1)], scrolls[game.int(0, scrolls.length - 1)]];
+        game.merchant = {
+          ...spot,
+          stock: wares.map((kind) => ({ kind, price: scale(SHOP_PRICES[kind]), amount: kind === "arrow" ? 10 : 1, sold: false })),
+        };
+      }
     }
     // Water and grass patches give each floor terrain to use; oil stays rare.
     addItem(TERRAIN_ITEMS[game.int(0, TERRAIN_ITEMS.length - 1)]);

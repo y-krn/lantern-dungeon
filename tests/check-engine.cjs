@@ -560,7 +560,7 @@ for(let seed=1;seed<=100;seed++){
 {
   const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../dist/game.js'),'utf8');
   const notice={hidden:false};
-  const storage=new Map(),context={DungeonEngine,renderer:{reset(){}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:'',closest:()=>notice}),clearPickupNotice(){},closeModal(){},updateUI(){}};
+  const storage=new Map(),context={DungeonEngine,renderer:{reset(){}},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},$:()=>({textContent:'',closest:()=>notice}),clearPickupNotice(){},closeModal(){},updateUI(){},offerStartKit(){}};
   vm.createContext(context);
   const startup=source.slice(source.indexOf('  const trial'),source.indexOf('  let sound'));
   const save=source.slice(source.indexOf('  function save()'),source.indexOf('  function beep('));
