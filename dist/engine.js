@@ -19,6 +19,9 @@
     isEquipment,
     validEquipment,
     ITEM_ORDER,
+    WEAPON_SHAPES,
+    ECHO_SOURCES,
+    echoOfSpecies,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -35,6 +38,8 @@
     typeof module !== "undefined" && module.exports
       ? require("./save.js")
       : root.DungeonSave;
+  const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  const same = (a, b) => !!a && !!b && a.x === b.x && a.y === b.y;
   class DungeonEngine {
     constructor(
       seed = Date.now(),
@@ -157,6 +162,7 @@
     }
     itemName(item) {
       const kind = itemKind(item);
+      if (kind === "echoShard") return `${MONSTERS[item.species]?.name || "魔物"}の灯影`;
       if (isEquipment(item))
         return (
           EQUIPMENT[equipmentKind(item)].name +
@@ -176,6 +182,10 @@
     }
     itemDescription(item) {
       const kind = itemKind(item);
+      if (kind === "echoShard") {
+        const echo = echoOfSpecies(item.species);
+        return `${echo.name}：${echo.text} 踏むとランタンに宿り、今の灯影と入れ替わります。`;
+      }
       if (isEquipment(item)) {
         const data = EQUIPMENT[equipmentKind(item)],
           old = this.player.equipment[kind];
@@ -236,7 +246,9 @@
       );
     }
     defense() {
-      return Math.max(0, 1 + this.equipmentPower(this.player.equipment.shield));
+      const echo = this.echo();
+      return Math.max(0, 1 + this.equipmentPower(this.player.equipment.shield)) +
+        (echo?.id === "shell" ? (echo.tier ? 4 : 2) : 0);
     }
     arrowCount() {
       return this.player.bag.filter((kind) => kind === "arrow").length;
@@ -500,35 +512,189 @@
     move(dx, dy) {
       if (!this.face(dx, dy)) return false;
       if (!this.canStep(this.player.x, this.player.y, dx, dy)) return false;
-      const x = this.player.x + dx,
-        y = this.player.y + dy,
-        enemy = this.enemyAt(x, y);
-      if (enemy) {
-        this.hit(enemy, this.attackPower() + this.int(-1, 2), "melee");
-      } else {
-        this.player.x = x;
-        this.player.y = y;
-        this.collect();
+      const p = this.player,
+        shape = this.weaponShape();
+      if (
+        this.enemyAt(p.x + dx, p.y + dy) ||
+        ((shape === "lampSpear" || shape === "hookSickle") && this.spearTarget(dx, dy).enemy)
+      )
+        return this.attack();
+      // The wing echo folds a second step into the same turn while no enemy is in view.
+      const echo = this.echo(),
+        steps = echo?.id === "wing" && this.calm(echo.tier) ? 2 : 1;
+      for (let step = 0; step < steps; step++) {
+        if (step) {
+          this.reveal();
+          if (!this.canStep(p.x, p.y, dx, dy) || this.enemyAt(p.x + dx, p.y + dy) || !this.calm(echo.tier)) break;
+        }
+        p.x += dx;
+        p.y += dy;
+        const found = this.collect();
         this.triggerTrap();
+        this.echoStep();
+        if (found || p.hp <= 0 || this.onStairs() || this.traps.some((t) => same(t, p)) || p.bindUntil >= this.turn + 1) break;
       }
       this.finishTurn();
       return true;
+    }
+    weaponShape() {
+      const kind = equipmentKind(this.player.equipment.weapon);
+      return WEAPON_SHAPES.includes(kind) ? kind : null;
+    }
+    spearTarget(dx, dy) {
+      let { x, y } = this.player;
+      for (let i = 0; i < 2 && this.canStep(x, y, dx, dy); i++) {
+        x += dx;
+        y += dy;
+        const enemy = this.enemyAt(x, y);
+        if (enemy) return { x, y, enemy };
+      }
+      return { x, y, enemy: null };
+    }
+    meleeTargets(shape, dx, dy) {
+      const p = this.player;
+      if (shape === "lampSpear" || shape === "hookSickle") return [this.spearTarget(dx, dy).enemy].filter(Boolean);
+      const facing = DIRS.findIndex((d) => d[0] === dx && d[1] === dy);
+      const dirs = shape === "sweepAxe" ? [facing + 7, facing, facing + 1].map((i) => DIRS[i % 8]) : [[dx, dy]];
+      return dirs
+        .filter(([x, y]) => this.canStep(p.x, p.y, x, y))
+        .map(([x, y]) => this.enemyAt(p.x + x, p.y + y))
+        .filter(Boolean);
+    }
+    shotTarget(range) {
+      const [dx, dy] = this.player.facing;
+      let { x, y } = this.player;
+      for (let i = 0; i < range && this.canStep(x, y, dx, dy); i++) {
+        x += dx;
+        y += dy;
+        const enemy = this.enemyAt(x, y);
+        if (enemy) return enemy;
+      }
+      return null;
     }
     attack() {
       if (this.status !== "playing") return false;
       const p = this.player,
         [dx, dy] = p.facing,
-        e = this.canStep(p.x, p.y, dx, dy)
-          ? this.enemyAt(p.x + dx, p.y + dy)
-          : null;
-      if (e) this.hit(e, this.attackPower() + this.int(-1, 2), "melee");
-      else {
-        this.say("武器を振った。目の前に敵はいない。");
-        this.effect("swing", p.x + dx, p.y + dy, 0, undefined,
-          this.attackVisual(p, { x: p.x + dx, y: p.y + dy }));
+        echo = this.echo(),
+        shape = this.weaponShape(),
+        targets = this.meleeTargets(shape, dx, dy);
+      if (!targets.length && echo?.id === "shot") {
+        const target = this.shotTarget(echo.tier ? 4 : 3);
+        if (target) {
+          this.lanternShot = true;
+          try {
+            this.hit(target, Math.max(1, Math.floor(this.attackPower() / 2) + this.int(-1, 1)), "arrow");
+          } finally {
+            delete this.lanternShot;
+          }
+          this.finishTurn();
+          return true;
+        }
+      }
+      if (!targets.length) {
+        const reach = shape === "lampSpear" || shape === "hookSickle" ? this.spearTarget(dx, dy) : { x: p.x + dx, y: p.y + dy };
+        this.say(shape ? `${EQUIPMENT[shape].name}を振るった。届く先に敵はいない。` : "武器を振った。目の前に敵はいない。");
+        this.effect("swing", reach.x, reach.y, 0, undefined, this.attackVisual(p, reach));
+      }
+      for (const enemy of targets) {
+        if (enemy.hp <= 0) continue;
+        this.hit(enemy, this.attackPower() + this.int(-1, 2), "melee");
+        if (enemy.hp <= 0) continue;
+        if (shape === "hookSickle" && distance(enemy, p) === 2) this.pull(enemy);
+        if (shape === "pushMaul") {
+          const might = echo?.id === "might";
+          this.push(enemy, might ? 3 : 2, 3 + (might ? (echo.tier ? 4 : 2) : 0));
+        }
       }
       this.finishTurn();
       return true;
+    }
+    pull(enemy) {
+      const p = this.player,
+        dx = Math.sign(p.x - enemy.x),
+        dy = Math.sign(p.y - enemy.y),
+        x = enemy.x + dx,
+        y = enemy.y + dy;
+      if (!this.canStep(enemy.x, enemy.y, dx, dy) || this.enemyAt(x, y) || same({ x, y }, p)) return;
+      Object.assign(enemy, { x, y });
+      this.landing(enemy);
+    }
+    push(enemy, steps, impact) {
+      const dx = Math.sign(enemy.x - this.player.x),
+        dy = Math.sign(enemy.y - this.player.y);
+      for (let i = 0; i < steps && enemy.hp > 0; i++) {
+        const x = enemy.x + dx,
+          y = enemy.y + dy,
+          other = this.enemyAt(x, y);
+        if (!this.canStep(enemy.x, enemy.y, dx, dy) || other || same({ x, y }, this.player)) {
+          this.hit(enemy, impact, "magic");
+          if (other) this.hit(other, impact, "magic");
+          return;
+        }
+        Object.assign(enemy, { x, y });
+        this.landing(enemy);
+      }
+    }
+    // Forced movement onto a trap springs it for monsters as well as for Rine.
+    landing(actor) {
+      if (actor === this.player) {
+        this.triggerTrap();
+        return;
+      }
+      const trap = this.traps.find((t) => same(t, actor));
+      if (!trap) return;
+      if (this.visible[this.key(actor.x, actor.y)]) trap.found = true;
+      this.hit(actor, this.int(2, 5), "magic");
+    }
+    echo() {
+      return this.player.echo ? echoOfSpecies(this.player.echo) : null;
+    }
+    echoInfo() {
+      const echo = this.echo();
+      return echo
+        ? { label: `ランタン：${echo.name}（${MONSTERS[echo.species].name}）`, short: echo.short, text: echo.text }
+        : { label: "ランタン：灯影なし", short: "", text: "倒した魔物が残す灯影の欠片を踏むと、その魔物の力が宿ります。" };
+    }
+    echoDropRule() {
+      return { percent: 15, pity: 4 };
+    }
+    dropEcho(enemy) {
+      if (!ECHO_SOURCES[enemy.species] || enemy.type === "guardian") return;
+      const p = this.player,
+        pity = p.echoPity || 0,
+        rule = this.echoDropRule();
+      if (pity < rule.pity && this.int(1, 100) > rule.percent) {
+        p.echoPity = pity + 1;
+        return;
+      }
+      const free = (x, y) => this.tile(x, y) && !same({ x, y }, this.stairs) && !same({ x, y }, p) && !this.items.some((i) => same(i, { x, y }));
+      const spot = [[0, 0], ...DIRS].map(([dx, dy]) => ({ x: enemy.x + dx, y: enemy.y + dy })).find((v) => free(v.x, v.y));
+      if (!spot) return;
+      p.echoPity = 0;
+      const visible = !!this.visible[this.key(spot.x, spot.y)];
+      this.items.push({ ...spot, kind: "echoShard", species: enemy.species, amount: 1, discovered: visible });
+      if (visible) this.say(`${enemy.name}の灯影が残った。踏むとランタンに宿る。`, "good");
+    }
+    echoStep() {
+      const p = this.player,
+        echo = this.echo();
+      if (echo?.id !== "moss" || p.hp <= 0) return;
+      p.echoSteps = ((p.echoSteps || 0) + 1) % 5;
+      if (!p.echoSteps && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + (echo.tier ? 2 : 1));
+    }
+    wakeRange() {
+      const echo = this.echo();
+      return echo?.id === "veil" ? (echo.tier ? 2 : 3) : 7;
+    }
+    calm(tier) {
+      return !this.enemies.some(
+        (e) =>
+          e.hp > 0 &&
+          this.visible[this.key(e.x, e.y)] &&
+          !(MONSTERS[e.species]?.trait === "mimic" && !e.revealed) &&
+          (!tier || distance(e, this.player) <= 3),
+      );
     }
     wait() {
       if (this.status !== "playing") return false;
@@ -536,6 +702,26 @@
       return true;
     }
     hit(enemy, damage, kind = "physical") {
+      if (enemy.hp <= 0) return;
+      const p = this.player,
+        echo = this.echo(),
+        strike = kind === "melee" || this.lanternShot;
+      if (strike && echo?.id === "root" && p.lastStrike === this.turn - 1) damage += echo.tier ? 5 : 3;
+      this.strike(enemy, damage, kind);
+      if (strike) p.lastStrike = this.turn;
+      if (enemy.hp <= 0) {
+        if (echo?.id === "ember" && p.hp > 0 && p.hp < p.maxHp) {
+          p.hp = Math.min(p.maxHp, p.hp + 3);
+          this.say("金灯の灯影が体力を3回復した。", "good");
+        }
+        this.dropEcho(enemy);
+        return;
+      }
+      if (kind !== "melee") return;
+      if (echo?.id === "feast" && p.hunger < 100) p.hunger = Math.min(100, p.hunger + (echo.tier ? 2 : 1));
+      if (echo?.id === "might" && this.weaponShape() !== "pushMaul") this.push(enemy, 1, echo.tier ? 4 : 2);
+    }
+    strike(enemy, damage, kind) {
       const m = MONSTERS[enemy.species],
         trait = EQUIPMENT[equipmentKind(this.player.equipment.weapon)]?.trait;
       if (kind === "melee" && trait === "ghost" && enemy.type === "ghost")
@@ -576,6 +762,19 @@
     collect() {
       const p = this.player,
         item = this.groundItem();
+      if (item?.kind === "echoShard") {
+        const previous = this.echo(),
+          echo = echoOfSpecies(item.species);
+        this.items.splice(this.items.indexOf(item), 1);
+        p.echo = item.species;
+        p.echoSteps = 0;
+        this.say(
+          `ランタンが${MONSTERS[item.species].name}の灯影を宿した。${echo.name}：${echo.text}${previous ? `（${previous.name}は消えた）` : ""}`,
+          "good",
+        );
+        this.effect("pickup", p.x, p.y, item.kind, this.log[0].text);
+        return true;
+      }
       if (!item || (!ITEMS[item.kind] && item.kind !== "gold")) return false;
       if (item.kind === "gold") {
         p.gold += item.amount;
@@ -848,9 +1047,24 @@
       );
       this.effect("damage", p.x, p.y, d, undefined,
         this.attackVisual(e, p, ranged ? "ranged" : "melee"));
+      this.blink();
     }
     enemyTurn() {
       return runEnemyTurn(this);
+    }
+    blink() {
+      const p = this.player,
+        room = this.roomAt(p.x, p.y);
+      if (this.echo()?.id !== "blink" || p.hp <= 0 || !room || this.int(1, 4) !== 1) return;
+      const spots = [];
+      for (let y = room.y; y < room.y + room.h; y++)
+        for (let x = room.x; x < room.x + room.w; x++)
+          if (distance({ x, y }, p) >= 1 && distance({ x, y }, p) <= 3 && this.tile(x, y) && !this.enemyAt(x, y) && !same({ x, y }, this.stairs) && !this.items.some((i) => same(i, { x, y })))
+            spots.push({ x, y });
+      if (!spots.length) return;
+      Object.assign(p, spots[this.int(0, spots.length - 1)]);
+      this.say("揺らぎの灯影で、リネは部屋の中へ転移した。", "good");
+      this.landing(p);
     }
     onStairs() {
       return this.player.x === this.stairs.x && this.player.y === this.stairs.y;

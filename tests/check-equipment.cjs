@@ -101,7 +101,7 @@ for(const dungeon of ['tutorial','depths'])for(const floor of [1,dungeon==='tuto
     const g=new DungeonEngine(seed,dungeon,true);g.floor=floor;g.generateFloor();
     for(const item of g.items)if(item.variant){counts[item.kind]++;kinds.add(item.variant);}
   }
-  assert.equal(kinds.size,12);
+  assert.equal(kinds.size,16);
   for(const count of Object.values(counts))assert(count>300&&count<500);
 }
 

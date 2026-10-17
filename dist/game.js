@@ -206,6 +206,9 @@
     $("bag-count").textContent =
       `${engine.inventoryCount()} / ${INVENTORY_CAPACITY}`;
     $("ammo-name").textContent = p.ammo === "arrow" ? "木の矢" : "未装備";
+    const echoInfo = engine.echoInfo();
+    $("echo-name").textContent = engine.echo()?.name || "灯影なし";
+    $("echo-text").textContent = echoInfo.text;
     $("ammo-count").textContent = engine.arrowCount();
     $("shoot-button").disabled =
       engine.status !== "playing" || p.ammo !== "arrow" || !engine.arrowCount();
@@ -264,7 +267,7 @@
     $("location-hint").textContent = engine.status === "playing"
       ? [warnings, situation].filter(Boolean).join(" ") : situation;
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
-    if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · 矢 ${engine.arrowCount()}本`;
+    if (portraitUI) $("mobile-progress").textContent = [`Lv.${p.level}`, `矢 ${engine.arrowCount()}本`, engine.echo() ? `灯影:${engine.echo().short}` : ""].filter(Boolean).join(" · ");
     if (trial) {
       const echo = engine.echo();
       const states = [echo ? `灯影「${echo.short}」${echo.text}` : "", engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);
@@ -406,7 +409,7 @@
       `<div class="modal-inner">${modalHeader("魔物図鑑")}<p class="modal-description">${entries.length ? `出会った魔物 ${entries.length}種。旅の中で見つけた姿を記しています。` : "まだ魔物の記録はありません。"}</p><div class="item-list">${entries
         .map(
           ([species, m]) =>
-            `<div class="item-card"><canvas data-monster="${species}" width="80" height="80" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p class="monster-story">${m.story}</p><p>${m.color}・${MONSTER_MARKS[m.tier]}</p></div></div>`,
+            `<div class="item-card"><canvas data-monster="${species}" width="80" height="80" role="img" aria-label="${m.name}：${m.color}、${MONSTER_MARKS[m.tier]}"></canvas><div><strong>${m.name}</strong><p class="monster-story">${m.story}</p><p>${m.color}・${MONSTER_MARKS[m.tier]}</p>${DungeonData.echoOfSpecies(species) ? `<p>${DungeonData.echoOfSpecies(species).name}：${DungeonData.echoOfSpecies(species).text}</p>` : ""}</div></div>`,
         )
         .join(
           "",
@@ -431,7 +434,7 @@
     }
     openModal(
       "help",
-      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を探す旅。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃します。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角はすり抜けられません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>その場で向きだけ変更。「向き変更」でも切り替えられます。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃します。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ放ちます。</p></div><div class="help-row"><span>. / X</span><p>その場で足踏みします。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床の品は上に乗ると拾います。武器・盾は装備すると効果を発揮します。呪われた装備は、清めの灯札で呪いを解くまで外せません。</p></div><div class="help-row"><span>灯札</span><p>灯札をかざすと、その力が現れます。効果が分からない灯札には、推測した名前を付けて記録できます。</p></div><div class="help-row"><span>魔物の記録</span><p>出会った魔物の姿を図鑑に記しています。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る</button><div class="help-row"><span>冒険の保存</span><p>冒険はブラウザに自動保存されます。</p></div><p class="modal-description">灯りの迷宮を踏破すると、地下30階へ続く深淵の迷宮に挑めます。倒れたら、新しい旅の始まりです。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
+      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を探す旅。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃します。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角はすり抜けられません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>その場で向きだけ変更。「向き変更」でも切り替えられます。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃します。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ放ちます。</p></div><div class="help-row"><span>. / X</span><p>その場で足踏みします。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床の品は上に乗ると拾います。武器・盾は装備すると効果を発揮します。呪われた装備は、清めの灯札で呪いを解くまで外せません。</p></div><div class="help-row"><span>灯札</span><p>灯札をかざすと、その力が現れます。効果が分からない灯札には、推測した名前を付けて記録できます。</p></div><div class="help-row"><span>灯影</span><p>倒した魔物が「灯影の欠片」を残すことがあります。踏むとランタンに宿り、その魔物の力が使えます。宿せるのは一つで、新しい欠片を踏むと入れ替わります。</p></div><div class="help-row"><span>武器の形</span><p>槍・鎌は2マス先まで届き、斧は前の3マスを薙ぎ、槌は敵を押し出します。敵の方向へ進むか「攻撃」で振るいます。</p></div><div class="help-row"><span>魔物の記録</span><p>出会った魔物の姿を図鑑に記しています。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る</button><div class="help-row"><span>冒険の保存</span><p>冒険はブラウザに自動保存されます。</p></div><p class="modal-description">灯りの迷宮を踏破すると、地下30階へ続く深淵の迷宮に挑めます。倒れたら、新しい旅の始まりです。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
     );
     if (portraitUI) {
       const rows = $("modal-content").querySelectorAll(".help-row");
