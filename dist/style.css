@@ -549,6 +549,7 @@ h3 {
 
 .equipment-icon {
   display: grid;
+  flex: none;
   place-items: center;
   width: 31px;
   height: 31px;

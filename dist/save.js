@@ -16,6 +16,7 @@
     isEquipment,
     monsterTier,
     monsterStats,
+    ECHO_SOURCES,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -229,6 +230,17 @@
       game.layout ??= null;
       game.monsterHouse ??= null;
       if (!game.tile(s.player.x, s.player.y)) return null;
+      // Lantern echo state; saves from before echoes simply have none.
+      const p = s.player,
+        counter = (value, max) => value == null || (Number.isInteger(value) && value >= 0 && value <= max);
+      if (
+        (p.echo != null && !Object.hasOwn(ECHO_SOURCES, p.echo)) ||
+        !counter(p.echoSteps, 4) ||
+        !counter(p.echoPity, 9) ||
+        (p.lastStrike != null && (!Number.isInteger(p.lastStrike) || p.lastStrike > s.turn)) ||
+        s.items.some((i) => i?.kind === "echoShard" && !Object.hasOwn(ECHO_SOURCES, i.species))
+      )
+        return null;
       game.player.ammo = game.arrowCount() ? (game.player.ammo ?? null) : null;
       game.traps = game.traps.filter((t) => !game.isRoomEntrance(t.x, t.y));
       for (const e of game.enemies) {

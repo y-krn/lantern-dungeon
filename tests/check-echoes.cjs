@@ -63,7 +63,7 @@ function replay(g) {
   veiled.wait(); assert.equal(sleeper.awake, false, 'Veil keeps a distant sleeper asleep');
   const plain = arena(), wakes = enemy(plain, 'mossSlime', 15, 10, {awake:false});
   plain.wait(); assert.equal(wakes.awake, true);
-  assert.equal(typeof new DungeonEngine(1).wakeRange, 'undefined');
+  assert.equal(new DungeonEngine(1).wakeRange(), 7, 'Without the veil echo monsters notice Rine at 7 cells');
 }
 // Wing: two cells per turn only with no visible enemy; stops on items.
 {

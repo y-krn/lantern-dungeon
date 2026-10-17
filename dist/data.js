@@ -66,6 +66,43 @@
         "装備すると本当の力と呪いが判明します。呪われた装備は外せません。",
     },
   };
+  ITEMS.echoShard = {
+    name: "灯影の欠片",
+    icon: "✦",
+    description: "倒した魔物の残り火。踏むとランタンに宿り、今の灯影と入れ替わります。",
+  };
+  // Weapons whose direction input does more than strike the adjacent cell.
+  const WEAPON_SHAPES = ["lampSpear", "sweepAxe", "hookSickle", "pushMaul"];
+  // Lantern echoes: each monster family lends its own trait to Rine's lantern.
+  const ECHOES = {
+    moss: { name: "苔の灯影", short: "苔", text: ["5歩進むごとに体力+1。", "5歩進むごとに体力+2。"] },
+    wing: { name: "翼の灯影", short: "翼", text: ["見える敵がいない時、1回の移動で2マス進む。", "3マス以内に見える敵がいない時、1回の移動で2マス進む。"] },
+    shot: { name: "灯弾の灯影", short: "灯弾", text: ["正面に届く敵がいない時、「攻撃」が直線3マス以内の最初の敵に届く（威力半分）。", "正面に届く敵がいない時、「攻撃」が直線4マス以内の最初の敵に届く（威力半分）。"] },
+    feast: { name: "喰らいの灯影", short: "喰らい", text: ["近接攻撃が当たるたび満腹度+1。", "近接攻撃が当たるたび満腹度+2。"] },
+    ember: { name: "金灯の灯影", short: "金灯", text: ["敵を倒すたび体力+3。"] },
+    blink: { name: "揺らぎの灯影", short: "揺らぎ", text: ["敵の攻撃を受けた後、1/4の確率で同じ部屋の3マス以内へ転移する。"] },
+    shell: { name: "殻の灯影", short: "殻", text: ["防御力+2。", "防御力+4。"] },
+    root: { name: "根の灯影", short: "根", text: ["2ターン続けて攻撃を当てると、2回目以降の攻撃+3。", "2ターン続けて攻撃を当てると、2回目以降の攻撃+5。"] },
+    veil: { name: "擬態の灯影", short: "擬態", text: ["眠っている敵は3マス以内に近づくまで気づかない。", "眠っている敵は2マス以内に近づくまで気づかない。"] },
+    might: { name: "剛腕の灯影", short: "剛腕", text: ["近接攻撃が当たった敵を1マス押し出す。壁や敵にぶつかると追加2ダメージ。", "近接攻撃が当たった敵を1マス押し出す。壁や敵にぶつかると追加4ダメージ。"] },
+  };
+  const ECHO_SOURCES = {
+    mossSlime: ["moss", 0], amberSlime: ["moss", 1],
+    caveBat: ["wing", 0], emberBat: ["wing", 0], obsidianBat: ["wing", 1],
+    frostBat: ["shot", 0], lanternGhost: ["shot", 0], thunderBat: ["shot", 1], frostGhost: ["shot", 1],
+    lanternMoth: ["feast", 0], jadeBat: ["feast", 1], eclipseMoth: ["feast", 1], jadeGhost: ["feast", 1],
+    goldGhost: ["ember", 0], abyssGhost: ["blink", 0],
+    ironBeetle: ["shell", 0], cobaltBeetle: ["shell", 1],
+    thornPlant: ["root", 0], moonPlant: ["root", 1],
+    coinMimic: ["veil", 0], starMimic: ["veil", 1],
+    stoneGolem: ["might", 0], obsidianGolem: ["might", 1],
+  };
+  function echoOfSpecies(species) {
+    const source = ECHO_SOURCES[species];
+    if (!source) return null;
+    const [id, tier] = source, echo = ECHOES[id];
+    return { id, tier, species, name: echo.name, short: echo.short, text: echo.text[Math.min(tier, echo.text.length - 1)] };
+  }
   const SCROLLS = ["scroll", "map", "identify", "uncurse"];
   const SCROLL_NAMES = ["赤い灯札", "青い灯札", "黄色い灯札", "緑の灯札"];
   const EQUIPMENT_NAMES = {
@@ -77,35 +114,35 @@
       name: "木の剣",
       slot: "weapon",
       power: 0,
-      weight: 12,
+      weight: 10,
       description: "攻撃力 +0。使い慣れた木の剣。",
     },
     copperSword: {
       name: "銅の剣",
       slot: "weapon",
       power: 3,
-      weight: 30,
+      weight: 22,
       description: "攻撃力 +3。扱いやすい剣。",
     },
     ironSword: {
       name: "鉄の剣",
       slot: "weapon",
       power: 6,
-      weight: 25,
+      weight: 20,
       description: "攻撃力 +6。丈夫な鉄の剣。",
     },
     starSword: {
       name: "星鉄の剣",
       slot: "weapon",
       power: 9,
-      weight: 8,
+      weight: 7,
       description: "攻撃力 +9。まれに見つかる強力な剣。",
     },
     ghostSword: {
       name: "祓いの剣",
       slot: "weapon",
       power: 3,
-      weight: 15,
+      weight: 9,
       trait: "ghost",
       description: "攻撃力 +3。亡霊への近接ダメージが2倍。",
     },
@@ -113,9 +150,37 @@
       name: "破甲のつるはし",
       slot: "weapon",
       power: 4,
-      weight: 10,
+      weight: 8,
       trait: "pierce",
       description: "攻撃力 +4。近接攻撃は敵の装甲による軽減を無視。",
+    },
+    lampSpear: {
+      name: "灯守りの槍",
+      slot: "weapon",
+      power: 2,
+      weight: 6,
+      description: "攻撃力 +2。敵の方向へ進むと、直線2マス以内の最初の敵をその場で突きます。壁や手前の敵は越えません。",
+    },
+    sweepAxe: {
+      name: "薙ぎの斧",
+      slot: "weapon",
+      power: 4,
+      weight: 6,
+      description: "攻撃力 +4。正面と、その左右斜め前の3マスにいる敵をまとめて攻撃します。",
+    },
+    hookSickle: {
+      name: "鉤の鎌",
+      slot: "weapon",
+      power: 2,
+      weight: 6,
+      description: "攻撃力 +2。敵の方向へ進むと、直線2マス以内の最初の敵をその場で攻撃し、2マス先の敵は1マス手前へ引き寄せます。",
+    },
+    pushMaul: {
+      name: "打ち槌",
+      slot: "weapon",
+      power: 3,
+      weight: 6,
+      description: "攻撃力 +3。当てた敵を2マス押し出します。壁にぶつかると3ダメージ、敵にぶつかると双方に3ダメージ。罠も発動します。",
     },
     travelerShield: {
       name: "旅人の盾",
@@ -725,6 +790,10 @@
     isEquipment,
     validEquipment,
     ITEM_ORDER,
+    WEAPON_SHAPES,
+    ECHOES,
+    ECHO_SOURCES,
+    echoOfSpecies,
   };
   root.DungeonData = data;
   if (typeof module !== "undefined" && module.exports) module.exports = data;
