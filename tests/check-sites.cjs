@@ -69,7 +69,7 @@ function floorWith(field, floor, dungeon = 'tutorial') {
     assert.equal(!!g.merchant, floor === 4 || floor === 8);
   }
   const g = floorWith('merchant', 4), turn = g.turn; assert.equal(g.site(), 'merchant');
-  const {wares} = g.shopOffers(); assert.equal(wares.length, 5); assert(wares.every(w => !w.available), 'No gold, no sale');
+  const {wares} = g.shopOffers(); assert.equal(wares.length, 6); assert(wares.every(w => !w.available), 'No gold, no sale');
   g.player.gold = 1000; const bread = g.shopOffers().wares.findIndex(w => w.kind === 'bread');
   assert(g.buy(bread)); assert.equal(g.player.gold, 1000 - wares[bread].price); assert(g.player.bag.includes('bread'));
   assert(!g.buy(bread), 'Sold out'); assert.equal(g.turn, turn);

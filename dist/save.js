@@ -10,11 +10,13 @@
     MONSTERS,
     EQUIPMENT,
     SCROLLS,
+    RESCUE_SCROLLS,
     SCROLL_NAMES,
     EQUIPMENT_NAMES,
     EQUIPMENT_KEYS,
     validEquipment,
     isEquipment,
+    validJar,
     monsterTier,
     monsterStats,
     ECHO_SOURCES,
@@ -66,6 +68,20 @@
           entry.text = entry.text.replaceAll(oldName, newName);
         entry.text = entry.text.replaceAll("灯札を読んだ", "灯札をかざした");
       }
+    // Expand only the complete four-label legacy schema; malformed partial maps stay invalid.
+    if (Object.keys(info.appearances).length === RESCUE_SCROLLS.length &&
+        RESCUE_SCROLLS.every((kind) => SCROLL_NAMES.slice(0, 4).includes(info.appearances[kind])) &&
+        new Set(Object.values(info.appearances)).size === RESCUE_SCROLLS.length) {
+      const unused = SCROLL_NAMES.filter((name) => !Object.values(info.appearances).includes(name));
+      let random = game.seed ^ 0x9e3779b9;
+      for (let i = unused.length - 1; i > 0; i--) {
+        random = (Math.imul(random, 1664525) + 1013904223) >>> 0;
+        const j = random % (i + 1);
+        [unused[i], unused[j]] = [unused[j], unused[i]];
+      }
+      SCROLLS.filter((kind) => !RESCUE_SCROLLS.includes(kind)).forEach((kind, index) => { info.appearances[kind] = unused[index]; });
+      if (game.dungeon === "tutorial") info.known.push(...SCROLLS.slice(4).filter((kind) => !info.known.includes(kind)));
+    }
     if (
       Object.keys(info.appearances).length !== SCROLLS.length ||
       SCROLLS.some((kind) => !SCROLL_NAMES.includes(info.appearances[kind])) ||
@@ -130,6 +146,7 @@
         }
         if (!validEquipment(item)) return false;
       }
+      if (item.kind === "keepJar" && !validJar(item)) return false;
     }
     return true;
   }
@@ -203,8 +220,8 @@
         s.player.bag.some((item) =>
           typeof item === "string"
             ? !Object.hasOwn(ITEMS, item) ||
-              Object.hasOwn(EQUIPMENT_NAMES, item)
-            : !validEquipment(item),
+              Object.hasOwn(EQUIPMENT_NAMES, item) || item === "keepJar"
+            : !validEquipment(item) && !validJar(item),
         ) ||
         (s.player.ammo != null && s.player.ammo !== "arrow") ||
         !Number.isInteger(s.floor) ||
@@ -363,7 +380,6 @@
           ["split", "spawned", "stunned"].some(key => e[key] != null && typeof e[key] !== "boolean") ||
           ((e.split || e.spawned) && !["bubbleSlime", "bubbleMother"].includes(e.species)) ||
           (e.spawned && !e.split) ||
-          (e.stunned && MONSTERS[e.species].trait !== "charge") ||
           (e.stolen != null && (MONSTERS[e.species].trait !== "steal" || typeof e.stolen !== "string" || e.stolen === "arrow" ||
             !Object.hasOwn(ITEMS, e.stolen) || Object.hasOwn(EQUIPMENT_NAMES, e.stolen)))
         )
@@ -373,6 +389,9 @@
       for (const actor of [p, ...game.enemies])
         for (const key of ["bindUntil", "resistUntil"])
           if (actor[key] != null && (!Number.isInteger(actor[key]) || actor[key] < 0 || actor[key] > game.turn + 2)) return null;
+      for (const e of game.enemies)
+        for (const [key, max] of [["sleepUntil", 8], ["slowUntil", 10]])
+          if (Object.hasOwn(e, key) && (!Number.isInteger(e[key]) || e[key] < 0 || e[key] > game.turn + max)) return null;
       if (!game.restoreIdentification()) return null;
       game.effects = [];
       game.reveal();

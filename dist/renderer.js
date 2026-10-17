@@ -1,6 +1,6 @@
 (function (root) {
   "use strict";
-  const { W, H, MONSTERS, TRAPS, equipmentKind } =
+  const { W, H, MONSTERS, TRAPS, SCROLLS, equipmentKind } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
       : root.DungeonData;
@@ -279,6 +279,7 @@
         const symbols = {lampSpear: "槍", sweepAxe: "斧", hookSickle: "鎌", pushMaul: "槌", echoShard: "✦",
           meteorSpear: "槍", gorgeAxe: "斧", shadowSickle: "鎌", quakeMaul: "槌", baneScythe: "禍", baneMirror: "禍",
           waterSkin: "◍", oilFlask: "◉", emberStone: "✺", blastNut: "✹", smokeBall: "☁",
+          driedFruit: "❦", greatHerb: "✿", hookRope: "⚓", slowDust: "⌛", flashBall: "☀", keepJar: "♜",
           ...(getEngine().strategyTrial ? {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂"} : {})};
         if (symbols[kind]) {
           ctx.save(); ctx.fillStyle = kind === "echoShard" ? "#c9b6ff" : "#fff2cc"; ctx.strokeStyle = "#3c4935"; ctx.lineWidth = tile * .06;
@@ -302,7 +303,7 @@
       );
       ctx.fill();
       // All lantern talismans share one appearance; neither knowledge nor curses leak into art.
-      const type = ['scroll', 'map', 'identify', 'uncurse'].includes(item.kind) ? 'scroll'
+      const type = SCROLLS.includes(item.kind) ? 'scroll'
         : ['weapon', 'shield'].includes(item.kind) ? equipmentKind(item) || (item.kind === 'weapon' ? 'ironSword' : 'travelerShield')
         : item.kind;
       if (paintedSprite(ctx, type, px + tile * .125, py + tile * .125 + bob, s * .75, 1, false, null)) return;
@@ -337,7 +338,7 @@
       } else
         sprite(
           ctx,
-          item.kind === "map" ? "scroll" : item.kind,
+          SCROLLS.includes(item.kind) ? "scroll" : item.kind,
           px,
           py + bob,
           s,
@@ -631,6 +632,18 @@
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+        }
+        if (!e.isPlayer && (e.sleepUntil >= engine.turn || e.slowUntil >= engine.turn)) {
+          ctx.save();
+          ctx.fillStyle = e.sleepUntil >= engine.turn ? "#d7c4ff" : "#a9d9ff";
+          ctx.strokeStyle = "#18202c";
+          ctx.lineWidth = Math.max(2, tile * .05);
+          ctx.font = `bold ${Math.round(tile * .4)}px sans-serif`;
+          ctx.textAlign = "center";
+          const mark = e.sleepUntil >= engine.turn ? "Zz" : "遅";
+          ctx.strokeText(mark, px + tile * .8, py + tile * .16);
+          ctx.fillText(mark, px + tile * .8, py + tile * .16);
+          ctx.restore();
         }
         if (e.intent) {
           ctx.fillStyle = "#ffdf85";

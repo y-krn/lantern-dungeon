@@ -25,13 +25,18 @@
     game.enemies.sort((a, b) => a.id - b.id);
     for (const e of game.enemies) {
       if (p.hp <= 0) break;
+      if (e.hp <= 0) continue;
+      if (e.sleepUntil >= game.turn) { delete e.intent; continue; }
+      if (e.sleepUntil != null) { delete e.sleepUntil; e.awake = true; }
+      if (e.stunned) { delete e.intent; delete e.stunned; continue; }
+      if (e.slowUntil >= game.turn && game.turn % 2 !== 0) continue;
+      if (e.slowUntil < game.turn) delete e.slowUntil;
       if (e.hp <= 0 || (e.house && !e.awake && !game.monsterHouse?.triggered))
         continue;
       const m = MONSTERS[e.species] || {},
         dist = Math.max(Math.abs(e.x - p.x), Math.abs(e.y - p.y)),
         visible = game.visible[game.key(e.x, e.y)];
       if (dist <= (game.wakeRange ? game.wakeRange() : 7) && visible) game.wakeEnemy(e);
-      if (e.stunned) { delete e.stunned; continue; }
       if (m.trait === "mimic" && !e.revealed) {
         if (dist === 1 && game.canStep(e.x, e.y, p.x - e.x, p.y - e.y)) {
           e.revealed = true;

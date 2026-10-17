@@ -12,6 +12,8 @@
     EQUIPMENT_KEYS,
     EQUIPMENT,
     SCROLLS,
+    RESCUE_SCROLLS,
+    NEW_ITEM_POOL,
     TERRAIN_ITEMS,
     TRAPS,
     BOONS,
@@ -229,6 +231,7 @@
         game.items.push({
           ...pos,
           kind,
+          ...(kind === "keepJar" ? { contents: [] } : {}),
           ...equipment,
           amount:
             kind === "gold"
@@ -250,7 +253,13 @@
       "arrow",
       game.random() < 0.5 ? "map" : "scroll",
     ].forEach((kind) => addItem(kind));
-    addItem(SCROLLS[game.int(0, SCROLLS.length - 1)]);
+    addItem(RESCUE_SCROLLS[game.int(0, RESCUE_SCROLLS.length - 1)]);
+    const rollNewItem = () => {
+      const depth = game.floor + (hard ? 2 : 0), pool = NEW_ITEM_POOL.filter(([, , min]) => depth >= min);
+      let roll = game.int(1, pool.reduce((sum, [, weight]) => sum + weight, 0));
+      for (const [kind, weight] of pool) if ((roll -= weight) <= 0) return kind;
+    };
+    addItem(rollNewItem());
     if (game.random() < 0.4) addItem("weapon", otherRooms);
     if (game.random() < 0.4) addItem("shield", otherRooms);
     if (houseRoom) {
@@ -324,8 +333,7 @@
       if (spot) {
         const scale = (base) => Math.round((base * (1 + game.floor * 0.08)) / 10) * 10,
           extra = ["waterSkin", "oilFlask", "emberStone", "blastNut", "smokeBall"],
-          scrolls = ["scroll", "map", "identify", "uncurse"],
-          wares = ["bread", "potion", "arrow", extra[game.int(0, extra.length - 1)], scrolls[game.int(0, scrolls.length - 1)]];
+          wares = ["bread", "potion", "arrow", extra[game.int(0, extra.length - 1)], SCROLLS[game.int(0, SCROLLS.length - 1)], rollNewItem()];
         game.merchant = {
           ...spot,
           stock: wares.map((kind) => ({ kind, price: scale(SHOP_PRICES[kind]), amount: kind === "arrow" ? 10 : 1, sold: false })),

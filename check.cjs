@@ -19,6 +19,7 @@ require('./tests/check-equipment.cjs');
 require('./tests/check-arsenal.cjs');
 require('./tests/check-terrain.cjs');
 require('./tests/check-quiver.cjs');
+require('./tests/check-item-variations.cjs');
 require('./tests/check-sites.cjs');
 require('./tests/check-lantern.cjs');
 require('./tests/check-traps.cjs');
