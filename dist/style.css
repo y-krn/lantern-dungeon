@@ -3445,3 +3445,13 @@ dialog::backdrop {
 #game {
   image-rendering: auto;
 }
+/* The trial keeps targeting alongside the dungeon and the touch controls. */
+.strategy-aim, .strategy-status { margin: 0; padding: 7px 10px; background: #f4ebd5; color: #35442f; font-size: 12px; }
+.strategy-targeting .action-bar > .action-button { display: none; }
+.strategy-aim { grid-column: 1 / -1; grid-row: 1 / -1; display: flex; flex-direction: column; justify-content: center; gap: 6px; border-radius: 5px; min-width: 0; }
+.strategy-aim[hidden], .strategy-status[hidden] { display: none; }
+.strategy-aim p { margin: 0; overflow-wrap: anywhere; }
+.strategy-aim > div { display: flex; gap: 8px; }
+.strategy-aim button { flex: 1; min-width: 0; min-height: 44px; margin: 0; padding: 5px; font-size: 12px; }
+.trial-exit { color: #425a40; font-size: 11px; text-decoration: underline; }
+@media (max-width:600px) { .trial-exit { display: none; } }

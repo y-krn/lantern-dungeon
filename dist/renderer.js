@@ -13,6 +13,7 @@
     minimap,
     viewport,
     getEngine,
+    getTarget = () => null,
     reduced = false,
   }) {
     const ctx = canvas.getContext("2d"),
@@ -191,6 +192,16 @@
       ctx.fillRect(px + s * 4, py + s * 14, s * 8, s);
     }
     function drawItem(item, px, py, now) {
+      if (getEngine().strategyTrial) {
+        const kind = equipmentKind(item) || item.kind;
+        const symbols = {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂", lampSpear: "↗", bellHammer: "⚒", returnShield: "◈"};
+        if (symbols[kind]) {
+          ctx.save(); ctx.fillStyle = "#fff2cc"; ctx.strokeStyle = "#3c4935"; ctx.lineWidth = tile * .06;
+          ctx.font = `bold ${tile * .55}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.strokeText(symbols[kind], px + tile / 2, py + tile / 2);
+          ctx.fillText(symbols[kind], px + tile / 2, py + tile / 2); ctx.restore(); return;
+        }
+      }
       const bob = reduced ? 0 : Math.sin(now / 700 + item.x) * tile * 0.035;
       const s = tile / 16;
       ctx.fillStyle = "#09181566";
@@ -315,6 +326,35 @@
             }
           }
         }
+      if (engine.strategyTrial) {
+        const lamp = engine.strategy.lamp;
+        if (lamp) {
+          ctx.fillStyle = "#ffdc6328";
+          for (let y = lamp.y - 2; y <= lamp.y + 2; y++) for (let x = lamp.x - 2; x <= lamp.x + 2; x++)
+            if (engine.inside(x, y) && engine.visible[engine.key(x, y)] && engine.tile(x, y) && engine.lineOfSight(lamp.x, lamp.y, x, y)) ctx.fillRect(x * tile + offsetX, y * tile + offsetY, tile, tile);
+        }
+        for (const [kind, entries] of [["lamp", lamp ? [lamp] : []], ["bait", engine.strategy.bait ? [engine.strategy.bait] : []], ["vine", engine.strategy.vines]]) for (const entry of entries) {
+          if (!engine.seen[engine.key(entry.x, entry.y)]) continue;
+          const x = (entry.x + .5) * tile + offsetX, y = (entry.y + .5) * tile + offsetY;
+          ctx.save(); ctx.strokeStyle = kind === "vine" ? "#355837" : "#694123"; ctx.fillStyle = kind === "lamp" ? "#ffe490" : kind === "vine" ? "#5d9654" : "#d9a26d"; ctx.lineWidth = tile * .04;
+          if (kind === "vine") {
+            ctx.beginPath(); ctx.moveTo(x - tile * .35, y + tile * .2); ctx.quadraticCurveTo(x + tile * .35, y - tile * .3, x - tile * .1, y - tile * .3); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(x - tile * .15, y, tile * .18, tile * .08, -.6, 0, Math.PI * 2); ctx.fill();
+          } else {
+            ctx.beginPath(); ctx.ellipse(x, y, tile * .18, tile * .23, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            if (kind === "lamp") { ctx.fillStyle = "#fff9dc"; ctx.beginPath(); ctx.ellipse(x, y - tile * .1, tile * .065, tile * .15, 0, 0, Math.PI * 2); ctx.fill(); }
+            ctx.font = `bold ${tile * .22}px sans-serif`; ctx.textAlign = "center"; ctx.fillStyle = "#293a2f"; ctx.fillText(String(entry.remaining), x, y + tile * .43);
+          }
+          ctx.restore();
+        }
+        const target = getTarget();
+        if (target) {
+          const points = [target, ...(target.plan?.landing && (target.plan.landing.x !== target.x || target.plan.landing.y !== target.y) ? [target.plan.landing] : [])];
+          ctx.save(); ctx.strokeStyle = target.plan ? "#fff4bd" : "#b53f3d"; ctx.lineWidth = tile * .06;
+          for (const point of points) { const x = point.x * tile + offsetX, y = point.y * tile + offsetY; ctx.strokeRect(x + tile * .12, y + tile * .12, tile * .76, tile * .76); ctx.beginPath(); ctx.moveTo(x + tile * .5, y + tile * .25); ctx.lineTo(x + tile * .5, y + tile * .75); ctx.moveTo(x + tile * .25, y + tile * .5); ctx.lineTo(x + tile * .75, y + tile * .5); ctx.stroke(); }
+          ctx.restore();
+        }
+      }
       if (engine.seen[engine.key(engine.stairs.x, engine.stairs.y)]) {
         const sx = engine.stairs.x * tile + offsetX,
           sy = engine.stairs.y * tile + offsetY;
@@ -788,7 +828,7 @@
       if (distance) playerTween = { from: origin, to: { x, y }, born, start: walkDistance, distance, rest };
       playerSettle = null;
     }
-    function directionAt(event) {
+    function tileAt(event) {
       const engine = getEngine(),
         r = canvas.getBoundingClientRect(),
         worldX =
@@ -801,10 +841,11 @@
             canvas.height / 2) /
             tile +
           camera.y;
-      return [
-        Math.sign(Math.floor(worldX) - engine.player.x),
-        Math.sign(Math.floor(worldY) - engine.player.y),
-      ];
+      return {x: Math.floor(worldX), y: Math.floor(worldY)};
+    }
+    function directionAt(event) {
+      const target = tileAt(event), p = getEngine().player;
+      return [Math.sign(target.x - p.x), Math.sign(target.y - p.y)];
     }
     return {
       ready,
@@ -824,6 +865,7 @@
       playEffects,
       remaining: () => Math.max(0, busyUntil - performance.now()),
       directionAt,
+      tileAt,
       start: () => requestAnimationFrame(render),
     };
   }

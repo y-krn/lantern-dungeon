@@ -20,3 +20,6 @@ require('./tests/check-ground.cjs');
 require('./tests/check-engine.cjs');
 require('./tests/check-pwa.cjs');
 require('./tests/check-playtest.cjs');
+const strategy = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-strategy.cjs')], {stdio: 'inherit'});
+if (strategy.error) throw strategy.error;
+if (strategy.status !== 0) process.exit(strategy.status ?? 1);
