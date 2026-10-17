@@ -113,7 +113,7 @@
         continue;
       }
       if (m.stationary || (m.cadence && game.turn % m.cadence !== 0)) continue;
-      if (typeof game.strategyStep === "function" && game.strategyStep(e)) continue;
+      if (typeof game.strategyLanding === "function" && e.bindUntil >= game.turn) continue;
       for (
         let stepIndex = 0;
         stepIndex < (e.awake ? m.speed || 1 : 1);
@@ -153,6 +153,10 @@
           e.x += step[0];
           e.y += step[1];
           e.direction = step;
+          if (typeof game.strategyLanding === "function") {
+            game.strategyLanding(e);
+            if (e.hp <= 0 || e.bindUntil >= game.turn) break;
+          }
         } else break;
       }
     }
