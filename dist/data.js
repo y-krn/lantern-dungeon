@@ -69,7 +69,7 @@
   ITEMS.echoShard = {
     name: "灯影の欠片",
     icon: "✦",
-    description: "倒した魔物の残り火。踏むとランタンに宿り、今の灯影と入れ替わります。",
+    description: "倒した魔物の残り火。踏むとランタンに宿ります。枠が埋まっている時は、入れ替えるかどうかを選べます。",
   };
   // Terrain tools: thrown in the facing direction (up to 4 cells) or used on the spot.
   Object.assign(ITEMS, {

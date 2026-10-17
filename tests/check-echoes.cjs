@@ -34,9 +34,14 @@ function replay(g) {
   assert.equal(g.player.echoPity, 0);
   assert.match(g.itemName(shard), /鉄殻甲虫の灯影/);
   const h = replay(g);
-  assert(h.move(1, 0)); assert.equal(h.player.echo, 'ironBeetle');
-  assert(!h.items.some(i => i.kind === 'echoShard'), 'Echoes never enter the bag');
-  assert(h.log.some(l => l.text.includes('苔の灯影は消えた')));
+  // A full lantern leaves the shard on the floor until Rine chooses.
+  const turn = h.turn; assert(h.move(1, 0)); assert.equal(h.player.echo, 'mossSlime');
+  assert.equal(h.site(), 'echo'); assert.equal(h.echoOffer().species, 'ironBeetle');
+  assert(!h.replaceEcho(1), 'No second slot to replace'); const kept = replay(h);
+  assert(h.replaceEcho(0)); assert.equal(h.player.echo, 'ironBeetle'); assert.equal(h.turn, turn + 1, 'Choosing is free');
+  assert(!h.items.some(i => i.kind === 'echoShard'), 'Echoes never enter the bag'); assert.equal(h.site(), null);
+  assert(kept.move(-1, 0)); assert.equal(kept.player.echo, 'mossSlime', 'Walking away keeps the current echo');
+  assert(kept.items.some(i => i.kind === 'echoShard'), 'The shard stays for later');
   replay(h);
   const guardian = arena(); guardian.player.echoPity = 2;
   const boss = enemy(guardian, 'starGuardian', 11, 10); boss.hp = 1; guardian.attack();
@@ -128,4 +133,4 @@ function replay(g) {
   assert.equal(StrategyEngine.restore(JSON.stringify(badShard)), null);
   const badPity = JSON.parse(g.serialize()); badPity.state.player.echoPity = 9; assert.equal(StrategyEngine.restore(JSON.stringify(badPity)), null);
 }
-console.log('PASS: lantern echoes cover every monster family, drop with pity, swap on pickup, and wing/shot/shell/feast/root/might/moss/ember/blink/veil behave as described with save validation.');
+console.log('PASS: lantern echoes cover every monster family, drop with pity, wait for a choice when the lantern is full, and wing/shot/shell/feast/root/might/moss/ember/blink/veil behave as described with save validation.');
