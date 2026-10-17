@@ -194,7 +194,7 @@
     function drawItem(item, px, py, now) {
       if (getEngine().strategyTrial) {
         const kind = equipmentKind(item) || item.kind;
-        const symbols = {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂", lampSpear: "↗", bellHammer: "⚒", returnShield: "◈"};
+        const symbols = {lightSeed: "♧", vineSeed: "❧", bait: "●", pullTalisman: "↙", swapTalisman: "↔", returnTalisman: "⌂", lampSpear: "↗"};
         if (symbols[kind]) {
           ctx.save(); ctx.fillStyle = "#fff2cc"; ctx.strokeStyle = "#3c4935"; ctx.lineWidth = tile * .06;
           ctx.font = `bold ${tile * .55}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";

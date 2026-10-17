@@ -27,23 +27,61 @@ function replay(g) {
   const corner = arena(); corner.tiles[corner.key(11,10)] = 0; corner.player.facing = [1,1];
   const hidden = enemy(corner, 'frostBat', 12, 12); corner.attack(); assert.equal(hidden.hp, hidden.maxHp, 'Spear cannot cut a blocked diagonal corner');
 }
-{
-  const g = arena('bellHammer'), e = enemy(g, 'cobaltBeetle', 11,10);
-  g.wait(); assert(g.strategy.charged); replay(g);
-  g.traps.push({x:12, y:10, found:false});
-  g.attack(); assert(g.traps[0].found, 'A charged hammer pushes onto the trap'); assert(!g.strategy.charged);
-  const hp = e.hp; g.face(Math.sign(e.x-g.player.x),Math.sign(e.y-g.player.y)); g.attack(); assert(e.hp < hp, 'Uncharged hammer still attacks');
-  g.wait(); g.use(g.player.bag.indexOf('potion')); assert(!g.strategy.charged, 'Another action loses the charge');
+// Direction input must use exactly the same attack, turn and RNG as the attack button.
+for (const [dx, dy] of DungeonData.DIRS) {
+  const g = arena(); g.player.facing = [-dx,-dy];
+  enemy(g,'ironBeetle',10+dx*2,10+dy*2);
+  const h = replay(g), origin = {x:g.player.x,y:g.player.y}, turn = g.turn;
+  assert(g.move(dx,dy)); h.face(dx,dy); assert(h.attack());
+  assert.deepEqual({x:g.player.x,y:g.player.y},origin,'A spear thrust does not step forward');
+  assert.equal(g.turn,turn+1); assert(g.enemies[0].hp < g.enemies[0].maxHp);
+  assert.equal(g.serialize(),h.serialize(),'Directional and explicit thrusts have identical results');
 }
 {
-  const g = arena('returnShield'), e = enemy(g, 'frostBat', 13,10);
-  e.intent = {x:10,y:10,kind:'ranged'}; const hp = g.player.hp; g.wait();
-  assert.equal(g.player.hp,hp); assert(e.hp < e.maxHp, 'Waiting reflects a front projectile');
-  assert(!('guarding' in g)); replay(g);
-  const h = arena('returnShield');
-  const a = enemy(h, 'frostBat', 13,10,0), b = enemy(h, 'frostBat', 10,13,1);
-  for (const e of [a,b]) e.intent = {x:10,y:10,kind:'ranged'};
-  h.wait(); assert(h.player.hp < 100, 'Another direction still deals damage');
+  const g = arena(), front = enemy(g,'ironBeetle',11,10), back = enemy(g,'ironBeetle',12,10);
+  assert(g.move(1,0)); assert(front.hp < front.maxHp); assert.equal(back.hp,back.maxHp);
+  const corner = arena(); corner.tiles[corner.key(11,10)] = 0; enemy(corner,'frostBat',12,12);
+  const blocked = corner.serialize(); assert(!corner.move(1,1)); assert.equal(corner.serialize(),blocked);
+  const distantWall = arena(); distantWall.tiles[distantWall.key(12,10)] = 0;
+  const hidden = enemy(distantWall,'frostBat',13,10); assert(distantWall.move(1,0));
+  assert.equal(distantWall.player.x,11); assert.equal(hidden.hp,hidden.maxHp,'A wall blocks the spear');
+  const far = arena(), distant = enemy(far,'ironBeetle',13,10);
+  assert(far.move(1,0)); assert.equal(far.player.x,11); assert.equal(distant.hp,distant.maxHp,'Out of range means movement only');
+  const empty = arena(); assert(empty.move(1,0)); assert.equal(empty.player.x,11); assert.equal(empty.turn,1);
+  const facing = arena(), target = enemy(facing,'ironBeetle',10,8), turn = facing.turn, rng = facing.rng;
+  assert(facing.face(0,-1)); assert.equal(facing.turn,turn); assert.equal(facing.rng,rng); assert.equal(target.hp,target.maxHp);
+  const ordinary = arena('none'), ordinaryEnemy = enemy(ordinary,'ironBeetle',12,10);
+  assert(ordinary.move(1,0)); assert.equal(ordinary.player.x,11); assert.equal(ordinaryEnemy.hp,ordinaryEnemy.maxHp,'Other weapons still require adjacent contact');
+  const bound = arena(), boundEnemy = enemy(bound,'ironBeetle',12,10); bound.player.bindUntil=bound.turn+2;
+  assert(bound.move(1,0)); assert.equal(bound.player.x,10); assert(boundEnemy.hp < boundEnemy.maxHp,'A bind restricts movement, not ranged melee');
+  const invalid = arena(); const saved = invalid.serialize();
+  for (const d of [[0,0],[2,0],[NaN,1]]) { assert(!invalid.move(...d)); assert.equal(invalid.serialize(),saved); }
+  const unchosen = new StrategyEngine(73), unchosenSave=unchosen.serialize();
+  assert(!unchosen.move(1,0)); assert(!unchosen.wait()); assert.equal(unchosen.serialize(),unchosenSave);
+}
+{
+  for (const kind of ['bellHammer','returnShield']) {
+    const g = new StrategyEngine(73), before = g.serialize();
+    assert(!g.chooseKit(kind)); assert.equal(g.serialize(),before,'Retired equipment cannot be selected');
+    assert(!Object.hasOwn(DungeonData.EQUIPMENT,kind),'Retired equipment is no longer installed');
+  }
+  const g = arena(), old=JSON.parse(g.serialize());
+  const hammer={kind:'weapon',variant:'bellHammer',rank:0,bonus:2,cursed:true,identified:true};
+  const shield={kind:'shield',variant:'returnShield',rank:0,bonus:-1,cursed:false,identified:true};
+  old.state.player.equipment={weapon:hammer,shield};old.state.player.weapon=0;old.state.player.shield=0;
+  old.state.player.bag=[{...hammer,cursed:false,identified:false}];
+  old.state.items=[{...shield,identified:false,x:12,y:10,amount:1,discovered:true}];old.state.strategy.charged=true;
+  const h=StrategyEngine.restore(JSON.stringify(old));assert(h);
+  assert.deepEqual(h.player.equipment.weapon,{...hammer,variant:'lampSpear'});
+  assert.deepEqual(h.player.equipment.shield,{...shield,variant:'travelerShield'});
+  assert.deepEqual(h.player.bag[0],{...old.state.player.bag[0],variant:'lampSpear'});
+  assert.deepEqual(h.items[0],{...old.state.items[0],variant:'travelerShield'});
+  assert(!Object.hasOwn(h.strategy,'charged'));replay(h);
+  const e=enemy(h,'frostBat',13,10);e.intent={x:10,y:10,kind:'ranged'};
+  const hp=h.player.hp;h.wait();assert(h.player.hp<hp);assert.equal(e.hp,e.maxHp,'Waiting no longer reflects shots');
+  old.state.strategy.charged='yes';assert.equal(StrategyEngine.restore(JSON.stringify(old)),null);
+  old.state.strategy.charged=false;old.state.player.equipment.weapon.kind='shield';
+  assert.equal(StrategyEngine.restore(JSON.stringify(old)),null,'Migration must not accept equipment in the wrong slot');
 }
 {
   const g = arena(); const before = g.serialize();
@@ -102,8 +140,8 @@ function replay(g) {
   const restored=replay(g); g.wait(); restored.wait(); assert.equal(g.serialize(),restored.serialize());
 }
 for (let seed=1;seed<=20;seed++) {
-  const g=new StrategyEngine(seed);g.chooseKit(['lampSpear','bellHammer','returnShield'][seed%3]);
+  const g=new StrategyEngine(seed);g.chooseKit(seed%2 ? 'lampSpear' : 'none');
   for(let floor=1;floor<=5;floor++){if(floor>1){g.floor=floor;g.generateFloor();}assert.equal(g.enemies.some(e=>e.type==='guardian'),floor===5);replay(g);}
 }
 assert.deepEqual(Array.from({length:20},(_,i)=>new DungeonEngine(i+1).serialize()),normal,'Even installed trial definitions keep the normal drop and RNG streams unchanged');
-console.log('PASS: nine trial items, targeting rollback, spear/corners, charged push/traps, reflection, bait/light lifetime, bind/resistance, fixed intents/friendly fire, floor use at capacity, isolated saves and deterministic replay across 100 generated floors.');
+console.log('PASS: seven trial items, directional/explicit spear parity in eight directions, corners/range/binds, retired-gear migration, targeting rollback, bait/light lifetime, bind/resistance, fixed intents/friendly fire, floor use at capacity, isolated saves and deterministic replay across 100 generated floors.');

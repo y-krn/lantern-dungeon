@@ -50,7 +50,7 @@ function checkLayout() {
     game:document.getElementById('game').getBoundingClientRect().toJSON(),
     minimap:document.getElementById('minimap').checkVisibility(),
     viewport:innerHeight})`);
-  assert(!layout.overflow);assert(layout.minimap);assert(layout.game.height>=160);
+  assert(!layout.overflow);assert(layout.minimap);assert(layout.game.height>=160,`Canvas height ${layout.game.height}`);
   assert(layout.controls.bottom<=layout.viewport+1,'Touch controls remain in the viewport');
   return layout;
 }
@@ -61,6 +61,8 @@ try {
   const normal=evaluate(`localStorage.getItem('lantern-dungeon-v1')`);
   browser('open',new URL('?trial=strategy',url).href);
   browser('set','viewport','390','844');
+  assert.equal(evaluate(`document.querySelectorAll('[data-kit]').length`),2,'Only spear and current gear remain');
+  assert(!evaluate(`document.getElementById('modal-content').textContent.includes('鐘打ちの槌') || document.getElementById('modal-content').textContent.includes('返しの盾')`));
   click('[data-kit="lampSpear"]');ready();assert(state().kitChosen);assert.equal(state().floor,1);
   screenshot('trial-start-390.png');checkLayout();
   for(const [width,height] of [[390,844],[320,568]]) {
@@ -104,19 +106,24 @@ try {
     fixture(`e.enemies=[{...DungeonData.monsterStats('ironBeetle'),hp:18,x:16,y:12,id:0,awake:true}];`);
     bagUse('swapTalisman');click('[data-direction="1,0"]');click('#strategy-confirm');ready();assert.equal(state().player.x,16);
     fixture(`e.strategy.lamp={x:16,y:12,remaining:5};`);bagUse('returnTalisman');ready();assert.equal(state().player.x,16);assert.equal(state().strategy.lamp,null);
-    fixture(`e.player.equipment.weapon={kind:'weapon',variant:'bellHammer',rank:0,bonus:0,cursed:false,identified:true};e.enemies=[{...DungeonData.monsterStats('cobaltBeetle'),hp:49,x:15,y:12,id:0,awake:true}];e.traps=[{x:16,y:12,found:false}];`);
-    click('#wait-button');ready();assert(state().strategy.charged);click('#attack-button');ready();assert(state().traps[0].found);assert(!state().strategy.charged);
+    // Directional touch input attacks at reach without stepping or pressing Attack.
+    fixture(`e.enemies=[{...DungeonData.monsterStats('cobaltBeetle'),hp:49,x:16,y:12,id:0,awake:true}];`);
+    const beforeThrust=state();click('[data-direction="1,0"]');ready();
+    const thrust=state();assert.equal(thrust.turn,beforeThrust.turn+1);assert.equal(thrust.player.x,14);
+    assert(thrust.enemies[0].hp<beforeThrust.enemies[0].hp);screenshot(`spear-${width}.png`);checkLayout();
+    browser('reload');ready();assert.equal(state().turn,thrust.turn);assert.equal(state().enemies[0].hp,thrust.enemies[0].hp);
+    fixture(`e.player.facing=[0,1];e.enemies=[{...DungeonData.monsterStats('cobaltBeetle'),hp:49,x:16,y:12,id:0,awake:true}];`);
+    click('#turn-button');click('[data-direction="1,0"]');
+    assert.equal(state().turn,0);assert.equal(state().enemies[0].hp,49,'Face-only input never attacks');click('#turn-button');
+    ready();browser('press','ArrowRight');ready();assert.equal(state().turn,1);assert.equal(state().player.x,14);assert(state().enemies[0].hp<49);
+    fixture();click('[data-direction="1,0"]');ready();assert.equal(state().player.x,15,'Empty reach allows walking');
     // A visible alert moth changes route and its attention state survives a reload.
     fixture(`e.enemies=[{...DungeonData.monsterStats('lanternMoth'),hp:12,x:17,y:14,id:1,awake:true}];`);
     bagUse('lightSeed');click('[data-direction="1,0"]');click('[data-direction="1,0"]');click('#strategy-confirm');ready();
     assert(state().enemies[0].lureUsed);screenshot(`lure-${width}.png`);
-    // A real UI reflection consumes a waiting action and preserves the original aim.
-    fixture(`e.player.equipment.shield={kind:'shield',variant:'returnShield',rank:0,bonus:0,cursed:false,identified:true};e.enemies=[{...DungeonData.monsterStats('frostBat'),hp:35,x:17,y:12,id:0,awake:true,intent:{x:14,y:12,kind:'ranged'}}];`);
-    click('#wait-button');ready();assert.equal(state().player.hp,100);assert(state().enemies[0].hp<35);
-    screenshot(`reflection-${width}.png`);checkLayout();
     assert(evaluate(`localStorage.getItem('lantern-dungeon-v1')===${JSON.stringify(normal)}`),'The trial preserves the ordinary save exactly');
     assert.equal(evaluate(`localStorage.getItem('lantern-dungeon-progress-v1')`),'true');
-    report.cases.push({viewport:[width,height],result:'passed',checks:['target/cancel','single consumption','reload','canvas pointer','floor use at capacity','eat/throw','vine','pull','swap','return','hammer','alert lure','reflection','normal save isolation','layout']});
+    report.cases.push({viewport:[width,height],result:'passed',checks:['target/cancel','single consumption','reload','canvas pointer','floor use at capacity','eat/throw','vine','pull','swap','return','directional spear','face-only','keyboard spear','empty reach movement','alert lure','normal save isolation','layout']});
   }
   fixture();bagUse('lightSeed');click('#strategy-confirm');ready();
   const online=state();
@@ -131,7 +138,7 @@ try {
   report.errors=browser('errors').errors;
   assert.equal(report.errors.length,0,'No browser errors');
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));
-  console.log(`PASS: trial UI at 390×844 and 320×568; cancellation, targeting, lifetime/reload, capacity, eat/throw, lure, reflection, normal-save isolation and future-save preservation. Artifacts: ${out}`);
+  console.log(`PASS: trial UI at 390×844 and 320×568; cancellation, targeting, lifetime/reload, capacity, eat/throw, lure, directional spear, face-only, normal-save isolation and future-save preservation. Artifacts: ${out}`);
 } catch (error) {
   report.failure=String(error);
   try { screenshot('failure.png'); report.visible=evaluate('document.body.innerText'); } catch {}

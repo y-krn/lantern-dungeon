@@ -13,9 +13,7 @@
     returnTalisman: { name: "仮宿の灯札", icon: "✧", description: "同じ階の置き灯へ戻り、灯りを消費します。敵が灯りの上にいると使えません。帰還後も敵は動きます。" },
   };
   const gear = {
-    lampSpear: { name: "灯守りの槍", slot: "weapon", power: 2, weight: 0, description: "攻撃力 +2。向いている直線2マスの最初の敵を突きます。壁や手前の敵は越えません。" },
-    bellHammer: { name: "鐘打ちの槌", slot: "weapon", power: 2, weight: 0, description: "攻撃力 +2。足踏みで溜め、次の一撃で1マス押します。壁への衝突は追加3ダメージ。音は近くの魔物を起こします。別の行動で溜めは消えます。" },
-    returnShield: { name: "返しの盾", slot: "shield", power: 0, weight: 0, description: "防御力 +0。足踏みしたターン、正面からの射撃を一発だけ反射します。近接・強打・罠には効きません。" },
+    lampSpear: { name: "灯守りの槍", slot: "weapon", power: 2, weight: 0, description: "攻撃力 +2。敵の方向へ進むと、直線2マス以内の最初の敵をその場で突きます。壁や手前の敵は越えません。" },
   };
   function install() {
     // Trial definitions are installed only after explicitly entering the trial.
@@ -31,7 +29,7 @@
       super(seed);
       this.strategyTrial = true;
       this.kitChosen = false;
-      this.strategy = { lamp: null, bait: null, vines: [], charged: false };
+      this.strategy = { lamp: null, bait: null, vines: [] };
       this.player.bag.push("lightSeed", "lightSeed", "vineSeed", "bait", "pullTalisman", "swapTalisman", "returnTalisman");
       this.prepareTrialFloor();
       this.say("分け灯を携えて、五つの回廊へ。", "good");
@@ -41,7 +39,7 @@
     }
     floorName() { return ["灯りの庭", "響きの回廊", "返り矢の広間", "仮宿の間", "分け灯の聖域"][this.floor - 1]; }
     prepareTrialFloor() {
-      this.strategy = { lamp: null, bait: null, vines: [], charged: false };
+      this.strategy = { lamp: null, bait: null, vines: [] };
       for (const actor of [this.player, ...this.enemies]) {
         for (const key of ["bindUntil", "resistUntil", "lureUsed", "lure"]) delete actor[key];
       }
@@ -171,46 +169,41 @@
     }
     hit(enemy, damage, kind = "physical") {
       if (enemy.hp <= 0) return;
-      const charged = kind === "melee" && this.strategy?.charged && equipmentKind(this.player.equipment.weapon) === "bellHammer";
-      const origin = {x: enemy.x, y: enemy.y}, visible = !!this.visible[this.key(enemy.x, enemy.y)], log = this.log.slice(), count = this.effects.length;
+      const visible = !!this.visible[this.key(enemy.x, enemy.y)], log = this.log.slice(), count = this.effects.length;
       super.hit(enemy, damage, kind);
       delete enemy.lure;
-      if (charged) {
-        this.strategy.charged = false;
-        const dx = Math.sign(origin.x - this.player.x), dy = Math.sign(origin.y - this.player.y);
-        if (enemy.hp > 0) {
-          if (!this.canStep(enemy.x, enemy.y, dx, dy)) super.hit(enemy, 3, "impact");
-          else if (!this.enemyAt(enemy.x + dx, enemy.y + dy)) { enemy.x += dx; enemy.y += dy; this.strategyLanding(enemy); }
-        }
-        for (const e of this.enemies) if (!e.house && e.hp > 0 && this.path(origin, e, 6).steps <= 6) e.awake = true;
-      }
       if (!visible) { this.log = log; this.effects.splice(count); }
     }
     move(dx, dy) {
       if (!this.ready() || !DIRS.some(d => d[0] === dx && d[1] === dy) || !this.canStep(this.player.x, this.player.y, dx, dy)) return false;
+      if (equipmentKind(this.player.equipment.weapon) === "lampSpear" && this.spearTarget(dx, dy).enemy) {
+        this.face(dx, dy);
+        return this.attack();
+      }
       const enemy = this.enemyAt(this.player.x + dx, this.player.y + dy);
       if (!enemy && this.player.bindUntil >= this.turn + 1) return false;
       return super.move(dx, dy);
+    }
+    spearTarget(dx, dy) {
+      let {x, y} = this.player;
+      for (let i = 0; i < 2 && this.canStep(x, y, dx, dy); i++) {
+        x += dx; y += dy;
+        const enemy = this.enemyAt(x, y);
+        if (enemy) return {x, y, enemy};
+      }
+      return {x, y, enemy: null};
     }
     attack() {
       if (!this.ready()) return false;
       if (equipmentKind(this.player.equipment.weapon) !== "lampSpear") return super.attack();
       const p = this.player, [dx, dy] = p.facing;
-      let x = p.x, y = p.y, hit = false;
-      for (let i = 0; i < 2 && this.canStep(x, y, dx, dy); i++) {
-        x += dx; y += dy;
-        const enemy = this.enemyAt(x, y);
-        if (enemy) { this.hit(enemy, this.attackPower() + this.int(-1, 2), "melee"); hit = true; break; }
-      }
-      if (!hit) { this.say("槍を突き出した。届く先に敵はいない。"); this.effect("swing", x, y, 0, undefined, this.attackVisual(p, {x, y})); }
+      const {x, y, enemy} = this.spearTarget(dx, dy);
+      if (enemy) this.hit(enemy, this.attackPower() + this.int(-1, 2), "melee");
+      else { this.say("槍を突き出した。届く先に敵はいない。"); this.effect("swing", x, y, 0, undefined, this.attackVisual(p, {x, y})); }
       this.finishTurn(); return true;
     }
     wait() {
-      if (!this.ready()) return false;
-      this.strategy.charged = equipmentKind(this.player.equipment.weapon) === "bellHammer";
-      this.waiting = true;
-      this.guarding = equipmentKind(this.player.equipment.shield) === "returnShield";
-      this.finishTurn(); return true;
+      return this.ready() && super.wait();
     }
     triggerTrap() { this.strategyLanding(this.player); }
     strategyLanding(actor) {
@@ -284,31 +277,13 @@
         this.effect("swing", aim.x, aim.y, 0, undefined, this.attackVisual(e, aim, aim.kind === "ranged" ? "ranged" : "melee"));
       }
     }
-    enemyHit(e, ranged = false) {
-      const p = this.player, [dx, dy] = p.facing;
-      if (ranged && this.guarding && Math.sign(e.x - p.x) === dx && Math.sign(e.y - p.y) === dy) {
-        this.guarding = false;
-        this.say("返しの盾が射撃を跳ね返した！", "good");
-        const n = distance(p, e);
-        let x = p.x, y = p.y;
-        for (let i = 0; i < n && this.canStep(x, y, dx, dy); i++) {
-          x += dx; y += dy;
-          const target = this.enemyAt(x, y);
-          if (target) { this.hit(target, e.attack + this.int(-1, 1), "physical"); this.effect("swing", x, y, 0, undefined, this.attackVisual(p, target, "arrow")); break; }
-        }
-        return;
-      }
-      super.enemyHit(e, ranged);
-    }
     enemyTurn() {
       this.inEnemyTurn = true;
       this.enemies.sort((a, b) => a.id - b.id);
       try { super.enemyTurn(); } finally { delete this.inEnemyTurn; }
     }
     finishTurn() {
-      if (!this.waiting) this.strategy.charged = false;
       super.finishTurn();
-      delete this.waiting; delete this.guarding;
       this.tutorialCleared = false;
       if (this.status === "won") this.log = this.log.map(entry => entry.text.includes("深淵の迷宮」への道") ? {...entry, text: "分け灯のランタンを手に入れた！ 五つの回廊を踏破した。"} : entry);
       for (const key of ["lamp", "bait"]) if (this.strategy[key] && --this.strategy[key].remaining <= 0) {
@@ -326,7 +301,13 @@
     static restore(raw) {
       try {
         const parsed = JSON.parse(raw), s = parsed.state;
-        if (parsed.version !== 2 || parsed.trial !== "strategy" || s?.strategyTrial !== true || typeof s.kitChosen !== "boolean" || s.floor > 5 || s.dungeon !== "tutorial" || s.tutorialCleared !== false || ["waiting", "guarding", "inEnemyTurn"].some(key => Object.hasOwn(s,key)) || !s.strategy || typeof s.strategy.charged !== "boolean" || !Array.isArray(s.strategy.vines)) return null;
+        if (parsed.version !== 2 || parsed.trial !== "strategy" || s?.strategyTrial !== true || typeof s.kitChosen !== "boolean" || s.floor > 5 || s.dungeon !== "tutorial" || s.tutorialCleared !== false || ["waiting", "guarding", "inEnemyTurn"].some(key => Object.hasOwn(s,key)) || !s.strategy || (Object.hasOwn(s.strategy, "charged") && typeof s.strategy.charged !== "boolean") || !Array.isArray(s.strategy.vines)) return null;
+        // Retired trial equipment keeps its power, bonus, curse and location on resume.
+        for (const item of [...Object.values(s.player?.equipment || {}), ...s.player.bag, ...s.items]) {
+          if (item?.variant === "bellHammer" && item.kind === "weapon") item.variant = "lampSpear";
+          if (item?.variant === "returnShield" && item.kind === "shield") item.variant = "travelerShield";
+        }
+        delete s.strategy.charged;
         install();
         const game = root.DungeonSave.restoreDungeon(JSON.stringify({version: 1, state: s}), StrategyEngine);
         if (!game) return null;

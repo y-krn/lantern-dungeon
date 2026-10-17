@@ -266,10 +266,10 @@
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
     if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · 矢 ${engine.arrowCount()}本`;
     if (trial) {
-      const states = [engine.strategy.charged ? "槌の溜め" : "", engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);
+      const states = [engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);
       $("strategy-status").textContent = states.join(" · ");
       $("strategy-status").hidden = portraitUI || states.length === 0;
-      if (portraitUI) $("mobile-progress").textContent = [p.bindUntil >= engine.turn + 1 ? "移動不可" : `Lv.${p.level}`, engine.strategy.lamp ? `灯り${engine.strategy.lamp.remaining}手` : `矢 ${engine.arrowCount()}本`, engine.strategy.charged ? "溜め" : ""].filter(Boolean).join(" · ");
+      if (portraitUI) $("mobile-progress").textContent = [p.bindUntil >= engine.turn + 1 ? "移動不可" : `Lv.${p.level}`, engine.strategy.lamp ? `灯り${engine.strategy.lamp.remaining}手` : `矢 ${engine.arrowCount()}本`].join(" · ");
       if (strategyAim) updateAim();
     }
     const list = $("event-log");
@@ -380,7 +380,7 @@
     else updateUI();
   }
   function chooseTrialKit() {
-    openModal("trial-kit", `<div class="modal-inner">${modalHeader("分け灯の旅支度")}<p class="modal-description">灯種と札を携え、五つの回廊へ。最初に携える品を一つ選べます。</p><div class="dungeon-list">${["lampSpear", "bellHammer", "returnShield"].map(variant => `<button class="dungeon-choice" data-kit="${variant}"><strong>${DungeonData.EQUIPMENT[variant].name}</strong><span class="dungeon-choice-description">${DungeonData.EQUIPMENT[variant].description}</span></button>`).join("")}</div><button class="secondary-button" data-kit="none">今の装備で出発する</button></div>`);
+    openModal("trial-kit", `<div class="modal-inner">${modalHeader("分け灯の旅支度")}<p class="modal-description">灯種と札を携え、五つの回廊へ。灯守りの槍を携えるか、今の装備で出発できます。</p><div class="dungeon-list"><button class="dungeon-choice" data-kit="lampSpear"><strong>${DungeonData.EQUIPMENT.lampSpear.name}</strong><span class="dungeon-choice-description">${DungeonData.EQUIPMENT.lampSpear.description}</span></button></div><button class="secondary-button" data-kit="none">今の装備で出発する</button></div>`);
     $("modal-content").querySelectorAll("[data-kit]").forEach(button => button.addEventListener("click", () => {
       engine.chooseKit(button.dataset.kit); closeModal(); updateUI(); save();
     }));
@@ -426,7 +426,7 @@
   }
   function showHelp() {
     if (trial) {
-      openModal("help", `<div class="modal-inner">${modalHeader("分け灯の歩き方")}<p class="modal-description">持ち物から灯種や札を選び、迷宮をタップするか方向ボタンで照準を動かします。「ここに使う」で確定、「やめる」で戻れます。</p><div class="help-row"><span>分けた灯り</span><p>蛾の注意を一度そらします。6手で消え、仮宿の灯札の帰還先にもなります。</p></div><div class="help-row"><span>香りと蔓</span><p>団子は食べるか投げて誘導。蔓は自分も踏みます。足止めしても敵は攻撃できます。</p></div><div class="help-row"><span>槌と返しの盾</span><p>足踏みで溜めてから押す。返しの盾は、足踏みした手だけ正面の射撃を一発反射します。</p></div><p class="modal-description">地下5階の星の番人を倒し、分け灯のランタンを探す短い冒険です。いつもの迷宮とは別に保存されます。</p><button class="primary-button" data-close>冒険に戻る</button></div>`); return;
+      openModal("help", `<div class="modal-inner">${modalHeader("分け灯の歩き方")}<p class="modal-description">持ち物から灯種や札を選び、迷宮をタップするか方向ボタンで照準を動かします。「ここに使う」で確定、「やめる」で戻れます。</p><div class="help-row"><span>分けた灯り</span><p>蛾の注意を一度そらします。6手で消え、仮宿の灯札の帰還先にもなります。</p></div><div class="help-row"><span>香りと蔓</span><p>団子は食べるか投げて誘導。蔓は自分も踏みます。足止めしても敵は攻撃できます。</p></div><div class="help-row"><span>灯守りの槍</span><p>敵の方向へ進むと、直線2マス以内の最初の敵をその場で突きます。敵がいなければ移動します。向き変更だけでは攻撃しません。</p></div><p class="modal-description">地下5階の星の番人を倒し、分け灯のランタンを探す短い冒険です。いつもの迷宮とは別に保存されます。</p><button class="primary-button" data-close>冒険に戻る</button></div>`); return;
     }
     openModal(
       "help",
