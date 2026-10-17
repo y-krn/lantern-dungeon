@@ -47,7 +47,7 @@
     const directionParts = { hero: [14,84,371,467], heroDownRight: [409,83,364,443],
       heroUpRight: [779,80,377,432], heroUp: [1156,80,371,430],
       frontBoot: [381,673,194,297], backBoot: [961,668,189,302] };
-    const walkFrameCount = () => 6;
+    const walkFrameCount = () => 12;
     const walkCycleDistance = () => 2;
     const atlas = typeof root.Image === 'function' ? new root.Image() : null;
     const ready = atlas ? new Promise(resolve => {
@@ -79,13 +79,18 @@
       directionAtlas.onerror = () => resolve(false);
       directionAtlas.src = 'art/hero-direction-rig.png';
     }) : Promise.resolve(false);
-    function paintWalk(paint, frame, type) {
+    function paintWalk(paint, frame, type, stride = 1) {
       // -1 is a planted standing pose using the same body, scale and ground anchor.
+      // stride < 1 blends a walking pose toward standing when starting or stopping.
       const standing = frame === -1;
+      const cycle = standing ? 0 : frame / walkFrameCount(type), amount = standing ? 0 : stride;
       const side = type === 'heroRight', frontal = type === 'hero' || type === 'heroUp';
       const back = type === 'heroUp' || type === 'heroUpRight';
       const projection = side ? [28,0] : frontal ? [0, back ? -9 : 9] : [22, back ? -6 : 6];
-      const hipX = back ? 158 : 176, hipY = side || type === 'hero' ? 333 : 347;
+      // The body dips on each contact and rises while the legs pass, swaying over the supporting foot.
+      const dip = 10 * amount * (1 + Math.cos(4 * Math.PI * cycle)) / 2;
+      const sway = side ? 0 : -6 * amount * Math.sin(2 * Math.PI * cycle);
+      const hipX = (back ? 158 : 176) + sway, hipY = (side || type === 'hero' ? 333 : 347) + dip;
       function part(name, x, y, width, height, directional = false) {
         paint.drawImage(directional ? directionAtlas : sideAtlas,
           ...(directional ? directionParts : sideParts)[name], x, y, width, height);
@@ -102,12 +107,13 @@
       }
       // The far leg is always behind and shaded; its phase is half a cycle ahead.
       for (const far of [true, false]) {
-        const phase = standing ? 0 : (frame / 6 + (far ? .5 : 0)) % 1, swing = phase >= .5;
+        const phase = (cycle + (far ? .5 : 0)) % 1, swing = !standing && phase >= .5;
         const u = (phase % .5) * 2;
-        const travel = standing ? 0 : swing ? -1 + 2 * u * u * (3 - 2 * u) : 1 - 2 * u;
+        const travel = amount * (standing ? 0 : swing ? -1 + 2 * u * u * (3 - 2 * u) : 1 - 2 * u);
         const hip = {x: hipX + (frontal ? far ? -22 : 22 : 0), y: hipY};
-        const foot = {x: hip.x + projection[0] * travel,
-          y: 448 + projection[1] * travel - (swing ? 22 * Math.sin(Math.PI * u) : 0)};
+        // Feet stay on the ground line; only the hips carry the sway.
+        const foot = {x: hip.x - sway + projection[0] * travel,
+          y: 448 + projection[1] * travel - (swing ? 22 * amount * Math.sin(Math.PI * u) : 0)};
         const bootHeight = 78;
         const ankle = {x: foot.x, y: foot.y - bootHeight * .73};
         const dx = ankle.x - hip.x, dy = ankle.y - hip.y, distance = Math.hypot(dx, dy);
@@ -126,7 +132,7 @@
       }
       const body = side ? sideParts.body : directionParts[type];
       const height = side ? body[3] * 338 / body[2] : 360, width = body[2] * height / body[3];
-      part(side ? 'body' : type, (338 - width) / 2, 0, width, height, !side);
+      part(side ? 'body' : type, (338 - width) / 2 + sway, dip, width, height, !side);
     }
     function tone(hex) {
       const [r, g, b] = hex.match(/\w\w/g).map(value => parseInt(value, 16) / 255);
@@ -135,7 +141,7 @@
       return {hue: delta ? ((max === r ? (g - b) / delta : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4) * 60 + 360) % 360 : 0,
         saturation: delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0};
     }
-    function paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame = null) {
+    function paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame = null, stride = 1) {
       const rig = sideAtlas?.complete && sideAtlas.naturalWidth &&
         (type === 'heroRight' || (directionParts[type] && directionAtlas?.complete && directionAtlas.naturalWidth));
       const walking = Number.isInteger(walkFrame) && walkFrame >= 0 && walkFrame < walkFrameCount(type)
@@ -144,25 +150,29 @@
       const useItem = !posed && !!itemFrames[type] && itemAtlas?.complete && itemAtlas.naturalWidth;
       const row = posed ? walkFrames[walkRows[type]] : null;
       const sheet = posed ? rig ? sideAtlas : walkAtlas : useItem ? itemAtlas : atlas;
-      const frameBounds = posed ? row[Math.max(0, walkFrame) % row.length] : useItem ? itemFrames[type] : artFrames[type];
+      const frameBounds = posed ? row[Math.floor(Math.max(0, walkFrame) * row.length / walkFrameCount(type))] : useItem ? itemFrames[type] : artFrames[type];
       if (!sheet?.complete || !sheet.naturalWidth || !frameBounds) return false;
       const m = MONSTERS[species];
       if (flip && type.startsWith('hero') && !posed) {
         type = {heroRight: 'heroLeft', heroUpRight: 'heroUpLeft', heroDownRight: 'heroDownLeft'}[type] || type;
         flip = false;
       }
-      const key = posed ? `walk:${rig ? 'rig:' : ''}${type}:${rig ? walkFrame : walkFrame % row.length}` : useItem ? `item:${type}` : species || type;
+      // Blends are quantized so starting/stopping adds only a few cached poses.
+      const blend = walking ? Math.max(0, Math.min(1, Math.round(stride * 4) / 4)) : 1;
+      const fallbackFrame = Math.floor(Math.max(0, walkFrame) * row?.length / walkFrameCount(type));
+      const key = posed ? `walk:${rig ? 'rig:' : ''}${type}:${rig ? `${walkFrame}:${blend}` : fallbackFrame}` : useItem ? `item:${type}` : species || type;
       if (!paintedSprites.has(key)) {
         const [sx, sy, width, height] = posed || useItem ? frameBounds : artFrames[type];
         const image = document.createElement('canvas');
-        image.width = posed && rig ? 338 : walking ? Math.max(...row.map(frame => frame[2])) : width;
-        image.height = posed && rig ? 484 : walking ? Math.max(...row.map(frame => frame[3])) : height;
+        // Rig poses are painted at half resolution: still above display size, a quarter of the memory.
+        image.width = posed && rig ? 169 : walking ? Math.max(...row.map(frame => frame[2])) : width;
+        image.height = posed && rig ? 242 : walking ? Math.max(...row.map(frame => frame[3])) : height;
         const paint = image.getContext('2d'), base = MONSTERS[baseSpecies[type]];
         if (m && base && m !== base) {
           const target = tone(m.colors[1]), original = tone(base.colors[1]);
           paint.filter = `hue-rotate(${target.hue - original.hue}deg) saturate(${target.saturation / (original.saturation || 1)})`;
         }
-        if (posed && rig) paintWalk(paint, walkFrame, type);
+        if (posed && rig) { paint.scale(.5, .5); paintWalk(paint, walkFrame, type, blend); }
         else paint.drawImage(sheet, sx, sy, width, height, (image.width - width) / 2, image.height - height, width, height);
         paintedSprites.set(key, image);
       }
@@ -597,8 +607,9 @@
       flip = false,
       species = null,
       walkFrame = null,
+      stride = 1,
     ) {
-      if (paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame)) return;
+      if (paintedSprite(context, type, x, y, scale, alpha, flip, species, walkFrame, stride)) return;
       const m = MONSTERS[species],
         pattern = sprites[type] || sprites.scroll;
       const colors = m
