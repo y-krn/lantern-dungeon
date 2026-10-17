@@ -1,7 +1,7 @@
 // Consumable stacking and arrow infusion in ordinary runs.
 const assert = require('node:assert/strict');
 require('../dist/engine.js');
-const {MONSTERS, STACK_SIZE, INVENTORY_CAPACITY, INFUSION_SHOTS, monsterStats} = DungeonData;
+const {MONSTERS, INVENTORY_CAPACITY, INFUSION_SHOTS, monsterStats} = DungeonData;
 const shield = () => ({kind:'shield', rank:0, bonus:0, cursed:false, identified:true});
 function arena(dungeon = 'tutorial') {
   const g = new DungeonEngine(77, dungeon, true);
@@ -17,24 +17,17 @@ function enemy(g, species, x, y) {
 function replay(g) {
   const restored = DungeonEngine.restore(g.serialize()); assert(restored); assert.equal(restored.serialize(), g.serialize()); return restored;
 }
-// Up to three identical consumables share a slot; equipment never stacks.
+// Every item but the arrow bundle takes its own slot out of 24, so choosing what to carry matters.
 {
-  assert.equal(STACK_SIZE, 3);
+  assert.equal(INVENTORY_CAPACITY, 24);
   const g = arena(); const p = g.player;
-  p.bag = ['bread', 'potion', 'bread', 'bread', 'bread', shield(), shield()];
-  assert.deepEqual(g.inventoryEntries().filter(e => e.kind === 'bread').map(e => e.count), [3, 1]);
-  assert.equal(g.inventoryCount(), 2 + 1 + 2 + 2, 'bread 2 slots, potion 1, spare shields 2, equipped 2');
-  // 16 spare shields + one bread stack + two equipped = 19 slots.
-  p.bag = [...Array.from({length:INVENTORY_CAPACITY - 4}, shield), 'bread', 'bread'];
-  assert.equal(g.inventoryCount(), INVENTORY_CAPACITY - 1);
-  g.items = [{x:p.x, y:p.y, kind:'potion'}]; g.collect(); assert.equal(g.inventoryCount(), INVENTORY_CAPACITY);
-  g.items = [{x:p.x, y:p.y, kind:'bread'}]; assert(g.collect(), 'A full bag still accepts a third bread into its stack');
-  g.items = [{x:p.x, y:p.y, kind:'bread'}]; assert(!g.collect(), 'A fourth bread needs a new slot');
-  g.items = [{x:p.x, y:p.y, kind:'map'}]; assert(!g.collect());
+  p.bag = ['bread', 'potion', 'bread', 'bread', 'bread', shield(), 'arrow', 'arrow'];
+  assert.deepEqual(g.inventoryEntries().filter(e => e.kind === 'bread').map(e => e.count), [1, 1, 1, 1]);
+  assert.equal(g.inventoryCount(), 4 + 1 + 1 + 1 + 2, 'four breads, a potion, a shield, one arrow bundle, two equipped');
+  p.bag = Array.from({length:INVENTORY_CAPACITY - 2}, () => 'bread');
+  assert.equal(g.inventoryCount(), INVENTORY_CAPACITY);
+  g.items = [{x:p.x, y:p.y, kind:'bread'}]; assert(!g.collect(), 'A full bag refuses even a matching item');
   g.items = []; replay(g);
-  // Unidentified talismans stack by their true kind, which matches their shared appearance.
-  const d = arena('depths'); d.player.bag = ['scroll', 'scroll', 'map'];
-  assert.deepEqual(d.inventoryEntries().map(e => [d.itemName(e.kind), e.count]), [[d.itemName('scroll'), 2], [d.itemName('map'), 1]]);
 }
 // Infusion: needs arrows, spends the source, charges five shots, saves, then fades.
 {
@@ -76,4 +69,4 @@ function replay(g) {
   const kind = JSON.parse(g.serialize()); kind.state.player.infusion.kind = 'ice'; assert.equal(DungeonEngine.restore(JSON.stringify(kind)), null);
   const legacy = JSON.parse(g.serialize()); delete legacy.state.player.infusion; assert(DungeonEngine.restore(JSON.stringify(legacy)));
 }
-console.log('PASS: identical consumables stack three to a slot (full bags still top up stacks), and thunder/fire/smoke infusions charge five arrows, act on impact, fade, save, and never reveal unknown talismans.');
+console.log('PASS: 24 slots with one item per slot (arrows bundled), and thunder/fire/smoke infusions charge five arrows, act on impact, fade, save, and never reveal unknown talismans.');

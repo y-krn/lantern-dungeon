@@ -2,9 +2,7 @@
   "use strict";
   const W = 44,
     H = 30,
-    INVENTORY_CAPACITY = 20,
-    // Identical consumables share one inventory slot up to this many.
-    STACK_SIZE = 3;
+    INVENTORY_CAPACITY = 24;
   const DIRS = [
     [0, -1],
     [1, -1],
@@ -889,7 +887,6 @@
     W,
     H,
     INVENTORY_CAPACITY,
-    STACK_SIZE,
     DIRS,
     ITEMS,
     EQUIPMENT,
