@@ -27,9 +27,11 @@
     pickupNotice.textContent = text;
     pickupTimer = setTimeout(clearPickupNotice, 1000);
   }
-  const SAVE_KEY = "lantern-dungeon-v1",
-    PROGRESS_KEY = "lantern-dungeon-progress-v1",
-    MONSTERS_KEY = "lantern-dungeon-monsters-v1";
+  const trial = typeof URLSearchParams !== "undefined" && new URLSearchParams(window.location.search).get("trial") === "strategy";
+  const Engine = trial ? StrategyEngine : DungeonEngine;
+  const SAVE_KEY = trial ? "lantern-strategy-trial-v2" : "lantern-dungeon-v1",
+    PROGRESS_KEY = trial ? "lantern-strategy-progress-v2" : "lantern-dungeon-progress-v1",
+    MONSTERS_KEY = trial ? "lantern-strategy-monsters-v2" : "lantern-dungeon-monsters-v1";
   const knownMonsters = new Set();
   try {
     const saved = JSON.parse(localStorage.getItem(MONSTERS_KEY) || "[]");
@@ -43,12 +45,14 @@
     tutorialCleared = false;
   try {
     tutorialCleared = localStorage.getItem(PROGRESS_KEY) === "true";
-    engine = DungeonEngine.restore(localStorage.getItem(SAVE_KEY));
+    const raw = localStorage.getItem(SAVE_KEY);
+    engine = Engine.restore(raw);
+    if (trial && raw && !engine) storageAvailable = false;
   } catch {
     storageAvailable = false;
   }
   const resumed = !!engine;
-  engine ||= new DungeonEngine();
+  engine ||= new Engine();
   engine.tutorialCleared ||= tutorialCleared;
   let sound = false,
     audio = null,
@@ -58,14 +62,21 @@
     announcedEnd = false,
     turnOnly = false;
   const facingNames = ["上", "右上", "右", "右下", "下", "左下", "左", "左上"];
+  let strategyAim = null;
   const renderer = createDungeonRenderer({
     canvas,
     minimap: $("minimap"),
     viewport: $("game-viewport"),
     getEngine: () => engine,
+    getTarget: () => strategyAim && ({...strategyAim, plan: engine.previewUse(strategyAim.index, strategyAim, strategyAim.mode)}),
     reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
   });
   function directionInput(dx, dy, faceOnly = turnOnly, force = false) {
+    if (strategyAim) {
+      strategyAim.x = Math.max(0, Math.min(DungeonData.W - 1, strategyAim.x + dx));
+      strategyAim.y = Math.max(0, Math.min(DungeonData.H - 1, strategyAim.y + dy));
+      updateAim(); return;
+    }
     act(
       () => (faceOnly ? engine.face(dx, dy) : engine.move(dx, dy)),
       force || faceOnly,
@@ -254,6 +265,13 @@
       ? [warnings, situation].filter(Boolean).join(" ") : situation;
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
     if (portraitUI) $("mobile-progress").textContent = `Lv.${p.level} · 矢 ${engine.arrowCount()}本`;
+    if (trial) {
+      const states = [engine.strategy.charged ? "槌の溜め" : "", engine.strategy.lamp ? `分け灯 あと${engine.strategy.lamp.remaining}手` : "", p.bindUntil >= engine.turn + 1 ? "蔓で移動できない" : ""].filter(Boolean);
+      $("strategy-status").textContent = states.join(" · ");
+      $("strategy-status").hidden = portraitUI || states.length === 0;
+      if (portraitUI) $("mobile-progress").textContent = [p.bindUntil >= engine.turn + 1 ? "移動不可" : `Lv.${p.level}`, engine.strategy.lamp ? `灯り${engine.strategy.lamp.remaining}手` : `矢 ${engine.arrowCount()}本`, engine.strategy.charged ? "溜め" : ""].filter(Boolean).join(" · ");
+      if (strategyAim) updateAim();
+    }
     const list = $("event-log");
     list.replaceChildren();
     for (const event of engine.log.slice(0, portraitUI ? 40 : 5)) {
@@ -272,7 +290,7 @@
     }
   }
   function act(action, force = false) {
-    if ($("modal").open || engine.status !== "playing" || renderer.remaining() > 0) return;
+    if (strategyAim || $("modal").open || engine.status !== "playing" || renderer.remaining() > 0) return;
     const now = performance.now();
     if (!force && now - lastInput < 95) return;
     lastInput = now;
@@ -306,6 +324,7 @@
     $("minimap-toggle").setAttribute("aria-expanded", String(minimapVisible));
   }
   function closeModal() {
+    if (trial && modalKind === "trial-kit" && !engine.kitChosen) { engine.chooseKit("none"); updateUI(); save(); }
     $("modal").close();
     modalKind = "";
     canvas.focus({ preventScroll: true });
@@ -330,7 +349,54 @@
     act,
     save,
     updateUI,
+    beginTarget,
   });
+
+  function updateAim() {
+    const active = !!strategyAim;
+    document.body.classList.toggle("strategy-targeting", active);
+    $("strategy-aim").hidden = !active;
+    if (active) {
+      const plan = engine.previewUse(strategyAim.index, strategyAim, strategyAim.mode);
+      $("strategy-target-label").textContent = `${engine.itemName(engine.targetItem(strategyAim.index))}：${plan ? plan.label : "ここは選べません"}`;
+      $("strategy-confirm").disabled = !plan;
+    }
+    for (const id of ["attack-button", "wait-button", "touch-wait", "bag-button", "shoot-button", "stairs-button", "turn-button"])
+      if (active) $(id).disabled = true;
+    $("direction-help").textContent = active ? "迷宮をタップ、または方向ボタンで狙う場所を選びます。" : $("direction-help").textContent;
+  }
+  function beginTarget(index, mode = "use") {
+    if (!trial) return;
+    closeModal();
+    const p = engine.player;
+    strategyAim = {index, mode, x: p.x + p.facing[0], y: p.y + p.facing[1]};
+    updateAim();
+  }
+  function finishAim(commit) {
+    const target = strategyAim;
+    if (!target || (commit && !engine.previewUse(target.index, target, target.mode))) return;
+    strategyAim = null; updateAim();
+    if (commit) act(() => engine.use(target.index, target, target.mode), true);
+    else updateUI();
+  }
+  function chooseTrialKit() {
+    openModal("trial-kit", `<div class="modal-inner">${modalHeader("分け灯の旅支度")}<p class="modal-description">灯種と札を携え、五つの回廊へ。最初に携える品を一つ選べます。</p><div class="dungeon-list">${["lampSpear", "bellHammer", "returnShield"].map(variant => `<button class="dungeon-choice" data-kit="${variant}"><strong>${DungeonData.EQUIPMENT[variant].name}</strong><span class="dungeon-choice-description">${DungeonData.EQUIPMENT[variant].description}</span></button>`).join("")}</div><button class="secondary-button" data-kit="none">今の装備で出発する</button></div>`);
+    $("modal-content").querySelectorAll("[data-kit]").forEach(button => button.addEventListener("click", () => {
+      engine.chooseKit(button.dataset.kit); closeModal(); updateUI(); save();
+    }));
+  }
+  if (trial) {
+    const status = document.createElement("p"); status.id = "strategy-status"; status.className = "strategy-status"; status.hidden = true;
+    const panel = document.createElement("section"); panel.id = "strategy-aim"; panel.className = "strategy-aim"; panel.hidden = true;
+    panel.innerHTML = '<p id="strategy-target-label" role="status" aria-live="polite"></p><div><button id="strategy-confirm" class="primary-button">ここに使う</button><button id="strategy-cancel" class="secondary-button">やめる</button></div>';
+    $("game-viewport").after(status);
+    document.querySelector(".action-bar").append(panel);
+    $("strategy-confirm").addEventListener("click", () => finishAim(true));
+    $("strategy-cancel").addEventListener("click", () => finishAim(false));
+    const exit = document.createElement("a"); exit.href = "./"; exit.textContent = "いつもの迷宮へ"; exit.className = "trial-exit";
+    document.querySelector(".site-header nav").append(exit);
+    document.title = "分け灯の回廊 — 灯りの迷宮 試作";
+  }
 
   function showMonsters() {
     const entries = Object.entries(MONSTERS).filter(([species]) => knownMonsters.has(species));
@@ -359,6 +425,9 @@
       .focus({ preventScroll: true });
   }
   function showHelp() {
+    if (trial) {
+      openModal("help", `<div class="modal-inner">${modalHeader("分け灯の歩き方")}<p class="modal-description">持ち物から灯種や札を選び、迷宮をタップするか方向ボタンで照準を動かします。「ここに使う」で確定、「やめる」で戻れます。</p><div class="help-row"><span>分けた灯り</span><p>蛾の注意を一度そらします。6手で消え、仮宿の灯札の帰還先にもなります。</p></div><div class="help-row"><span>香りと蔓</span><p>団子は食べるか投げて誘導。蔓は自分も踏みます。足止めしても敵は攻撃できます。</p></div><div class="help-row"><span>槌と返しの盾</span><p>足踏みで溜めてから押す。返しの盾は、足踏みした手だけ正面の射撃を一発反射します。</p></div><p class="modal-description">地下5階の星の番人を倒し、分け灯のランタンを探す短い冒険です。いつもの迷宮とは別に保存されます。</p><button class="primary-button" data-close>冒険に戻る</button></div>`); return;
+    }
     openModal(
       "help",
       `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を探す旅。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃します。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角はすり抜けられません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>その場で向きだけ変更。「向き変更」でも切り替えられます。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃します。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ放ちます。</p></div><div class="help-row"><span>. / X</span><p>その場で足踏みします。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床の品は上に乗ると拾います。武器・盾は装備すると効果を発揮します。呪われた装備は、清めの灯札で呪いを解くまで外せません。</p></div><div class="help-row"><span>灯札</span><p>灯札をかざすと、その力が現れます。効果が分からない灯札には、推測した名前を付けて記録できます。</p></div><div class="help-row"><span>魔物の記録</span><p>出会った魔物の姿を図鑑に記しています。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る</button><div class="help-row"><span>冒険の保存</span><p>冒険はブラウザに自動保存されます。</p></div><p class="modal-description">灯りの迷宮を踏破すると、地下30階へ続く深淵の迷宮に挑めます。倒れたら、新しい旅の始まりです。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
@@ -375,7 +444,9 @@
     $("monster-guide-button").addEventListener("click", showMonsters);
   }
   function startNew(dungeon = engine.dungeon) {
-    const next = new DungeonEngine(Date.now(), dungeon, engine.tutorialCleared);
+    const next = new Engine(Date.now(), dungeon, engine.tutorialCleared);
+    if (trial) storageAvailable = true;
+    strategyAim = null;
     clearPickupNotice();
     closeModal();
     engine = next;
@@ -384,8 +455,15 @@
     renderer.reset();
     updateUI();
     save();
+    if (trial) chooseTrialKit();
   }
   function confirmNew() {
+    if (strategyAim) return;
+    if (trial) {
+      if (!engine.kitChosen) { chooseTrialKit(); return; }
+      openModal("new", `<div class="modal-inner">${modalHeader("分け灯の回廊")}<p class="modal-description">新しい支度で地下1階から出発します。今の試作の冒険は終了します。</p><button id="trial-restart" class="primary-button">新しい支度で出発する</button><button class="secondary-button" data-close>今の冒険へ戻る</button></div>`);
+      $("trial-restart").addEventListener("click", () => startNew()); return;
+    }
     openModal(
       "new",
       `<div class="modal-inner">${modalHeader("迷宮を選ぶ")}<p class="modal-description">挑む迷宮を選んで、地下1階から出発します。現在の冒険は終了し、持ち物・レベル・所持金は初期状態に戻ります。深淵の迷宮に挑む資格は失われません。</p><div class="dungeon-list">${Object.entries(
@@ -409,6 +487,10 @@
       );
   }
   function showEnd() {
+    if (trial) {
+      openModal("end", `<div class="modal-inner">${modalHeader(engine.status === "won" ? "分け灯の回廊、踏破！" : "また、灯りを分けて。")}<p class="modal-description">地下${engine.floor}階 · ${engine.turn}手の冒険。次は違う支度で、別の灯りの使い方を。</p><button id="trial-restart" class="primary-button">新しい支度で出発する</button><button class="secondary-button" data-close>迷宮を振り返る</button></div>`);
+      $("trial-restart").addEventListener("click", () => startNew()); return;
+    }
     const won = engine.status === "won",
       tutorial = engine.dungeon === "tutorial",
       p = engine.player,
@@ -475,6 +557,7 @@
     }),
   );
   $("modal").addEventListener("cancel", () => {
+    if (trial && modalKind === "trial-kit" && !engine.kitChosen) { engine.chooseKit("none"); updateUI(); save(); }
     modalKind = "";
     canvas.focus({ preventScroll: true });
   });
@@ -507,6 +590,7 @@
   document.addEventListener("keydown", (event) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (strategyAim && !$("modal").open && ["Escape", "Enter"].includes(key)) { event.preventDefault(); finishAim(key === "Enter"); return; }
     if ($("modal").open) return;
     if (event.target.matches("input,textarea,select")) return;
     if (bindings[key]) {
@@ -547,6 +631,7 @@
   });
   canvas.addEventListener("pointerdown", (event) => {
     canvas.focus({ preventScroll: true });
+    if (strategyAim) { Object.assign(strategyAim, renderer.tileAt(event)); updateAim(); return; }
     const [dx, dy] = renderer.directionAt(event);
     if (dx || dy) directionInput(dx, dy, turnOnly || event.shiftKey, true);
     else if (!turnOnly && !event.shiftKey) act(() => engine.wait(), true);
@@ -588,6 +673,7 @@
     engine.say("ランタンを灯し直した。冒険の続きへ。", "good");
   updateUI();
   save();
+  if (trial && !engine.kitChosen) chooseTrialKit();
   window.addEventListener("pagehide", save);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") save();

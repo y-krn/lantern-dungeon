@@ -64,6 +64,7 @@
             }
         if (spots.length) {
           Object.assign(e, spots[game.int(0, spots.length - 1)]);
+          if (typeof game.strategyLanding === "function") game.strategyLanding(e);
           if (visible) game.say(`${e.name}が部屋の中へ転移した。`);
           continue;
         }
@@ -71,6 +72,11 @@
       if (e.intent) {
         const aim = e.intent;
         delete e.intent;
+        if (typeof game.resolveStrategyIntent === "function") {
+          game.resolveStrategyIntent(e, aim);
+          if (p.hp <= 0) break;
+          continue;
+        }
         if (
           p.x === aim.x &&
           p.y === aim.y &&
@@ -107,6 +113,7 @@
         continue;
       }
       if (m.stationary || (m.cadence && game.turn % m.cadence !== 0)) continue;
+      if (typeof game.strategyStep === "function" && game.strategyStep(e)) continue;
       for (
         let stepIndex = 0;
         stepIndex < (e.awake ? m.speed || 1 : 1);
