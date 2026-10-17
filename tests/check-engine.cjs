@@ -407,7 +407,7 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
     // Echo shards go to the lantern, not the bag, so a full bag never blocks them.
     for(const kind of Object.keys(ITEMS).filter(kind=>kind!=='echoShard')){
       Object.assign(p,start);game.log=[];game.effects=[];
-      const item={x:p.x+dx,y:p.y+dy,kind,amount:1,...(['weapon','shield'].includes(kind)?{rank:1,bonus:2,cursed:true,identified:false}:{})};
+      const item={x:p.x+dx,y:p.y+dy,kind,amount:1,...(kind==='keepJar'?{contents:[]}:{}),...(['weapon','shield'].includes(kind)?{rank:1,bonus:2,cursed:true,identified:false}:{})};
       game.items=[item];const name=game.itemName(item),bag=[...p.bag];
       assert(game.move(dx,dy));
       assert(game.log.some(entry=>entry.text===`持ち物がいっぱい。${name}は足元に残った。`));
@@ -419,8 +419,8 @@ for(const count of [0,3,9]){const saved=JSON.parse(savedFloors.get(6));saved.sta
 {
   const game=new DungeonEngine(22),p=game.player;
   for(const kind of [...Object.keys(ITEMS).filter(kind=>kind!=='echoShard'),'gold','weapon','shield']){
-    p.bag=[];game.effects=[];const gear=kind==='weapon'||kind==='shield';game.items=[{x:p.x,y:p.y,kind,amount:42,...(gear?{rank:1,bonus:2,cursed:false,identified:false}:{})}];game.collect();
-    const text=kind==='gold'?'42Gを拾った。':gear?`${game.itemName(p.bag.at(-1))}を拾った。`:kind==='arrow'?'木の矢を42本拾った。':`${ITEMS[kind].name}を拾った。`;
+    p.bag=[];game.effects=[];const gear=kind==='weapon'||kind==='shield';game.items=[{x:p.x,y:p.y,kind,amount:42,...(kind==='keepJar'?{contents:[]}:{}),...(gear?{rank:1,bonus:2,cursed:false,identified:false}:{})}];game.collect();
+    const text=kind==='gold'?'42Gを拾った。':gear||kind==='keepJar'?`${game.itemName(p.bag.at(-1))}を拾った。`:kind==='arrow'?'木の矢を42本拾った。':`${ITEMS[kind].name}を拾った。`;
     assert.deepEqual(game.effects,[{type:'pickup',x:p.x,y:p.y,value:kind,text}]);
     // Later events in the same turn must not replace the pickup message.
     game.say('足元にトゲの罠！ 3ダメージ。','danger');assert.equal(game.effects[0].text,text);

@@ -79,15 +79,41 @@
     blastNut: { name: "爆ぜ実", icon: "✹", description: "向いている方向へ投げ、落ちた周囲3×3に15ダメージ。リネも巻き込まれます。油と草むらに火が付きます。" },
     smokeBall: { name: "煙玉", icon: "☁", description: "足元の周囲5×5に霧を広げます。霧の中を狙った敵の射撃・強打は空振りし、霧の中のリネは遠くから狙われません。5ターンで晴れます。" },
   });
-  const THROWN_ITEMS = ["waterSkin", "oilFlask", "emberStone", "blastNut"];
+  Object.assign(ITEMS, {
+    driedFruit: { name: "干し果実", icon: "❦", description: "満腹度を25、体力を5回復します。" },
+    greatHerb: { name: "大回復草", icon: "✿", description: "体力を60回復します。体力が満タンなら、最大体力が3増えます。" },
+    gustTalisman: { name: "突風の灯札", icon: "✧", description: "隣接する敵すべてを2マス押し出します。壁や敵との衝突で3ダメージ。途中の罠や炎にも触れます。" },
+    sleepTalisman: { name: "眠りの灯札", icon: "✧", description: "見えている敵すべてを8ターン眠らせ、予告を取り消します。ダメージを受けると目覚めます。" },
+    sharpenTalisman: { name: "鍛えの灯札", icon: "✧", description: "装備中の武器の補正値を1増やします。呪いは解けません。" },
+    temperTalisman: { name: "守りの灯札", icon: "✧", description: "装備中の盾の補正値を1増やします。呪いは解けません。" },
+    warpTalisman: { name: "転移の灯札", icon: "✧", description: "この階のどこかの空きマスへ転移します。行き先は選べません。" },
+    copyTalisman: { name: "写しの灯札", icon: "✧", description: "見えている最も近い魔物の灯影の欠片を足元に写します。番人には効きません。足元に品がある時は隣に残ります。" },
+    hookRope: { name: "鉤縄", icon: "⚓", description: "向いている方向へ5マス投げ、最初の敵を隣まで引き寄せます。途中の罠や炎にも触れます。" },
+    slowDust: { name: "鈍りの粉", icon: "⌛", description: "向いている方向へ4マス投げ、最初の敵を10ターン鈍足にします。鈍足の敵は2ターンに1回だけ行動します。" },
+    flashBall: { name: "光玉", icon: "☀", description: "向いている方向へ4マス投げ、落ちた周囲3×3の敵の予告を取り消し、次の1回の行動を奪います。" },
+    keepJar: { name: "灯籠瓶", icon: "♜", description: "消耗品3個を入れて1枠で持ち運べます。入れる・取り出すと1ターン進みます。矢・装備・瓶は入りません。中の品は取り出してから使います。" },
+  });
+  const NEW_ITEM_POOL = [
+    ["driedFruit", 14, 1], ["greatHerb", 4, 4], ["gustTalisman", 9, 2],
+    ["sleepTalisman", 8, 2], ["sharpenTalisman", 6, 3], ["temperTalisman", 6, 3],
+    ["warpTalisman", 8, 2], ["copyTalisman", 5, 4], ["hookRope", 10, 2],
+    ["slowDust", 10, 3], ["flashBall", 10, 3], ["keepJar", 4, 3],
+  ];
+  const RESCUE_SCROLLS = ["scroll", "map", "identify", "uncurse"];
+  const jarConsumable = (item) => typeof item === "string" && Object.hasOwn(ITEMS, item) &&
+    !["arrow", "weapon", "shield", "keepJar", "echoShard"].includes(item);
+  const validJar = (item) => item?.kind === "keepJar" && Array.isArray(item.contents) &&
+    item.contents.length <= 3 && item.contents.every(jarConsumable);
+  const THROWN_ITEMS = ["waterSkin", "oilFlask", "emberStone", "blastNut", "hookRope", "slowDust", "flashBall"];
   // Spending one of these lends its power to the next five arrows.
   const INFUSIONS = {
     scroll: { id: "thunder", name: "雷の灯", text: "命中した敵とつながった水たまりに12ダメージ。水たまりがなければ命中した敵に追加6ダメージ。" },
     emberStone: { id: "fire", name: "火の灯", text: "命中した場所に火を放つ。" },
     smokeBall: { id: "smoke", name: "霧の灯", text: "命中した場所の周囲3×3に霧を広げる。" },
+    sleepTalisman: { id: "sleep", name: "眠りの灯", text: "命中した敵を5ターン眠らせる。ダメージを受けると目覚める。" },
   };
   const INFUSION_SHOTS = 5;
-  const TERRAIN_ITEMS = [...THROWN_ITEMS, "smokeBall"];
+  const TERRAIN_ITEMS = ["waterSkin", "oilFlask", "emberStone", "blastNut", "smokeBall"];
   const SURFACES = {
     water: { name: "水たまり" },
     oil: { name: "油だまり" },
@@ -109,7 +135,7 @@
   // Two held echoes of these families add a further effect.
   const RESONANCES = {
     meteor: { name: "流星", pair: ["wing", "shot"], text: "灯弾の威力が半分にならない。" },
-    ambush: { name: "奇襲", pair: ["veil", "feast"], text: "まだ気づいていない敵への攻撃が2倍。" },
+    ambush: { name: "奇襲", pair: ["veil", "feast"], text: "まだ気づいていない敵と、眠っている敵への攻撃が2倍。" },
     mossShell: { name: "苔むす殻", pair: ["moss", "shell"], text: "苔の灯影が3歩ごとに働く。" },
     quake: { name: "地鳴り", pair: ["might", "root"], text: "押し出しの衝突ダメージ+3。" },
   };
@@ -124,6 +150,7 @@
   // Roadside stalls: wares priced by depth, plus appraisal and uncursing services.
   const SHOP_PRICES = { bread: 60, potion: 80, arrow: 60, waterSkin: 70, oilFlask: 70, emberStone: 80, blastNut: 90, smokeBall: 80, scroll: 120, map: 90, identify: 100, uncurse: 120 };
   const SHOP_SERVICES = { appraise: { name: "鑑定", base: 50 }, cleanse: { name: "解呪", base: 120 } };
+  Object.assign(SHOP_PRICES, { driedFruit: 40, greatHerb: 200, gustTalisman: 130, sleepTalisman: 130, sharpenTalisman: 130, temperTalisman: 130, warpTalisman: 130, copyTalisman: 130, hookRope: 90, slowDust: 90, flashBall: 90, keepJar: 150 });
   const START_KITS = {
     spear: { name: "迎え撃つ旅", text: "灯守りの槍と木の矢10本。近づかれる前に突く。", weapon: "lampSpear", items: Array(10).fill("arrow") },
     maul: { name: "切り拓く旅", text: "打ち槌と爆ぜ実2個。押し出して道を開く。", weapon: "pushMaul", items: ["blastNut", "blastNut"] },
@@ -178,8 +205,8 @@
     const [id, tier] = source, echo = ECHOES[id];
     return { id, tier, species, name: echo.name, short: echo.short, text: echo.text[Math.min(tier, echo.text.length - 1)] };
   }
-  const SCROLLS = ["scroll", "map", "identify", "uncurse"];
-  const SCROLL_NAMES = ["赤い灯札", "青い灯札", "黄色い灯札", "緑の灯札"];
+  const SCROLLS = [...RESCUE_SCROLLS, "gustTalisman", "sleepTalisman", "sharpenTalisman", "temperTalisman", "warpTalisman", "copyTalisman"];
+  const SCROLL_NAMES = ["赤い灯札", "青い灯札", "黄色い灯札", "緑の灯札", "紫の灯札", "白い灯札", "黒い灯札", "橙色の灯札", "桃色の灯札", "銀色の灯札"];
   const EQUIPMENT_NAMES = {
     weapon: ["木の剣", "銅の剣", "鉄の剣", "星鉄の剣"],
     shield: ["旅人の盾", "銅の盾", "鉄の盾", "星鉄の盾"],
@@ -1112,6 +1139,10 @@
     monsterTier,
     monsterStats,
     SCROLLS,
+    RESCUE_SCROLLS,
+    NEW_ITEM_POOL,
+    jarConsumable,
+    validJar,
     SCROLL_NAMES,
     EQUIPMENT_NAMES,
     EQUIPMENT_KEYS,

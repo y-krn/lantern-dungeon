@@ -150,6 +150,31 @@ for (const factory of [createInventoryUI, browser.createInventoryUI]) {
     for(const status of ['dead','won']){engine.status=status;ui.api.updateGround();assert(groundContext.hidden);}
     hint.textContent='灯りの届く先へ、進んでみよう。';ui.api.updateGround();assert(ui.caption.hidden);
   }
+  // Jar selections keep unknown contents private, cancel without changing state, and commit one turn.
+  {
+    const engine=quietUI(),p=engine.player;engine.dungeon='depths';engine.identification.known=['identify'];
+    p.bag=[{kind:'keepJar',contents:['sleepTalisman']},'bread','arrow'];
+    const ui=inventoryUI(engine);let before=engine.serialize();ui.api.showBag();
+    assert(!ui.html.includes('眠りの灯札'));ui.action('jar-put',0);assert.equal(ui.kind,'jar');
+    assert(!ui.buttons.some(b=>b.dataset.jarTarget==='2'),'Arrows cannot go in a jar');
+    ui.cancel('jar-cancel');assert.equal(engine.serialize(),before);
+    ui.action('jar-put',0);ui.buttons.find(b=>b.dataset.jarTarget==='1').click();
+    assert.equal(engine.turn,1);assert.deepEqual(p.bag[0].contents,['sleepTalisman','bread']);
+    ui.api.showBag();before=engine.serialize();ui.action('jar-take',0);assert(!ui.html.includes('眠りの灯札'));
+    ui.cancel('jar-cancel');assert.equal(engine.serialize(),before);
+    ui.action('jar-take',0);ui.buttons.find(b=>b.dataset.jarTarget==='0').click();
+    assert.equal(engine.turn,2);assert.equal(p.bag.at(-1),'sleepTalisman');
+    engine.items=[{kind:'keepJar',contents:['bread'],x:p.x,y:p.y}];ui.api.showGround();
+    assert(!ui.buttons.some(b=>['use','jar-put','jar-take','exchange'].includes(b.dataset.itemAction)));
+    ui.api.updateGround();assert(ui.document.getElementById('ground-use-button').hidden);
+    ui.action('pickup');assert.equal(p.bag.at(-1).kind,'keepJar');
+    for(const kind of DungeonData.SCROLLS.slice(4)) {
+      p.bag=[kind,'arrow'];ui.api.showBag();
+      assert(!ui.html.includes(DungeonData.ITEMS[kind].name));
+      assert(!ui.buttons.some(b=>b.dataset.itemAction==='infuse'));
+      assert(ui.html.includes('かざす'));
+    }
+  }
   // A UI instance follows the replacement run, including callbacks bound before the switch.
   {
     const previous=quietUI(),next=quietUI();

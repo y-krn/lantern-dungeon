@@ -1,5 +1,5 @@
 // This factory is also injected into the browser; keep it independent of Node and the DOM.
-function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, INVENTORY_CAPACITY, DUNGEONS }) {
+function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, INVENTORY_CAPACITY, DUNGEONS, SCROLLS }) {
   const key = (x, y) => y * W + x;
   const inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
   const kind = item => typeof item === 'string' ? item : item.kind;
@@ -7,10 +7,11 @@ function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, 
     const visible = p => !!s.visible[key(p.x, p.y)];
     const known = item => {
       const k = kind(item);
-      if (['scroll', 'map', 'identify', 'uncurse'].includes(k) && !s.identification.known.includes(k))
+      if (SCROLLS.includes(k) && !s.identification.known.includes(k))
         return { kind: 'unknown-scroll', appearance: s.identification.appearances[k] };
       if (typeof item === 'object' && !item.identified && ['weapon', 'shield'].includes(k))
         return { kind: k, identified: false };
+      if (k === 'keepJar') return { kind: k, contents: item.contents.map(known) };
       return typeof item === 'string' ? { kind: item } : { ...item };
     };
     const enemies = s.enemies.filter(e => e.hp > 0 && visible(e));

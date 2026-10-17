@@ -18,6 +18,8 @@
     equipmentKind,
     itemKind,
     isEquipment,
+    jarConsumable,
+    validJar,
     validEquipment,
     ITEM_ORDER,
     WEAPON_SHAPES,
@@ -190,6 +192,8 @@
     itemName(item) {
       const kind = itemKind(item);
       if (kind === "echoShard") return `${MONSTERS[item.species]?.name || "魔物"}の灯影`;
+      if (kind === "keepJar" && typeof item === "object")
+        return `灯籠瓶［${item.contents.map((value) => this.itemName(value)).join("・") || "空"}］`;
       if (isEquipment(item))
         return (
           EQUIPMENT[equipmentKind(item)].name +
@@ -378,7 +382,7 @@
       else p.bag.splice(index, 1);
       if (exchange) this.collect();
       this.items.push({
-        ...(isEquipment(item) ? item : { kind }),
+        ...(isEquipment(item) || validJar(item) ? item : { kind }),
         x: p.x,
         y: p.y,
         amount,
@@ -448,6 +452,7 @@
           }
         }
       }
+      if (infusion.kind === "sleep" && enemy && enemy.hp > 0 && MONSTERS[enemy.species]?.trait !== "mirror") this.sleepEnemy(enemy, 5);
       if (infusion.kind === "fire") this.ignite(x, y);
       if (infusion.kind === "smoke")
         for (let fy = y - 1; fy <= y + 1; fy++)
@@ -716,6 +721,7 @@
       if (!this.canStep(enemy.x, enemy.y, dx, dy) || this.enemyAt(x, y) || same({ x, y }, p)) return;
       Object.assign(enemy, { x, y });
       this.landing(enemy);
+      return true;
     }
     push(enemy, steps, impact) {
       const dx = Math.sign(enemy.x - this.player.x),
@@ -741,6 +747,7 @@
       }
       const trap = this.traps.find((t) => same(t, actor));
       if (trap) this.springTrap(trap, actor);
+      if (trap?.type !== "fire" && actor.hp > 0 && this.surfaceAt(actor.x, actor.y)?.type === "fire") this.hit(actor, 4, "magic");
     }
     echo() {
       return this.echoes()[0] || null;
@@ -868,7 +875,7 @@
         strike = kind === "melee" || this.lanternShot;
       if (strike && root && p.lastStrike === this.turn - 1) damage += root.tier ? 5 : 3;
       // The ambush resonance doubles blows on monsters that have not noticed Rine.
-      if (strike && !enemy.awake && this.resonance("ambush")) damage *= 2;
+      if (strike && (!enemy.awake || enemy.sleepUntil >= this.turn) && this.resonance("ambush")) damage *= 2;
       const monster = MONSTERS[enemy.species];
       if (monster?.trait === "mirror" && (kind === "arrow" || this.lanternShot)) {
         const reflected = Math.ceil(Math.max(1, damage) / 2);
@@ -945,6 +952,7 @@
             : 0),
       );
       if (m?.trait === "mimic") enemy.revealed = true;
+      delete enemy.sleepUntil;
       enemy.hp -= damage;
       if (m?.trait === "blink" && enemy.hp > 0) enemy.blinkPending = true;
       this.wakeEnemy(enemy);
@@ -1042,7 +1050,7 @@
           item.kind === "arrow" && Number.isInteger(item.amount)
             ? Math.max(1, item.amount)
             : 1;
-        const value = isEquipment(item)
+        const value = validJar(item) ? { kind: "keepJar", contents: [...item.contents] } : isEquipment(item)
           ? {
               kind: item.kind,
               rank: item.rank,
@@ -1103,14 +1111,8 @@
           actor.hp = 0;
         }
       } else if (type === "warp") {
-        const spots = [];
-        for (const room of this.rooms)
-          for (let y = room.y; y < room.y + room.h; y++)
-            for (let x = room.x; x < room.x + room.w; x++)
-              if (this.tile(x, y) && !this.enemyAt(x, y) && !same({ x, y }, p) && !same({ x, y }, this.stairs) && !this.traps.some((t) => same(t, { x, y })))
-                spots.push({ x, y });
         tell(player ? "どこかへ飛ばされた。" : `${actor.name}がどこかへ消えた。`, player ? "danger" : "good");
-        if (spots.length) Object.assign(actor, spots[this.int(0, spots.length - 1)]);
+        this.warpActor(actor);
         if (player) this.reveal();
       } else if (type === "rust") {
         const weapon = player && p.equipment.weapon;
@@ -1139,6 +1141,39 @@
     useGround(target) {
       return this.use("ground", target);
     }
+    sleepEnemy(enemy, turns) {
+      if (enemy.hp <= 0) return;
+      enemy.sleepUntil = this.turn + turns;
+      enemy.awake = true;
+      delete enemy.intent;
+    }
+    warpActor(actor) {
+      const spots = [];
+      for (const room of this.rooms)
+        for (let y = room.y; y < room.y + room.h; y++)
+          for (let x = room.x; x < room.x + room.w; x++)
+            if (this.tile(x, y) && !this.enemyAt(x, y) && !same({ x, y }, this.player) && !same({ x, y }, this.stairs) && !this.traps.some((t) => same(t, { x, y })))
+              spots.push({ x, y });
+      if (spots.length) Object.assign(actor, spots[this.int(0, spots.length - 1)]);
+    }
+    jarPut(index, target) {
+      const jar = this.player.bag[index], item = this.player.bag[target];
+      if (this.status !== "playing" || !Number.isInteger(index) || !Number.isInteger(target) || !validJar(jar) || jar.contents.length >= 3 || !jarConsumable(item)) return false;
+      jar.contents.push(item);
+      this.player.bag.splice(target, 1);
+      this.say(`${this.itemName(item)}を灯籠瓶に入れた。`);
+      this.finishTurn();
+      return true;
+    }
+    jarTake(index, target) {
+      const jar = this.player.bag[index];
+      if (this.status !== "playing" || !Number.isInteger(index) || !Number.isInteger(target) || !validJar(jar) || target < 0 || target >= jar.contents.length || this.inventoryCount() >= INVENTORY_CAPACITY) return false;
+      const [item] = jar.contents.splice(target, 1);
+      this.player.bag.push(item);
+      this.say(`${this.itemName(item)}を灯籠瓶から取り出した。`);
+      this.finishTurn();
+      return true;
+    }
     use(index, target) {
       const fromGround = index === "ground";
       if (this.status !== "playing" || (!fromGround && !Number.isInteger(index))) return false;
@@ -1146,6 +1181,7 @@
         item = this.targetItem(index),
         kind = itemKind(item);
       if (!ITEMS[kind]) return false;
+      if (kind === "keepJar" || kind === "echoShard") return false;
       if (fromGround && isEquipment(item)) return false;
       let arrowLanding;
       if (isEquipment(p.bag[index])) return this.equip(index);
@@ -1181,6 +1217,46 @@
         p.hp = Math.min(p.maxHp, p.hp + (this.bane("shield") === "reflect" ? 12 : 25));
         this.say(`回復草を使った。体力 +${p.hp - before}`, "good");
         this.effect("heal", p.x, p.y, p.hp - before);
+      }
+      if (kind === "driedFruit") {
+        const hp = p.hp, hunger = p.hunger;
+        p.hp = Math.min(p.maxHp, p.hp + 5);
+        p.hunger = Math.min(100, p.hunger + 25);
+        this.say(`干し果実を食べた。体力 +${p.hp - hp}、満腹度 +${p.hunger - hunger}%`, "good");
+        this.effect("heal", p.x, p.y, p.hp - hp);
+      }
+      if (kind === "greatHerb") {
+        const full = p.hp === p.maxHp, before = p.hp;
+        if (full) p.maxHp += 3;
+        p.hp = Math.min(p.maxHp, p.hp + 60);
+        this.say(full ? "大回復草の力で最大体力が3増えた！" : `大回復草を使った。体力 +${p.hp - before}`, "good");
+        this.effect("heal", p.x, p.y, p.hp - before);
+      }
+      if (kind === "gustTalisman") {
+        this.say("突風の灯札から風が吹き抜けた！", "good");
+        const targets = this.enemies.filter((e) => e.hp > 0 && distance(e, p) === 1);
+        for (const e of targets) this.push(e, 2, 3);
+      }
+      if (kind === "sleepTalisman") {
+        for (const e of this.enemies) if (e.hp > 0 && this.visible[this.key(e.x, e.y)]) this.sleepEnemy(e, 8);
+        this.say("眠りの灯札から、まどろみの灯りが広がった。", "good");
+      }
+      if (kind === "sharpenTalisman" || kind === "temperTalisman") {
+        const gear = p.equipment[kind === "sharpenTalisman" ? "weapon" : "shield"];
+        if (gear && gear.bonus < 99) {
+          gear.bonus++;
+          this.say(`${this.itemName(gear)}に灯りが宿った。補正値 +1。`, "good");
+        } else this.say("灯りが静かに消えた。");
+      }
+      if (kind === "warpTalisman") {
+        this.warpActor(p);
+        this.say("転移の灯札が輝き、別の場所へ移った。", "good");
+      }
+      if (kind === "copyTalisman") {
+        const target = this.enemies.filter((e) => e.hp > 0 && e.type !== "guardian" && ECHO_SOURCES[e.species] && this.visible[this.key(e.x, e.y)])
+          .sort((a, b) => distance(a, p) - distance(b, p) || a.id - b.id)[0];
+        const copied = target && this.placeShard(target.species, p);
+        this.say(copied ? `${target.name}の灯影を足元に写した。` : "写しの灯札の灯りが静かに消えた。", copied ? "good" : "normal");
       }
       if (kind === "scroll") {
         this.say("雷光の灯札をかざした！");
@@ -1476,12 +1552,12 @@
         }
       return seen;
     }
-    throwLanding() {
+    throwLanding(range = 4) {
       const p = this.player,
         [dx, dy] = p.facing;
       let x = p.x,
         y = p.y;
-      for (let i = 0; i < 4 && this.canStep(x, y, dx, dy); i++) {
+      for (let i = 0; i < range && this.canStep(x, y, dx, dy); i++) {
         x += dx;
         y += dy;
         if (this.enemyAt(x, y)) break;
@@ -1490,9 +1566,29 @@
     }
     throwItem(kind) {
       const p = this.player,
-        land = this.throwLanding(),
+        land = this.throwLanding(kind === "hookRope" ? 5 : 4),
         area = [[0, 0], ...DIRS].map(([dx, dy]) => ({ x: land.x + dx, y: land.y + dy })).filter((v) => this.tile(v.x, v.y));
       this.effect("arrow", land.x, land.y, 0, undefined, this.attackVisual(p, land, "arrow"));
+      if (kind === "hookRope") {
+        const enemy = this.enemyAt(land.x, land.y);
+        if (enemy) for (let i = 0; i < 4 && enemy.hp > 0 && distance(enemy, p) > 1; i++) {
+          const next = {x: enemy.x + Math.sign(p.x - enemy.x), y: enemy.y + Math.sign(p.y - enemy.y)};
+          if (!this.pull(enemy) || !same(enemy, next)) break;
+        }
+        this.say("鉤縄を投げた。");
+      }
+      if (kind === "slowDust") {
+        const enemy = this.enemyAt(land.x, land.y);
+        if (enemy) { enemy.slowUntil = this.turn + 10; this.wakeEnemy(enemy); }
+        this.say("鈍りの粉が舞った。");
+      }
+      if (kind === "flashBall") {
+        for (const v of area) {
+          const enemy = this.enemyAt(v.x, v.y);
+          if (enemy) { delete enemy.intent; enemy.stunned = true; this.wakeEnemy(enemy); }
+        }
+        this.say("光玉がまぶしく弾け、魔物の動きを止めた。", "good");
+      }
       if (kind === "waterSkin") {
         for (const v of area) this.setSurface(v.x, v.y, "water");
         this.say("水袋が弾け、周りが水たまりになった。", "good");
@@ -1667,7 +1763,7 @@
       if (!ware?.available) return false;
       const p = this.player;
       p.gold -= ware.price;
-      p.bag.push(...Array(ware.amount).fill(ware.kind));
+      p.bag.push(...Array.from({ length: ware.amount }, () => ware.kind === "keepJar" ? {kind: "keepJar", contents: []} : ware.kind));
       this.merchant.stock[index].sold = true;
       this.say(`${ware.name}を${ware.price}Gで買った。`, "good");
       this.effect("pickup", p.x, p.y, ware.kind, this.log[0].text);

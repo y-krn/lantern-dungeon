@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 require('../dist/engine.js');
-const scrolls=['scroll','map','identify','uncurse'];
+const scrolls=DungeonData.SCROLLS;
 const gear=(kind='weapon',cursed=false,bonus=2)=>({kind,rank:1,bonus,cursed,identified:false});
 function quiet(seed=42,dungeon='depths'){
   const game=new DungeonEngine(seed,dungeon,true);game.enemies=[];game.items=[];game.traps=[];return game;
@@ -41,7 +41,7 @@ function quiet(seed=42,dungeon='depths'){
 }
 {
   const game=quiet(),p=game.player;p.bag=['map','map','scroll','identify'];
-  assert.equal(new Set(scrolls.map(kind=>game.itemName(kind))).size,4);
+  assert.equal(new Set(scrolls.map(kind=>game.itemName(kind))).size,10);
   assert(!game.itemDescription('map').includes('地形'));assert(!game.itemName('map').includes('地図'));
   const original=game.itemName('map');assert(game.nameScroll(0,'地図？'));assert.equal(game.turn,0);
   assert(game.itemName('map').includes('地図？'));assert.deepEqual(game.identification.known,['identify']);
@@ -93,7 +93,7 @@ function quiet(seed=42,dungeon='depths'){
   const game=quiet(),saved=JSON.parse(game.serialize()),state=saved.state;
   state.player.bag=['identify','uncurse',gear('weapon',true,-1)];
   state.identification.known=['identify'];state.identification.names.uncurse='解呪？';
-  for(const kind of scrolls)state.identification.appearances[kind]=state.identification.appearances[kind].replace('灯札','巻物');
+  state.identification.appearances=Object.fromEntries(DungeonData.RESCUE_SCROLLS.map((kind,i)=>[kind,DungeonData.SCROLL_NAMES[i].replace('灯札','巻物')]));
   state.log=[{text:'インパスの巻物とシャナクの巻物を拾った。',type:'normal',turn:0},{text:'雷の巻物を読んだ！',type:'normal',turn:0}];
   const restored=DungeonEngine.restore(JSON.stringify(saved));assert(restored);
   assert.deepEqual(restored.player,state.player);assert.equal(restored.rng,state.rng);assert.equal(restored.turn,state.turn);

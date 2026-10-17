@@ -1,6 +1,6 @@
 (function (root) {
   "use strict";
-  const { INVENTORY_CAPACITY, ITEMS, SCROLLS, itemKind, isEquipment } =
+  const { INVENTORY_CAPACITY, ITEMS, SCROLLS, itemKind, isEquipment, jarConsumable } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
       : root.DungeonData;
@@ -52,7 +52,7 @@
       const engine = getEngine();
       const kind = itemKind(item);
       if (kind === "identify" && engine.identification.known.includes(kind)) return "鑑定する";
-      return kind === "bread" || (engine.strategyTrial && kind === "bait") ? "食べる" : kind === "arrow" ? "1本放つ" : DungeonData.THROWN_ITEMS.includes(kind) ? "投げる" : SCROLLS.includes(kind) || (engine.strategyTrial && kind.endsWith("Talisman")) ? "かざす" : "使う";
+      return kind === "bread" || kind === "driedFruit" || (engine.strategyTrial && kind === "bait") ? "食べる" : kind === "arrow" ? "1本放つ" : DungeonData.THROWN_ITEMS.includes(kind) ? "投げる" : SCROLLS.includes(kind) || (engine.strategyTrial && kind.endsWith("Talisman")) ? "かざす" : "使う";
     }
     function isUnknown(item) {
       const engine = getEngine();
@@ -69,12 +69,12 @@
       const canPickup = kind === "gold" || (kind === "arrow" && engine.arrowCount()) || engine.inventoryCount() < INVENTORY_CAPACITY;
       const primary = isEquipment(item)
         ? actionButton("equip-ground", old ? "持ち替える" : "装備する", "ground", old?.cursed || (!old && !canPickup))
-        : kind === "gold" ? "" : actionButton("use", useLabel(item));
+        : kind === "gold" || kind === "keepJar" ? "" : actionButton("use", useLabel(item));
       const appraise = isUnknown(item) && engine.identification.known.includes("identify") && engine.player.bag.includes("identify")
         ? actionButton("appraise", "鑑定（灯札1枚）") : "";
       const naming = SCROLLS.includes(kind) && isUnknown(item) ? actionButton("name", "名前を付ける") : "";
       return (isEquipment(item) && appraise ? appraise + primary : primary + appraise) + actionButton("pickup", "拾う", "ground", !canPickup) +
-        (kind !== "gold" ? actionButton("exchange", "交換する", "ground", engine.onStairs() || !engine.player.bag.length) : "") + naming;
+        (kind !== "gold" && kind !== "keepJar" ? actionButton("exchange", "交換する", "ground", engine.onStairs() || !engine.player.bag.length) : "") + naming;
     }
     function groundNote() {
       const engine = getEngine();
@@ -87,7 +87,7 @@
         else if (old) notes.push(`持ち替えると、${engine.itemName(old)}を足元に置きます。`);
       }
       if (engine.inventoryCount() >= INVENTORY_CAPACITY && item.kind !== "gold" && !(item.kind === "arrow" && engine.arrowCount()))
-        notes.push("持ち物がいっぱいです。拾う品と手放す品を交換できます。");
+        notes.push(item.kind === "keepJar" ? "持ち物がいっぱいです。空いている床で品を置き、枠を空けると拾えます。" : "持ち物がいっぱいです。拾う品と手放す品を交換できます。");
       if (engine.onStairs() && item.kind !== "gold") notes.push("階段の上では交換できません。");
       return notes.length ? `<p class="item-note">${notes.map(escapeHTML).join("<br>")}</p>` : "";
     }
@@ -104,6 +104,7 @@
             index = button.dataset.index === "ground" ? "ground" : Number(button.dataset.index);
           const returnTo = onReturn === showBag ? () => showBag(index) : onReturn;
           if (action === "name") { showItemName(index, returnTo); return; }
+          if (action === "jar-put" || action === "jar-take") { showJar(index, action === "jar-take", returnTo); return; }
           if (action === "exchange" && index === "ground") { showExchange(returnTo); return; }
           if (action === "use" && engine.scrollNeedsTarget(index)) { showIdentify(index, returnTo); return; }
           if (action === "use" && engine.requiresAim?.(index)) { beginTarget(index); return; }
@@ -151,15 +152,16 @@
         .map(([kind, item]) => bagRow(item, actionButton("unequip", "外す", kind), 1, "装備中")).join("");
       const bagCards = entries.map(({kind,index,count}) => {
         const item = p.bag[index], equipped = kind === "arrow" && p.ammo === "arrow";
-        const primary = kind === "arrow" ? actionButton("equip-arrow", equipped ? "外す" : "装備する", index)
+        const primary = kind === "keepJar" ? actionButton("jar-put", "入れる", index, item.contents.length >= 3 || !p.bag.some(jarConsumable)) + actionButton("jar-take", "取り出す", index, !item.contents.length || engine.inventoryCount() >= INVENTORY_CAPACITY)
+          : kind === "arrow" ? actionButton("equip-arrow", equipped ? "外す" : "装備する", index)
           : actionButton("use", isEquipment(item) ? "装備する" : useLabel(item), index);
         const naming = (SCROLLS.includes(kind) && isUnknown(item) ? actionButton("name", "名前を付ける", index) : "") +
           (engine.canInfuse(index) ? actionButton("infuse", "矢に灯す", index) : "");
         return bagRow(item, primary + naming + actionButton("drop", "置く", index, !!ground || engine.onStairs()) +
-          (ground && ITEMS[ground.kind] && !engine.onStairs() ? actionButton("exchange", "足元と交換", index) : ""), count, equipped ? "装備中" : "");
+          (ground && ground.kind !== "keepJar" && ITEMS[ground.kind] && !engine.onStairs() ? actionButton("exchange", "足元と交換", index) : ""), count, equipped ? "装備中" : "");
       }).join("");
       const groundCard = ground ? bagRow(ground, groundButtons(), 1, "足元", true) : "";
-      openModal("bag", `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong></div><p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本${engine.echoInfo ? `<br><strong>${escapeHTML(engine.echoInfo().label)}</strong>　${escapeHTML(engine.echoInfo().text)}` : ""}</p><div class="bag-list" role="region" aria-label="足元と持ち物" tabindex="0">${groundCard}${equippedCards}${bagCards}${!equippedCards && !bagCards ? '<p class="item-note">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備・予備装備・道具は1個につき1枠。矢は1束で1枠です。足元の品は枠に含みません。</p><p>足元の品は持たずに使えます。矢の使用は1本、置く・交換は束ごと。階段や品がある場所には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`);
+      openModal("bag", `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong></div><p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本${engine.echoInfo ? `<br><strong>${escapeHTML(engine.echoInfo().label)}</strong>　${escapeHTML(engine.echoInfo().text)}` : ""}</p><div class="bag-list" role="region" aria-label="足元と持ち物" tabindex="0">${groundCard}${equippedCards}${bagCards}${!equippedCards && !bagCards ? '<p class="item-note">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備・予備装備・道具は1個につき1枠。矢は1束で1枠です。足元の品は枠に含みません。</p><p>灯籠瓶は拾ってから扱います。ほかの足元の品は持たずに使えます。矢の使用は1本、置く・交換は束ごと。階段や品がある場所には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`);
       const rows = $("modal-content").querySelectorAll(".bag-entry");
       if (selected !== null) rows.forEach((row) => {
         if (row.querySelector(`[data-index="${selected}"]`)) {
@@ -180,13 +182,25 @@
       if ($("modal").open || engine.status !== "playing") return;
       const item = engine.groundItem();
       if (!item) return;
-      if (isEquipment(item)) { showGround(); return; }
+      if (isEquipment(item) || item.kind === "keepJar") { showGround(); return; }
       if (engine.requiresAim?.("ground")) { beginTarget("ground"); return; }
       if (engine.scrollNeedsTarget("ground")) { showIdentify("ground", closeModal); return; }
       act(() => item.kind === "gold" ? getEngine().pickup() : getEngine().useGround(), true);
     }
     function targetRow(target, item, place, action, count = 1) {
       return `<button class="target-choice" data-${action}="${target}"><span class="item-icon" aria-hidden="true">${SCROLLS.includes(itemKind(item)) ? "✧" : ITEMS[itemKind(item)].icon}</span><strong>${escapeHTML(itemLabel(item, count))}</strong><span class="bag-badge">${place}</span></button>`;
+    }
+    function showJar(index, take, onCancel) {
+      const engine = getEngine(), jar = engine.player.bag[index];
+      if (jar?.kind !== "keepJar") return;
+      const targets = take ? jar.contents.map((item, target) => ({ item, target }))
+        : engine.player.bag.map((item, target) => ({ item, target })).filter(({ item }) => jarConsumable(item));
+      openModal("jar", `<div class="modal-inner bag-modal">${modalHeader(take ? "取り出す品を選ぶ" : "瓶に入れる品を選ぶ")}<p class="selection-source">${escapeHTML(engine.itemName(jar))}　${jar.contents.length} / 3</p><div class="bag-list" role="region" aria-label="灯籠瓶の品" tabindex="0">${targets.map(({ item, target }) => targetRow(target, item, take ? "瓶の中" : "持ち物", "jar-target")).join("") || '<p class="item-note">選べる品がありません。</p>'}</div><button class="secondary-button" id="jar-cancel">戻る</button></div>`);
+      $("modal-content").querySelectorAll("[data-jar-target]").forEach((button) => button.addEventListener("click", () => {
+        closeModal();
+        act(() => take ? getEngine().jarTake(index, Number(button.dataset.jarTarget)) : getEngine().jarPut(index, Number(button.dataset.jarTarget)), true);
+      }));
+      $("jar-cancel").addEventListener("click", onCancel);
     }
     function showIdentify(index, onCancel = showBag) {
       const engine = getEngine();
@@ -234,7 +248,7 @@
       const engine = getEngine();
       const ground = engine.groundItem();
       groundContext.hidden = engine.status !== "playing" || !ground;
-      groundUseButton.hidden = groundContext.hidden || isEquipment(ground);
+      groundUseButton.hidden = groundContext.hidden || isEquipment(ground) || ground?.kind === "keepJar";
       if (!groundContext.hidden) {
         groundItemButton.innerHTML = `<span class="ground-marker">足元</span><span class="ground-name">${escapeHTML(itemLabel(ground))}</span><span aria-hidden="true">${isEquipment(ground) ? "調べる" : "⋯"}</span>`;
         groundItemButton.setAttribute("aria-label", `${itemLabel(ground)}を調べる`);

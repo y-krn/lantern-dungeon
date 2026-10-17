@@ -192,6 +192,7 @@
       const visible = !!this.visible[this.key(actor.x, actor.y)];
       const trap = this.traps.find(v => same(v, actor));
       if (trap) this.springTrap(trap, actor);
+      if (actor !== this.player && trap?.type !== "fire" && actor.hp > 0 && this.surfaceAt(actor.x, actor.y)?.type === "fire") this.hit(actor, 4, "magic");
       const vine = this.strategy.vines.find(v => same(v, actor));
       if (vine && actor.hp > 0) {
         this.strategy.vines.splice(this.strategy.vines.indexOf(vine), 1);
