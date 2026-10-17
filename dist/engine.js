@@ -475,7 +475,7 @@
         id: actor === this.player ? "player" : actor.id,
         x: actor.x, y: actor.y, type: actor === this.player ? "hero" : actor.type,
         species: actor.species, hp: actor.hp, maxHp: actor.maxHp,
-        revealed: actor.revealed, facing: actor.facing?.slice(),
+        revealed: actor.revealed, elite: actor.elite, facing: actor.facing?.slice(),
         visible: actor === this.player || !!this.visible[this.key(actor.x, actor.y)],
       });
       return { source: capture(source), target: capture(target), kind };
@@ -808,11 +808,12 @@
       this.effect("pickup", p.x, p.y, "echoShard", this.log[0].text);
       return true;
     }
-    // Leaves a shard at or next to a cell; returns false when every nearby cell is taken.
-    placeShard(species, at) {
+    // Guaranteed rewards can share the death cell when every nearby cell is taken.
+    placeShard(species, at, guaranteed = false) {
       const p = this.player,
         free = (x, y) => this.tile(x, y) && !same({ x, y }, this.stairs) && !this.items.some((i) => same(i, { x, y })),
-        spot = [[0, 0], ...DIRS].map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })).find((v) => free(v.x, v.y) && (at === p || !same(v, p)));
+        spot = [[0, 0], ...DIRS].map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })).find((v) => free(v.x, v.y) && (at === p || !same(v, p)))
+          || (guaranteed ? {x: at.x, y: at.y} : null);
       if (!spot) return false;
       const visible = !!this.visible[this.key(spot.x, spot.y)];
       this.items.push({ ...spot, kind: "echoShard", species, amount: 1, discovered: visible });
@@ -826,12 +827,12 @@
       const p = this.player,
         pity = p.echoPity || 0,
         rule = this.echoDropRule();
-      if (pity < rule.pity && this.int(1, 100) > rule.percent) {
+      if (!enemy.elite && pity < rule.pity && this.int(1, 100) > rule.percent) {
         p.echoPity = pity + 1;
         return;
       }
-      if (!this.placeShard(enemy.species, enemy)) return;
-      p.echoPity = 0;
+      if (!this.placeShard(enemy.species, enemy, enemy.elite)) return;
+      if (!enemy.elite) p.echoPity = 0;
       const shard = this.items.at(-1);
       if (shard.discovered) this.say(`${enemy.name}の灯影が残った。踏むとランタンに宿る。`, "good");
     }

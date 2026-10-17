@@ -46,12 +46,16 @@
         for (const key of ["bindUntil", "resistUntil"]) delete actor[key];
       }
       const ordinary = this.enemies.filter(e => !e.house && e.type !== "guardian");
-      if (this.floor >= 2 && ordinary[1]) Object.assign(ordinary[1], monsterStats("frostBat"), {hp: MONSTERS.frostBat.hp});
+      if (this.floor >= 2 && ordinary[1]) {
+        Object.assign(ordinary[1], monsterStats("frostBat", ordinary[1].elite));
+        ordinary[1].hp = ordinary[1].maxHp;
+      }
       ECHO_ROSTERS[this.floor - 1].forEach((species, i) => {
         const e = ordinary[this.floor >= 2 ? i + 2 : i + 1];
         if (!e) return;
         delete e.revealed;
-        Object.assign(e, monsterStats(species), {hp: MONSTERS[species].hp});
+        Object.assign(e, monsterStats(species, e.elite));
+        e.hp = e.maxHp;
       });
       if (this.floor > 1) {
         const supplies = ["lightSeed", "vineSeed", "bait", ["pullTalisman", "swapTalisman", "returnTalisman"][(this.floor - 2) % 3]];
