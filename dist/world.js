@@ -277,6 +277,19 @@
         house: i < houseSpots.length,
       });
     }
+    const miniboss = hard && {10: "bubbleMother", 20: "gateGolem"}[game.floor];
+    if (miniboss) {
+      const enemy = game.enemies.find(e => !e.house),
+        rooms = ordinaryRooms.filter(r => r !== exitRoom),
+        spot = enemy && !game.isRoomEntrance(enemy.x, enemy.y) && game.roomAt(enemy.x, enemy.y) !== exitRoom
+          ? {x: enemy.x, y: enemy.y} : emptySpot(rooms, true);
+      if (enemy && spot) {
+        used.delete(game.key(enemy.x, enemy.y));
+        used.add(game.key(spot.x, spot.y));
+        Object.assign(enemy, spot, monsterStats(miniboss), {hp: MONSTERS[miniboss].hp});
+        delete enemy.elite;
+      }
+    }
     for (
       let i = 0;
       i < Math.min(game.floor + (hard ? 2 : 0), hard ? 8 : 5);
@@ -298,7 +311,7 @@
       if (spot) {
         const pool = Object.keys(BOONS).filter((id) => id !== "insight" || hard),
           choices = [];
-        while (choices.length < 3) {
+        while (choices.length < (game.player.shrineBonus ? 4 : 3)) {
           const id = pool.splice(game.int(0, pool.length - 1), 1)[0],
             species = Object.keys(ECHO_SOURCES);
           choices.push(id === "echo" ? { id, species: species[game.int(0, species.length - 1)] } : { id });

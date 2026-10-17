@@ -25,7 +25,7 @@ function replay(g) {
   return restored;
 }
 const additions = ['bubbleSlime','rustSlime','mudSlime','thiefBat','bellBat','hornBeetle','mirrorBeetle','snareVine','blastMoth','archerGhost','mendGhost','wardGolem'];
-assert.equal(Object.keys(MONSTERS).length, 37);
+assert.equal(Object.keys(MONSTERS).length, 39);
 assert.equal(new Set(Object.values(MONSTERS).map(m => m.type)).size, 9);
 assert.deepEqual(MONSTER_POOLS[0], ['mossSlime']);
 for (const species of additions) {

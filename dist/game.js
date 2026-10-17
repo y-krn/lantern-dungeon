@@ -260,7 +260,7 @@
         : threat
           ? `${threat.name}が力をためている。`
           : engine.site() === "shrine"
-            ? "灯台がある。「灯台に触れる」で、三つの灯りから一つを受け取れる。"
+            ? `灯台がある。「灯台に触れる」で、${engine.shrine.choices.length === 4 ? "四つ" : "三つ"}の灯りから一つを受け取れる。`
           : engine.site() === "merchant"
             ? "灯り売りの露店。「露店を見る」で買い物と鑑定・解呪ができる。"
           : engine.site() === "echo"
@@ -408,7 +408,7 @@
     const site = engine.site();
     if (site === "shrine") {
       const options = engine.boonOptions();
-      openModal("shrine", `<div class="modal-inner">${modalHeader("灯台")}<p class="modal-description">三つの灯りから一つを受け取れます。受け取ると灯台の灯りは消えます。ターンは進みません。</p><div class="dungeon-list">${options.map((o, i) => `<button class="dungeon-choice" data-boon="${i}" ${o.available ? "" : "disabled"}><strong>${o.name}</strong><span class="dungeon-choice-description">${o.text}${o.available ? "" : "（今は受け取れません）"}</span></button>`).join("")}</div><button class="secondary-button" data-close>あとで</button></div>`);
+      openModal("shrine", `<div class="modal-inner">${modalHeader("灯台")}<p class="modal-description">${engine.shrine.choices.length === 4 ? "奥から届いた灯りが加わり、四つの候補があります。" : "三つの灯りから一つを受け取れます。"}受け取ると灯台の灯りは消えます。ターンは進みません。</p><div class="dungeon-list">${options.map((o, i) => `<button class="dungeon-choice" data-boon="${i}" ${o.available ? "" : "disabled"}><strong>${o.name}</strong><span class="dungeon-choice-description">${o.text}${o.available ? "" : "（今は受け取れません）"}</span></button>`).join("")}</div><button class="secondary-button" data-close>あとで</button></div>`);
       $("modal-content").querySelectorAll("[data-boon]").forEach((button) => button.addEventListener("click", () => {
         if (engine.chooseBoon(Number(button.dataset.boon))) { closeModal(); updateUI(); save(); }
       }));

@@ -15,7 +15,7 @@ function arena(Engine= DungeonEngine,species='hornBeetle') {
 }
 // Explicit arithmetic, independent of the shared generation/save helper.
 for(const [species,m] of Object.entries(MONSTERS)) {
-  if(m.type==='guardian'){assert.throws(()=>monsterStats(species,true),RangeError);continue;}
+  if(m.type==='guardian'||m.miniboss){assert.throws(()=>monsterStats(species,true),RangeError);continue;}
   const s=monsterStats(species,true);
   assert.equal(s.name,`灯冠の${m.name}`);assert.equal(s.maxHp,Math.ceil(m.hp*1.5));
   assert.equal(s.attack,Math.ceil(m.attack*1.2));assert.equal(s.exp,m.exp*2);assert(s.elite);
@@ -26,7 +26,7 @@ let eligible=0,elites=0,houses=0,guardians=0;
 for(const dungeon of ['tutorial','depths'])for(let seed=1;seed<=180;seed++)for(const floor of [1,2,3,4,5,8,10,...(dungeon==='depths'?[20,30]:[])]) {
   const g=new DungeonEngine(seed,dungeon,true);g.floor=floor;g.generateFloor();
   for(const e of g.enemies) {
-    const qualifies=floor+(dungeon==='depths'?2:0)>=5&&!e.house&&e.type!=='guardian';
+    const qualifies=floor+(dungeon==='depths'?2:0)>=5&&!e.house&&e.type!=='guardian'&&!MONSTERS[e.species].miniboss;
     if(e.house)houses++;if(e.type==='guardian')guardians++;
     if(!qualifies)assert(!e.elite,'No early, house or guardian elites');
     else {eligible++;if(e.elite)elites++;}

@@ -41,3 +41,6 @@ if (variations.status !== 0) process.exit(variations.status ?? 1);
 const elite = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-elite.cjs')], {stdio: 'inherit'});
 if (elite.error) throw elite.error;
 if (elite.status !== 0) process.exit(elite.status ?? 1);
+const minibosses = spawnSync(process.execPath, [path.join(__dirname, 'tests/check-minibosses.cjs')], {stdio: 'inherit'});
+if (minibosses.error) throw minibosses.error;
+if (minibosses.status !== 0) process.exit(minibosses.status ?? 1);

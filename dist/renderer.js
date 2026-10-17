@@ -543,7 +543,9 @@
       for (const e of entities) {
         const px = e.x * tile + offsetX,
           py = e.y * tile + offsetY,
-          s = tile / 16;
+          s = tile / 16,
+          size = e.isPlayer || e.spawned ? 1 : MONSTERS[e.species]?.size || 1,
+          head = tile * .8 * (1 - size);
         const style = e.isPlayer ? null : motionStyle(e.type), hop = e.hop || 0;
         ctx.fillStyle = "#06151466";
         ctx.beginPath();
@@ -596,7 +598,7 @@
           ctx.save();
           ctx.translate(px + tile / 2 + pushX * tile, py + tile * .8 + pushY * tile);
           ctx.rotate(lean);
-          ctx.scale(scaleX, scaleY);
+          ctx.scale(scaleX * size, scaleY * size);
           if (!e.isPlayer && MONSTERS[e.species]?.trait === "burst" && e.hp <= e.maxHp / 2)
             ctx.filter = `brightness(${reduced ? 1.35 : 1.35 + (Math.sin(now / 150) + 1) * .35})`;
           sprite(
@@ -634,15 +636,15 @@
           ctx.fillStyle = "#ffdf85";
           ctx.font = `bold ${Math.round(tile * 0.5)}px sans-serif`;
           ctx.textAlign = "center";
-          ctx.fillText("!", px + tile * (crowned ? .88 : .5), py - tile * 0.05);
+          ctx.fillText("!", px + tile * (crowned || size > 1 ? .88 : .5), py + head - tile * 0.05);
         }
         if (!e.isPlayer && !e.defeated && e.hp < e.maxHp) {
           ctx.fillStyle = "#10171ee0";
-          ctx.fillRect(px + tile * 0.16, py - tile * 0.12, tile * 0.68, s * 2);
+          ctx.fillRect(px + tile * 0.16, py + head - tile * 0.12, tile * 0.68, s * 2);
           ctx.fillStyle = "#db8790";
           ctx.fillRect(
             px + tile * 0.18,
-            py - tile * 0.1,
+            py + head - tile * 0.1,
             (tile * 0.64 * e.hp) / e.maxHp,
             s,
           );

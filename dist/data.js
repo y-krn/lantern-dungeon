@@ -166,6 +166,7 @@
     stoneGolem: ["might", 0], obsidianGolem: ["might", 1],
   };
   Object.assign(ECHO_SOURCES, {
+    bubbleMother: ["moss", 1], gateGolem: ["might", 1],
     bubbleSlime: ["moss", 0], rustSlime: ["moss", 1], mudSlime: ["moss", 1],
     thiefBat: ["wing", 0], bellBat: ["wing", 0], hornBeetle: ["shell", 0],
     mirrorBeetle: ["shell", 1], snareVine: ["root", 0], blastMoth: ["feast", 0],
@@ -967,6 +968,22 @@
       counter: "罠・炎・押し出しの衝突・雷光の灯札は軽減されません。",
     },
   });
+  Object.assign(MONSTERS, {
+    bubbleMother: {
+      type: "slime", tier: 3, name: "大泡の母体", hp: 120, attack: 14, exp: 50,
+      color: "泡青色", colors: ["#294f68", "#75bdd1", "#e2f6fb"],
+      trait: "split", splitLimit: 3, miniboss: 10, size: 1.35,
+      feature: "深淵10階の大きな泡スライム。傷を受けてHPが4以上残ると、HPを分けて3回まで分裂します。分身は分裂せず、経験値1で金貨と欠片を残しません。",
+      counter: "斧や爆ぜ実でまとめて攻撃しましょう。母体を倒すと、次に使う灯台の候補が一つ増えます。戦わずに階段へ進むこともできます。",
+    },
+    gateGolem: {
+      type: "golem", tier: 5, name: "鉄門の大ゴーレム", hp: 200, attack: 26, exp: 80,
+      color: "鉄門色", colors: ["#343c46", "#8597ac", "#dce5ef"],
+      trait: "charge", ward: true, range: 4, cadence: 2, miniboss: 20, size: 1.4,
+      feature: "深淵20階の大きな守り手。近接攻撃・矢・灯弾を半減し、直線4マス以内を予告して突進します。普段の移動は2ターンに1歩です。",
+      counter: "横へ避け、壁や罠へ突っ込ませましょう。衝突・炎・雷光は守りを無視します。倒すと次に使う灯台の候補が一つ増えますが、階段は討伐せずに使えます。",
+    },
+  });
   const monsterStories = {
     slime: "ひんやりした石畳に暮らす、葉飾りのぷるぷるした魔物。",
     bat: "大きな耳とふかふかの襟が目印。遺跡の天井が寝床です。",
@@ -1068,7 +1085,7 @@
   }
   function monsterStats(species, elite = false) {
     const m = MONSTERS[species];
-    if (elite && m.type === "guardian") throw new RangeError("Guardians cannot be elite");
+    if (elite && (m.type === "guardian" || m.miniboss)) throw new RangeError("Guardians and minibosses cannot be elite");
     return {
       species,
       type: m.type,
