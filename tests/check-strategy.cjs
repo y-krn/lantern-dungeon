@@ -91,14 +91,30 @@ for (const [dx, dy] of DungeonData.DIRS) {
   for (let i=0;i<4;i++) g.wait(); assert.equal(g.strategy.lamp.remaining,1);
   const h = replay(g); g.wait(); h.wait(); assert.equal(g.strategy.lamp,null); assert.equal(g.serialize(),h.serialize(),'Expiry has the same timing after restore');
 }
+// Lamps and food never redirect ordinary pursuit.
+for (const species of ['lanternMoth','eclipseMoth','mossSlime','amberSlime','ironBeetle','cobaltBeetle']) {
+  const g=arena(), e=enemy(g,species,13,12), control=replay(g);
+  assert(use(g,'lightSeed',{x:13,y:10})); control.wait();
+  assert.deepEqual(g.enemies,control.enemies,'A lamp must not affect any species movement or intent');
+  assert.equal(g.rng,control.rng,'A lamp must not consume extra pursuit RNG');
+  assert(!Object.hasOwn(e,'lure'));assert(!Object.hasOwn(e,'lureUsed'));replay(g);
+}
 {
-  const g = arena(); const moth = enemy(g,'lanternMoth',13,12);
-  use(g,'lightSeed',{x:13,y:10}); assert(moth.lureUsed,'An alert moth can be distracted');
-  assert(moth.lure); const h = replay(g); g.wait(); h.wait(); assert.equal(g.serialize(),h.serialize());
-  assert(!moth.lure); g.wait(); assert(moth.lureUsed); assert(!moth.lure,'The same creature cannot be lured repeatedly');
-  const food = arena(); food.player.hunger=60; assert(use(food,'bait')); assert.equal(food.player.hunger,75);
-  const thrown = arena(), beetle = enemy(thrown,'ironBeetle',13,12);
-  assert(use(thrown,'bait',{x:13,y:10},'throw')); assert(beetle.lureUsed); assert.equal(thrown.player.hunger,100);
+  const food=arena();food.player.hunger=60;assert(use(food,'bait'));assert.equal(food.player.hunger,75);
+  const thrown=arena(), before=thrown.serialize();
+  assert(!thrown.requiresAim(thrown.player.bag.indexOf('bait'),'throw'));
+  assert(!use(thrown,'bait',{x:13,y:10},'throw'));assert.equal(thrown.serialize(),before,'Rejected throwing preserves food, turns and RNG');
+  thrown.items=[{kind:'bait',amount:1,x:10,y:10}];const ground=thrown.serialize();
+  assert(!thrown.use('ground',{x:13,y:10},'throw'));assert.equal(thrown.serialize(),ground);
+  thrown.player.hunger=50;assert(thrown.useGround());assert.equal(thrown.player.hunger,65);assert.equal(thrown.items.length,0);
+  const old=JSON.parse(arena().serialize());
+  old.state.strategy.lamp={x:13,y:10,remaining:4};old.state.strategy.bait={x:12,y:11,remaining:3};
+  old.state.enemies=[{...DungeonData.monsterStats('lanternMoth'),hp:12,x:13,y:12,id:0,awake:true,lureUsed:true,lure:{kind:'lamp',remaining:2}},{...DungeonData.monsterStats('frostBat'),hp:DungeonData.MONSTERS.frostBat.hp,x:10,y:13,id:1,awake:true,intent:{x:10,y:10,kind:'ranged'}}];
+  const migrated=StrategyEngine.restore(JSON.stringify(old));assert(migrated);
+  assert(!Object.hasOwn(migrated.strategy,'bait'));assert(!Object.hasOwn(migrated.enemies[0],'lure'));assert(!Object.hasOwn(migrated.enemies[0],'lureUsed'));
+  assert.deepEqual(migrated.strategy.lamp,old.state.strategy.lamp);assert.deepEqual(migrated.enemies[1].intent,old.state.enemies[1].intent);replay(migrated);
+  old.state.strategy.bait.remaining=-1;assert.equal(StrategyEngine.restore(JSON.stringify(old)),null,'Corrupt legacy bait is rejected before removal');
+  old.state.strategy.bait.remaining=3;old.state.enemies[0].lure.remaining=9;assert.equal(StrategyEngine.restore(JSON.stringify(old)),null);
 }
 {
   const g = arena(); use(g,'vineSeed'); assert.equal(g.strategy.vines.length,1); assert(!g.player.bindUntil,'Placing a vine does not immediately bind its owner');
@@ -108,6 +124,14 @@ for (const [dx, dy] of DungeonData.DIRS) {
   const player = arena(); use(player,'vineSeed'); player.move(1,0); player.move(-1,0);
   const before = player.serialize(); assert(!player.move(1,0)); assert.equal(player.serialize(),before,'A failed bound movement costs nothing');
   player.wait(); assert(player.move(1,0),'Waiting out a bind permits movement again');
+}
+{
+  const g=arena();g.tiles.fill(0);for(let x=2;x<=25;x++)g.tiles[g.key(x,10)]=1;
+  g.stairs={x:25,y:10};g.strategy.vines=[{x:12,y:10}];g.traps=[{x:12,y:10,found:false}];
+  const fast=enemy(g,'caveBat',13,10);g.wait();
+  assert.equal(fast.x,12,'A vine stops the remainder of a fast enemy movement');assert(fast.hp<fast.maxHp);assert(g.traps[0].found);
+  g.wait();assert.equal(fast.x,12,'The next movement is also bound');
+  g.wait();assert.equal(fast.x,11,'Ordinary pursuit resumes after the bind');
 }
 {
   const g = arena(); g.items=[{x:14,y:10,kind:'potion',amount:1}];
@@ -144,4 +168,4 @@ for (let seed=1;seed<=20;seed++) {
   for(let floor=1;floor<=5;floor++){if(floor>1){g.floor=floor;g.generateFloor();}assert.equal(g.enemies.some(e=>e.type==='guardian'),floor===5);replay(g);}
 }
 assert.deepEqual(Array.from({length:20},(_,i)=>new DungeonEngine(i+1).serialize()),normal,'Even installed trial definitions keep the normal drop and RNG streams unchanged');
-console.log('PASS: seven trial items, directional/explicit spear parity in eight directions, corners/range/binds, retired-gear migration, targeting rollback, bait/light lifetime, bind/resistance, fixed intents/friendly fire, floor use at capacity, isolated saves and deterministic replay across 100 generated floors.');
+console.log('PASS: seven trial items, directional/explicit spear parity in eight directions, corners/range/binds, retired-gear migration, targeting rollback, no lure AI, food-only dumplings, legacy lure cleanup, light lifetime, bind/resistance, fixed intents/friendly fire, floor use at capacity, isolated saves and deterministic replay across 100 generated floors.');

@@ -3,11 +3,11 @@
   const node = typeof module !== "undefined" && module.exports;
   if (node) require("./engine.js");
   const data = node ? require("./data.js") : root.DungeonData;
-  const { W, H, DIRS, ITEMS, EQUIPMENT, ITEM_ORDER, MONSTERS, equipmentKind, itemKind, monsterStats } = data;
+  const { DIRS, ITEMS, EQUIPMENT, ITEM_ORDER, MONSTERS, equipmentKind, itemKind, monsterStats } = data;
   const extras = {
-    lightSeed: { name: "灯種", icon: "♧", description: "直線3マス以内に置き灯を一つ。6ターン灯り、蛾の注意を一度だけそらします。仮宿の帰還先にもなります。" },
+    lightSeed: { name: "灯種", icon: "♧", description: "直線3マス以内に置き灯を一つ。6ターン灯り、仮宿の灯札の帰還先になります。" },
     vineSeed: { name: "蔓の種", icon: "❧", description: "足元へ蔓を仕込みます。次に踏んだ者の移動を一度封じます。自分もかかり、攻撃は防げません。" },
-    bait: { name: "香り団子", icon: "●", description: "食べると満腹度+15。直線3マス以内へ投げると、スライムや甲虫を一度だけ誘います。餌は6ターン残ります。" },
+    bait: { name: "香り団子", icon: "●", description: "食べると満腹度+15。旅の途中で食べる小さな団子。" },
     pullTalisman: { name: "引き寄せの灯札", icon: "✧", description: "直線4マス以内の敵か床の品を、手前へ最大2マス引き寄せます。壁や他の対象は越えません。" },
     swapTalisman: { name: "入れ替えの灯札", icon: "✧", description: "見えている4マス以内の敵と位置を交換します。攻撃予告は元のマスに残り、着地先の罠は発動します。" },
     returnTalisman: { name: "仮宿の灯札", icon: "✧", description: "同じ階の置き灯へ戻り、灯りを消費します。敵が灯りの上にいると使えません。帰還後も敵は動きます。" },
@@ -29,7 +29,7 @@
       super(seed);
       this.strategyTrial = true;
       this.kitChosen = false;
-      this.strategy = { lamp: null, bait: null, vines: [] };
+      this.strategy = { lamp: null, vines: [] };
       this.player.bag.push("lightSeed", "lightSeed", "vineSeed", "bait", "pullTalisman", "swapTalisman", "returnTalisman");
       this.prepareTrialFloor();
       this.say("分け灯を携えて、五つの回廊へ。", "good");
@@ -39,12 +39,11 @@
     }
     floorName() { return ["灯りの庭", "響きの回廊", "返り矢の広間", "仮宿の間", "分け灯の聖域"][this.floor - 1]; }
     prepareTrialFloor() {
-      this.strategy = { lamp: null, bait: null, vines: [] };
+      this.strategy = { lamp: null, vines: [] };
       for (const actor of [this.player, ...this.enemies]) {
-        for (const key of ["bindUntil", "resistUntil", "lureUsed", "lure"]) delete actor[key];
+        for (const key of ["bindUntil", "resistUntil"]) delete actor[key];
       }
       const ordinary = this.enemies.filter(e => !e.house && e.type !== "guardian");
-      if (ordinary[0]) Object.assign(ordinary[0], monsterStats("lanternMoth"), {hp: MONSTERS.lanternMoth.hp});
       if (this.floor >= 2 && ordinary[1]) Object.assign(ordinary[1], monsterStats("frostBat"), {hp: MONSTERS.frostBat.hp});
       if (this.floor > 1) {
         const supplies = ["lightSeed", "vineSeed", "bait", ["pullTalisman", "swapTalisman", "returnTalisman"][(this.floor - 2) % 3]];
@@ -76,19 +75,6 @@
       return true;
     }
     ready() { return this.kitChosen && this.status === "playing"; }
-    path(from, to, max = W * H) {
-      const values = Array(W * H).fill(Infinity), q = [{x: to.x, y: to.y}];
-      values[this.key(to.x, to.y)] = 0;
-      for (let h = 0; h < q.length; h++) {
-        const v = q[h], d = values[this.key(v.x, v.y)];
-        if (d >= max) continue;
-        for (const [dx, dy] of DIRS) if (this.canStep(v.x, v.y, dx, dy)) {
-          const k = this.key(v.x + dx, v.y + dy);
-          if (values[k] === Infinity) { values[k] = d + 1; q.push({x: v.x + dx, y: v.y + dy}); }
-        }
-      }
-      return { values, steps: values[this.key(from.x, from.y)] };
-    }
     ray(from, to, range, actors = true) {
       const dx = to.x - from.x, dy = to.y - from.y, n = distance(from, to);
       if (!n || n > range || (dx && dy && Math.abs(dx) !== Math.abs(dy))) return null;
@@ -101,14 +87,15 @@
       }
       return cells;
     }
-    requiresAim(index, mode = "use") {
+    requiresAim(index) {
       const kind = itemKind(this.targetItem(index));
-      return ["lightSeed", "pullTalisman", "swapTalisman"].includes(kind) || (kind === "bait" && mode === "throw");
+      return ["lightSeed", "pullTalisman", "swapTalisman"].includes(kind);
     }
     previewUse(index, target, mode = "use") {
       if (!this.ready()) return null;
       const kind = itemKind(this.targetItem(index)), p = this.player;
       if (!Object.hasOwn(extras, kind)) return null;
+      if (mode !== "use") return null;
       if (kind === "bait" && mode === "use") return {kind, label: "香り団子を食べる"};
       if (kind === "vineSeed") return !this.onStairs() && !this.strategy.vines.some(v => same(v, p)) ? {kind, label: "足元へ蔓を仕込む"} : null;
       if (kind === "returnTalisman") {
@@ -118,9 +105,9 @@
       if (!target || !Number.isInteger(target.x) || !Number.isInteger(target.y) || !this.inside(target.x, target.y) || !this.visible[this.key(target.x, target.y)] || !this.tile(target.x, target.y)) return null;
       const enemy = this.enemyAt(target.x, target.y), item = this.items.find(i => same(i, target));
       const disguised = enemy && MONSTERS[enemy.species]?.trait === "mimic" && !enemy.revealed;
-      if (kind === "lightSeed" || kind === "bait") {
-        if ((kind === "lightSeed" ? this.strategy.lamp : this.strategy.bait) || enemy || item || same(target, p) || same(target, this.stairs) || !this.ray(p, target, 3)) return null;
-        return {kind, landing: target, label: kind === "lightSeed" ? "ここへ灯りを置く" : "ここへ団子を投げる"};
+      if (kind === "lightSeed") {
+        if (this.strategy.lamp || enemy || item || same(target, p) || same(target, this.stairs) || !this.ray(p, target, 3)) return null;
+        return {kind, landing: target, label: "ここへ灯りを置く"};
       }
       if (kind === "swapTalisman") return enemy && !disguised && distance(p, target) <= 4 && this.lineOfSight(p.x, p.y, target.x, target.y) ? {kind, enemy, landing: target, label: `${enemy.name}と入れ替わる`} : null;
       if (kind === "pullTalisman") {
@@ -145,8 +132,8 @@
       const p = this.player;
       if (index === "ground") this.items.splice(this.items.indexOf(this.groundItem()), 1);
       else this.player.bag.splice(index, 1);
-      if (kind === "lightSeed" || (kind === "bait" && mode === "throw")) {
-        this.strategy[kind === "lightSeed" ? "lamp" : "bait"] = {x: target.x, y: target.y, remaining: 6};
+      if (kind === "lightSeed") {
+        this.strategy.lamp = {x: target.x, y: target.y, remaining: 6};
       } else if (kind === "bait") p.hunger = Math.min(100, p.hunger + 15);
       else if (kind === "vineSeed") this.strategy.vines.push({x: p.x, y: p.y});
       else if (kind === "returnTalisman") {
@@ -171,7 +158,6 @@
       if (enemy.hp <= 0) return;
       const visible = !!this.visible[this.key(enemy.x, enemy.y)], log = this.log.slice(), count = this.effects.length;
       super.hit(enemy, damage, kind);
-      delete enemy.lure;
       if (!visible) { this.log = log; this.effects.splice(count); }
     }
     move(dx, dy) {
@@ -224,40 +210,6 @@
           if (visible || actor === this.player) this.say(`${actor === this.player ? "リネ" : actor.name}の足に蔓が絡んだ。`, "warning");
         }
       }
-      if (actor !== this.player && same(this.strategy.bait, actor)) this.strategy.bait = null;
-    }
-    strategyStep(e) {
-      const m = MONSTERS[e.species], p = this.player;
-      let goal = p;
-      if (!e.lureUsed && !e.lure) {
-        const light = e.type === "moth", food = ["mossSlime", "amberSlime", "ironBeetle", "cobaltBeetle"].includes(e.species);
-        const kind = light && this.strategy.lamp ? "lamp" : food && this.strategy.bait ? "bait" : null;
-        if (kind && this.path(e, this.strategy[kind], 4).steps <= 4) {
-          e.lure = {kind, remaining: 2}; e.lureUsed = true;
-          if (this.visible[this.key(e.x, e.y)]) this.say(`${e.name}が${kind === "lamp" ? "分けた灯り" : "団子の香り"}へ顔を向けた。`);
-        }
-      }
-      if (e.lure) {
-        const target = this.strategy[e.lure.kind];
-        if (target) goal = target;
-        else delete e.lure;
-      }
-      const field = this.path(e, goal).values;
-      const bound = e.bindUntil >= this.turn;
-      if (!bound) for (let i = 0; i < (e.awake ? m.speed || 1 : 1); i++) {
-        if (same(e, goal) || (goal === p && distance(e, p) === 1 && this.canStep(e.x, e.y, p.x - e.x, p.y - e.y))) break;
-        const candidates = DIRS.filter(([dx, dy]) => this.canStep(e.x, e.y, dx, dy) && !same({x: e.x + dx, y: e.y + dy}, p) && !this.enemyAt(e.x + dx, e.y + dy));
-        const chase = e.awake || e.lure ? candidates.filter(([dx, dy]) => field[this.key(e.x + dx, e.y + dy)] < field[this.key(e.x, e.y)]).sort((a, b) => field[this.key(e.x + a[0], e.y + a[1])] - field[this.key(e.x + b[0], e.y + b[1])])[0] : null;
-        const forward = candidates.filter(([dx, dy]) => !e.direction || dx !== -e.direction[0] || dy !== -e.direction[1]);
-        const wander = forward.length ? forward : candidates;
-        const step = e.lure ? chase : chase || wander[this.int(0, Math.max(0, wander.length - 1))];
-        if (!step) break;
-        e.x += step[0]; e.y += step[1]; e.direction = step;
-        this.strategyLanding(e);
-        if (e.hp <= 0 || e.bindUntil >= this.turn) break;
-      }
-      if (e.lure && (--e.lure.remaining <= 0 || same(e, goal))) delete e.lure;
-      return true;
     }
     resolveStrategyIntent(e, aim) {
       const range = aim.kind === "windup" ? 1 : MONSTERS[e.species].range;
@@ -286,9 +238,9 @@
       super.finishTurn();
       this.tutorialCleared = false;
       if (this.status === "won") this.log = this.log.map(entry => entry.text.includes("深淵の迷宮」への道") ? {...entry, text: "分け灯のランタンを手に入れた！ 五つの回廊を踏破した。"} : entry);
-      for (const key of ["lamp", "bait"]) if (this.strategy[key] && --this.strategy[key].remaining <= 0) {
-        if (key === "lamp") this.say("分けた灯りが静かに消えた。");
-        this.strategy[key] = null;
+      if (this.strategy.lamp && --this.strategy.lamp.remaining <= 0) {
+        this.say("分けた灯りが静かに消えた。");
+        this.strategy.lamp = null;
       }
       for (const e of [this.player, ...this.enemies]) if (e.bindUntil != null && e.bindUntil <= this.turn) {
         delete e.bindUntil; e.resistUntil = this.turn + 1;
@@ -313,6 +265,7 @@
         if (!game) return null;
         const validPosition = v => v && Number.isInteger(v.x) && Number.isInteger(v.y) && game.tile(v.x, v.y);
         for (const key of ["lamp", "bait"]) {
+          if (key === "bait" && !Object.hasOwn(s.strategy, key)) continue;
           const v = s.strategy[key];
           if (v !== null && (!validPosition(v) || !Number.isInteger(v.remaining) || v.remaining < 1 || v.remaining > 6)) return null;
         }
@@ -322,7 +275,9 @@
           for (const key of ["bindUntil", "resistUntil"]) if (e[key] != null && (!Number.isInteger(e[key]) || e[key] < 0 || e[key] > game.turn + 2)) return null;
           if (e.lureUsed != null && typeof e.lureUsed !== "boolean") return null;
           if (e.lure && (!["lamp", "bait"].includes(e.lure.kind) || !Number.isInteger(e.lure.remaining) || e.lure.remaining < 1 || e.lure.remaining > 2 || e.lureUsed !== true)) return null;
+          delete e.lure; delete e.lureUsed;
         }
+        delete game.strategy.bait;
         if (game.enemies.some(e => !Number.isInteger(e.id)) || new Set(game.enemies.map(e => e.id)).size !== game.enemies.length) return null;
         return game;
       } catch { return null; }

@@ -333,10 +333,10 @@
           for (let y = lamp.y - 2; y <= lamp.y + 2; y++) for (let x = lamp.x - 2; x <= lamp.x + 2; x++)
             if (engine.inside(x, y) && engine.visible[engine.key(x, y)] && engine.tile(x, y) && engine.lineOfSight(lamp.x, lamp.y, x, y)) ctx.fillRect(x * tile + offsetX, y * tile + offsetY, tile, tile);
         }
-        for (const [kind, entries] of [["lamp", lamp ? [lamp] : []], ["bait", engine.strategy.bait ? [engine.strategy.bait] : []], ["vine", engine.strategy.vines]]) for (const entry of entries) {
+        for (const [kind, entries] of [["lamp", lamp ? [lamp] : []], ["vine", engine.strategy.vines]]) for (const entry of entries) {
           if (!engine.seen[engine.key(entry.x, entry.y)]) continue;
           const x = (entry.x + .5) * tile + offsetX, y = (entry.y + .5) * tile + offsetY;
-          ctx.save(); ctx.strokeStyle = kind === "vine" ? "#355837" : "#694123"; ctx.fillStyle = kind === "lamp" ? "#ffe490" : kind === "vine" ? "#5d9654" : "#d9a26d"; ctx.lineWidth = tile * .04;
+          ctx.save(); ctx.strokeStyle = kind === "vine" ? "#355837" : "#694123"; ctx.fillStyle = kind === "lamp" ? "#ffe490" : "#5d9654"; ctx.lineWidth = tile * .04;
           if (kind === "vine") {
             ctx.beginPath(); ctx.moveTo(x - tile * .35, y + tile * .2); ctx.quadraticCurveTo(x + tile * .35, y - tile * .3, x - tile * .1, y - tile * .3); ctx.stroke();
             ctx.beginPath(); ctx.ellipse(x - tile * .15, y, tile * .18, tile * .08, -.6, 0, Math.PI * 2); ctx.fill();

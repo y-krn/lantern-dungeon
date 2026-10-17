@@ -426,7 +426,7 @@
   }
   function showHelp() {
     if (trial) {
-      openModal("help", `<div class="modal-inner">${modalHeader("分け灯の歩き方")}<p class="modal-description">持ち物から灯種や札を選び、迷宮をタップするか方向ボタンで照準を動かします。「ここに使う」で確定、「やめる」で戻れます。</p><div class="help-row"><span>分けた灯り</span><p>蛾の注意を一度そらします。6手で消え、仮宿の灯札の帰還先にもなります。</p></div><div class="help-row"><span>香りと蔓</span><p>団子は食べるか投げて誘導。蔓は自分も踏みます。足止めしても敵は攻撃できます。</p></div><div class="help-row"><span>灯守りの槍</span><p>敵の方向へ進むと、直線2マス以内の最初の敵をその場で突きます。敵がいなければ移動します。向き変更だけでは攻撃しません。</p></div><p class="modal-description">地下5階の星の番人を倒し、分け灯のランタンを探す短い冒険です。いつもの迷宮とは別に保存されます。</p><button class="primary-button" data-close>冒険に戻る</button></div>`); return;
+      openModal("help", `<div class="modal-inner">${modalHeader("分け灯の歩き方")}<p class="modal-description">持ち物から灯種や札を選び、迷宮をタップするか方向ボタンで照準を動かします。「ここに使う」で確定、「やめる」で戻れます。</p><div class="help-row"><span>分けた灯り</span><p>6手で消え、仮宿の灯札の帰還先になります。</p></div><div class="help-row"><span>食料と蔓</span><p>団子は食べると満腹度を15回復。蔓は自分も踏みます。足止めしても敵は攻撃できます。</p></div><div class="help-row"><span>灯守りの槍</span><p>敵の方向へ進むと、直線2マス以内の最初の敵をその場で突きます。敵がいなければ移動します。向き変更だけでは攻撃しません。</p></div><p class="modal-description">地下5階の星の番人を倒し、分け灯のランタンを探す短い冒険です。いつもの迷宮とは別に保存されます。</p><button class="primary-button" data-close>冒険に戻る</button></div>`); return;
     }
     openModal(
       "help",

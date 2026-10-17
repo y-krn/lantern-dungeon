@@ -95,10 +95,13 @@ try {
     assert.equal(evaluate('window.lanternGame.snapshot().state.player.bag.length'),18);
     click('#ground-use-button');click('#strategy-confirm');ready();
     assert.equal(state().items.length,0);assert(state().strategy.lamp);assert.equal(state().player.bag.length,18);
-    // The two uses of food must remain separate, including on the floor.
-    fixture(`e.player.hunger=50;`);bagUse('bait','throw');click('#strategy-confirm');ready();
-    assert(state().strategy.bait);assert.equal(state().player.hunger,50);
-    fixture(`e.player.hunger=50;`);bagUse('bait');ready();assert.equal(state().player.hunger,65);assert.equal(state().strategy.bait,null);
+    // Dumplings are food only, in the bag and directly on the floor.
+    fixture(`e.player.hunger=50;`);click('#bag-button');
+    assert.equal(evaluate(`document.querySelectorAll('[data-item-action="throw"]').length`),0);
+    browser('press','Escape');bagUse('bait');ready();assert.equal(state().player.hunger,65);
+    fixture(`e.player.hunger=50;e.player.bag=Array(18).fill('bread');e.items=[{kind:'bait',x:14,y:12,amount:1}];`);
+    click('#ground-item-button');assert.equal(evaluate(`document.querySelectorAll('[data-item-action="throw"]').length`),0);
+    click('[data-item-action="use"][data-index="ground"]');ready();assert.equal(state().player.hunger,65);assert.equal(state().items.length,0);assert.equal(state().player.bag.length,18);
     fixture();bagUse('vineSeed');ready();assert.equal(state().strategy.vines.length,1);
     fixture(`e.items=[{kind:'potion',amount:1,x:17,y:12}];`);
     bagUse('pullTalisman');click('[data-direction="1,0"]');click('[data-direction="1,0"]');click('#strategy-confirm');ready();
@@ -117,13 +120,14 @@ try {
     assert.equal(state().turn,0);assert.equal(state().enemies[0].hp,49,'Face-only input never attacks');click('#turn-button');
     ready();browser('press','ArrowRight');ready();assert.equal(state().turn,1);assert.equal(state().player.x,14);assert(state().enemies[0].hp<49);
     fixture();click('[data-direction="1,0"]');ready();assert.equal(state().player.x,15,'Empty reach allows walking');
-    // A visible alert moth changes route and its attention state survives a reload.
+    // A lamp never distracts a visible moth; ordinary pursuit continues.
     fixture(`e.enemies=[{...DungeonData.monsterStats('lanternMoth'),hp:12,x:17,y:14,id:1,awake:true}];`);
     bagUse('lightSeed');click('[data-direction="1,0"]');click('[data-direction="1,0"]');click('#strategy-confirm');ready();
-    assert(state().enemies[0].lureUsed);screenshot(`lure-${width}.png`);
+    assert.equal(state().enemies[0].x,16);assert(!Object.hasOwn(state().enemies[0],'lure'));assert(!Object.hasOwn(state().enemies[0],'lureUsed'));
+    screenshot(`pursuit-${width}.png`);checkLayout();
     assert(evaluate(`localStorage.getItem('lantern-dungeon-v1')===${JSON.stringify(normal)}`),'The trial preserves the ordinary save exactly');
     assert.equal(evaluate(`localStorage.getItem('lantern-dungeon-progress-v1')`),'true');
-    report.cases.push({viewport:[width,height],result:'passed',checks:['target/cancel','single consumption','reload','canvas pointer','floor use at capacity','eat/throw','vine','pull','swap','return','directional spear','face-only','keyboard spear','empty reach movement','alert lure','normal save isolation','layout']});
+    report.cases.push({viewport:[width,height],result:'passed',checks:['target/cancel','single consumption','reload','canvas pointer','floor use at capacity','food-only bag/floor','vine','pull','swap','return','directional spear','face-only','keyboard spear','empty reach movement','ordinary pursuit with lamp','normal save isolation','layout']});
   }
   fixture();bagUse('lightSeed');click('#strategy-confirm');ready();
   const online=state();
@@ -138,7 +142,7 @@ try {
   report.errors=browser('errors').errors;
   assert.equal(report.errors.length,0,'No browser errors');
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));
-  console.log(`PASS: trial UI at 390×844 and 320×568; cancellation, targeting, lifetime/reload, capacity, eat/throw, lure, directional spear, face-only, normal-save isolation and future-save preservation. Artifacts: ${out}`);
+  console.log(`PASS: trial UI at 390×844 and 320×568; cancellation, targeting, lifetime/reload, capacity, food-only dumplings, ordinary pursuit, directional spear, face-only, normal-save isolation and future-save preservation. Artifacts: ${out}`);
 } catch (error) {
   report.failure=String(error);
   try { screenshot('failure.png'); report.visible=evaluate('document.body.innerText'); } catch {}

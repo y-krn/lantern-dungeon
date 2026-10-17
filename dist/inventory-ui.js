@@ -73,7 +73,7 @@
       const appraise = isUnknown(item) && engine.identification.known.includes("identify") && engine.player.bag.includes("identify")
         ? actionButton("appraise", "鑑定（灯札1枚）") : "";
       const naming = SCROLLS.includes(kind) && isUnknown(item) ? actionButton("name", "名前を付ける") : "";
-      return (isEquipment(item) && appraise ? appraise + primary : primary + appraise) + (engine.strategyTrial && kind === "bait" ? actionButton("throw", "投げる") : "") + actionButton("pickup", "拾う", "ground", !canPickup) +
+      return (isEquipment(item) && appraise ? appraise + primary : primary + appraise) + actionButton("pickup", "拾う", "ground", !canPickup) +
         (kind !== "gold" ? actionButton("exchange", "交換する", "ground", engine.onStairs() || !engine.player.bag.length) : "") + naming;
     }
     function groundNote() {
@@ -106,7 +106,7 @@
           if (action === "name") { showItemName(index, returnTo); return; }
           if (action === "exchange" && index === "ground") { showExchange(returnTo); return; }
           if (action === "use" && engine.scrollNeedsTarget(index)) { showIdentify(index, returnTo); return; }
-          if ((action === "use" || action === "throw") && engine.requiresAim?.(index, action)) { beginTarget(index, action); return; }
+          if (action === "use" && engine.requiresAim?.(index)) { beginTarget(index); return; }
           closeModal();
           act(() => {
             const engine = getEngine();
@@ -153,7 +153,7 @@
         const primary = kind === "arrow" ? actionButton("equip-arrow", equipped ? "外す" : "装備する", index)
           : actionButton("use", isEquipment(item) ? "装備する" : useLabel(item), index);
         const naming = SCROLLS.includes(kind) && isUnknown(item) ? actionButton("name", "名前を付ける", index) : "";
-        return bagRow(item, primary + (engine.strategyTrial && kind === "bait" ? actionButton("throw", "投げる", index) : "") + naming + actionButton("drop", "置く", index, !!ground || engine.onStairs()) +
+        return bagRow(item, primary + naming + actionButton("drop", "置く", index, !!ground || engine.onStairs()) +
           (ground && ITEMS[ground.kind] && !engine.onStairs() ? actionButton("exchange", "足元と交換", index) : ""), count, equipped ? "装備中" : "");
       }).join("");
       const groundCard = ground ? bagRow(ground, groundButtons(), 1, "足元", true) : "";
