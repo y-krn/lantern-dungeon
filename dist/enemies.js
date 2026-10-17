@@ -28,7 +28,7 @@
       const m = MONSTERS[e.species] || {},
         dist = Math.max(Math.abs(e.x - p.x), Math.abs(e.y - p.y)),
         visible = game.visible[game.key(e.x, e.y)];
-      if (dist <= 7 && visible) e.awake = true;
+      if (dist <= (game.wakeRange ? game.wakeRange() : 7) && visible) e.awake = true;
       if (m.trait === "mimic" && !e.revealed) {
         if (dist === 1 && game.canStep(e.x, e.y, p.x - e.x, p.y - e.y)) {
           e.revealed = true;
