@@ -262,6 +262,8 @@
             ? "灯台がある。「灯台に触れる」で、三つの灯りから一つを受け取れる。"
           : engine.site() === "merchant"
             ? "灯り売りの露店。「露店を見る」で買い物と鑑定・解呪ができる。"
+          : engine.site() === "echo"
+            ? "灯影の欠片がある。「灯影を選ぶ」で今の灯影と入れ替えられる。"
           : engine.onStairs()
             ? engine.floor === engine.maxFloor()
               ? `${info.guardian}がランタンを守っている。`
@@ -273,7 +275,7 @@
               : nearest ? `${nearest.name}がすぐ近くにいる。` : "";
     const site = engine.site();
     $("site-button").hidden = !site;
-    $("site-button").textContent = site === "shrine" ? "灯台に触れる" : "露店を見る";
+    $("site-button").textContent = site === "shrine" ? "灯台に触れる" : site === "echo" ? "灯影を選ぶ" : "露店を見る";
     $("location-hint").textContent = engine.status === "playing"
       ? [warnings, situation].filter(Boolean).join(" ") : situation;
     inventoryUI.updateGround({ threat, nearest, danger: lowHP || lowHunger });
@@ -409,6 +411,12 @@
       $("modal-content").querySelectorAll("[data-boon]").forEach((button) => button.addEventListener("click", () => {
         if (engine.chooseBoon(Number(button.dataset.boon))) { closeModal(); updateUI(); save(); }
       }));
+    } else if (site === "echo") {
+      const incoming = engine.echoOffer(), held = engine.echoes();
+      openModal("echo", `<div class="modal-inner">${modalHeader("灯影を選ぶ")}<p class="modal-description">足元に${DungeonData.MONSTERS[incoming.species].name}の灯影の欠片があります。ランタンの枠はすべて埋まっています。入れ替える灯影を選ぶか、今のままにします。ターンは進みません。</p><div class="dungeon-choice" aria-hidden="true"><strong>新しい灯影：${incoming.name}</strong><span class="dungeon-choice-description">${incoming.text}</span></div><div class="dungeon-list">${held.map((e, i) => `<button class="dungeon-choice" data-replace-echo="${i}"><strong>${e.name}（${DungeonData.MONSTERS[e.species].name}）を手放す</strong><span class="dungeon-choice-description">${e.text}</span></button>`).join("")}</div><button class="secondary-button" data-close>今の灯影のままにする</button></div>`);
+      $("modal-content").querySelectorAll("[data-replace-echo]").forEach((button) => button.addEventListener("click", () => {
+        if (engine.replaceEcho(Number(button.dataset.replaceEcho))) { closeModal(); updateUI(); save(); }
+      }));
     } else if (site === "merchant") {
       const {wares, services} = engine.shopOffers(), p = engine.player;
       const row = (attr, value, name, price, available, note) => `<button class="dungeon-choice" data-${attr}="${value}" ${available ? "" : "disabled"}><strong>${name}</strong><span class="dungeon-choice-description">${note || `${price}G${!available && p.gold < price ? "（所持金が足りません）" : ""}`}</span></button>`;
@@ -472,7 +480,7 @@
     }
     openModal(
       "help",
-      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を探す旅。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃します。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角はすり抜けられません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>その場で向きだけ変更。「向き変更」でも切り替えられます。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃します。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ放ちます。</p></div><div class="help-row"><span>. / X</span><p>その場で足踏みします。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床の品は上に乗ると拾います。武器・盾は装備すると効果を発揮します。呪われた装備は、清めの灯札で呪いを解くまで外せません。</p></div><div class="help-row"><span>灯札</span><p>灯札をかざすと、その力が現れます。効果が分からない灯札には、推測した名前を付けて記録できます。</p></div><div class="help-row"><span>灯影</span><p>倒した魔物が「灯影の欠片」を残すことがあります。踏むとランタンに宿り、その魔物の力が使えます。宿せるのは一つで、新しい欠片を踏むと入れ替わります。</p></div><div class="help-row"><span>地形</span><p>水たまりは雷光を伝え、油と草むらは燃え広がります。草むらと霧の中にいると遠くから狙われず、霧の中を狙った攻撃は空振りします。水袋・油瓶・火種・爆ぜ実は向いている方向へ投げ、煙玉は足元に霧を広げます。</p></div><div class="help-row"><span>矢に灯す</span><p>木の矢を持っている時、雷光の灯札・火種・煙玉を「矢に灯す」と、次の5本がその力を帯びます。</p></div><div class="help-row"><span>武器の形</span><p>槍・鎌は2マス先まで届き、斧は前の3マスを薙ぎ、槌は敵を押し出します。敵の方向へ進むか「攻撃」で振るいます。</p></div><div class="help-row"><span>魔物の記録</span><p>出会った魔物の姿を図鑑に記しています。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る</button><div class="help-row"><span>冒険の保存</span><p>冒険はブラウザに自動保存されます。</p></div><p class="modal-description">灯りの迷宮を踏破すると、地下30階へ続く深淵の迷宮に挑めます。倒れたら、新しい旅の始まりです。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
+      `<div class="modal-inner">${modalHeader("迷宮の歩き方")}<p class="modal-subtitle">${engine.dungeonInfo().name}：地下${engine.maxFloor()}階の「${engine.dungeonInfo().treasure}」を探す旅。</p><div class="help-row"><span>↑ ↓ ← → / WASD</span><p>移動。敵に向かって移動すると攻撃します。</p></div><div class="help-row"><span>Q E Z C</span><p>左上・右上・左下・右下に斜め移動。壁の角はすり抜けられません。</p></div><div class="help-row"><span>Shift＋方向 / T</span><p>その場で向きだけ変更。「向き変更」でも切り替えられます。</p></div><div class="help-row"><span>Space / F</span><p>向いている方向へ攻撃します。</p></div><div class="help-row"><span>R</span><p>装備した木の矢を向いている方向へ放ちます。</p></div><div class="help-row"><span>. / X</span><p>その場で足踏みします。</p></div><div class="help-row"><span>I / Enter / M</span><p>持ち物 / 階段を降りる / ミニマップ切替。</p></div><div class="help-row"><span>拾う・装備</span><p>床の品は上に乗ると拾います。武器・盾は装備すると効果を発揮します。呪われた装備は、清めの灯札で呪いを解くまで外せません。</p></div><div class="help-row"><span>灯札</span><p>灯札をかざすと、その力が現れます。効果が分からない灯札には、推測した名前を付けて記録できます。</p></div><div class="help-row"><span>灯影</span><p>倒した魔物が「灯影の欠片」を残すことがあります。踏むとランタンに宿り、その魔物の力が使えます。枠が埋まっている時は「灯影を選ぶ」で入れ替えるかどうかを選べます。</p></div><div class="help-row"><span>地形</span><p>水たまりは雷光を伝え、油と草むらは燃え広がります。草むらと霧の中にいると遠くから狙われず、霧の中を狙った攻撃は空振りします。水袋・油瓶・火種・爆ぜ実は向いている方向へ投げ、煙玉は足元に霧を広げます。</p></div><div class="help-row"><span>矢に灯す</span><p>木の矢を持っている時、雷光の灯札・火種・煙玉を「矢に灯す」と、次の5本がその力を帯びます。</p></div><div class="help-row"><span>武器の形</span><p>槍・鎌は2マス先まで届き、斧は前の3マスを薙ぎ、槌は敵を押し出します。敵の方向へ進むか「攻撃」で振るいます。</p></div><div class="help-row"><span>魔物の記録</span><p>出会った魔物の姿を図鑑に記しています。</p></div><button class="secondary-button" id="monster-guide-button">魔物図鑑を見る</button><div class="help-row"><span>冒険の保存</span><p>冒険はブラウザに自動保存されます。</p></div><p class="modal-description">灯りの迷宮を踏破すると、地下30階へ続く深淵の迷宮に挑めます。倒れたら、新しい旅の始まりです。</p><button class="primary-button" data-close>冒険に戻る</button></div>`,
     );
     if (portraitUI) {
       const rows = $("modal-content").querySelectorAll(".help-row");

@@ -151,7 +151,8 @@
         appearances: Object.fromEntries(
           SCROLLS.map((kind, i) => [kind, names[i]]),
         ),
-        known: legacy || this.dungeon === "tutorial" ? [...SCROLLS] : [],
+        // The appraisal talisman is always known so it can be used to learn the others.
+        known: legacy || this.dungeon === "tutorial" ? [...SCROLLS] : ["identify"],
         names: {},
       };
     }
@@ -208,7 +209,7 @@
       const kind = itemKind(item);
       if (kind === "echoShard") {
         const echo = echoOfSpecies(item.species);
-        return `${echo.name}：${echo.text} 踏むとランタンに宿り、今の灯影と入れ替わります。`;
+        return `${echo.name}：${echo.text} 踏むとランタンに宿ります。枠が埋まっている時は、入れ替えるかどうかを選べます。`;
       }
       if (isEquipment(item)) {
         const data = EQUIPMENT[equipmentKind(item)],
@@ -776,20 +777,45 @@
       };
     }
     // With two slots a new echo fills the empty one, else displaces the older.
+    echoSlotFree() {
+      return this.echoes().length < this.echoSlots();
+    }
+    // Fills the first free slot; callers check echoSlotFree() first.
     absorbEcho(species) {
       const p = this.player;
-      let previous = null;
-      if (this.echoSlots() === 2 && p.echo && !p.echo2) p.echo2 = species;
-      else if (this.echoSlots() === 2 && p.echo) {
-        previous = echoOfSpecies(p.echo);
-        p.echo = p.echo2;
-        p.echo2 = species;
-      } else {
-        previous = p.echo ? echoOfSpecies(p.echo) : null;
-        p.echo = species;
-      }
+      if (!p.echo) p.echo = species;
+      else p.echo2 = species;
       p.echoSteps = 0;
-      return previous;
+    }
+    // The shard under Rine while every slot is taken, offered for an exchange.
+    echoOffer() {
+      const shard = this.groundItem();
+      return this.status === "playing" && shard?.kind === "echoShard" && !this.echoSlotFree() ? echoOfSpecies(shard.species) : null;
+    }
+    // Replaces the echo in the given slot with the shard underfoot; free, like a shrine boon.
+    replaceEcho(slot) {
+      const incoming = this.echoOffer(),
+        p = this.player,
+        key = slot === 0 ? "echo" : slot === 1 && this.echoSlots() === 2 ? "echo2" : null;
+      if (!incoming || !key || !p[key]) return false;
+      const previous = echoOfSpecies(p[key]),
+        shard = this.groundItem();
+      this.items.splice(this.items.indexOf(shard), 1);
+      p[key] = incoming.species;
+      p.echoSteps = 0;
+      this.say(`${previous.name}を手放し、${MONSTERS[incoming.species].name}の灯影を宿した。${incoming.name}：${incoming.text}`, "good");
+      this.effect("pickup", p.x, p.y, "echoShard", this.log[0].text);
+      return true;
+    }
+    // Leaves a shard at or next to a cell; returns false when every nearby cell is taken.
+    placeShard(species, at) {
+      const p = this.player,
+        free = (x, y) => this.tile(x, y) && !same({ x, y }, this.stairs) && !this.items.some((i) => same(i, { x, y })),
+        spot = [[0, 0], ...DIRS].map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })).find((v) => free(v.x, v.y) && (at === p || !same(v, p)));
+      if (!spot) return false;
+      const visible = !!this.visible[this.key(spot.x, spot.y)];
+      this.items.push({ ...spot, kind: "echoShard", species, amount: 1, discovered: visible });
+      return true;
     }
     echoDropRule() {
       return { percent: 15, pity: 4 };
@@ -803,13 +829,10 @@
         p.echoPity = pity + 1;
         return;
       }
-      const free = (x, y) => this.tile(x, y) && !same({ x, y }, this.stairs) && !same({ x, y }, p) && !this.items.some((i) => same(i, { x, y }));
-      const spot = [[0, 0], ...DIRS].map(([dx, dy]) => ({ x: enemy.x + dx, y: enemy.y + dy })).find((v) => free(v.x, v.y));
-      if (!spot) return;
+      if (!this.placeShard(enemy.species, enemy)) return;
       p.echoPity = 0;
-      const visible = !!this.visible[this.key(spot.x, spot.y)];
-      this.items.push({ ...spot, kind: "echoShard", species: enemy.species, amount: 1, discovered: visible });
-      if (visible) this.say(`${enemy.name}の灯影が残った。踏むとランタンに宿る。`, "good");
+      const shard = this.items.at(-1);
+      if (shard.discovered) this.say(`${enemy.name}の灯影が残った。踏むとランタンに宿る。`, "good");
     }
     echoStep() {
       const p = this.player,
@@ -904,12 +927,14 @@
         item = this.groundItem();
       if (item?.kind === "echoShard") {
         const echo = echoOfSpecies(item.species);
+        // With every slot taken the shard waits on the floor until Rine chooses what to give up.
+        if (!this.echoSlotFree()) {
+          this.say(`${MONSTERS[item.species].name}の灯影の欠片がある。${echo.name}：${echo.text}「灯影を選ぶ」で今の灯影と入れ替えられる。`);
+          return false;
+        }
         this.items.splice(this.items.indexOf(item), 1);
-        const previous = this.absorbEcho(item.species);
-        this.say(
-          `ランタンが${MONSTERS[item.species].name}の灯影を宿した。${echo.name}：${echo.text}${previous ? `（${previous.name}は消えた）` : ""}`,
-          "good",
-        );
+        this.absorbEcho(item.species);
+        this.say(`ランタンが${MONSTERS[item.species].name}の灯影を宿した。${echo.name}：${echo.text}`, "good");
         this.effect("pickup", p.x, p.y, item.kind, this.log[0].text);
         return true;
       }
@@ -1341,6 +1366,7 @@
       if (this.status !== "playing") return null;
       if (this.shrine && !this.shrine.used && same(this.shrine, p)) return "shrine";
       if (this.merchant && same(this.merchant, p)) return "merchant";
+      if (this.echoOffer()) return "echo";
       return null;
     }
     unknownCount() {
@@ -1366,7 +1392,7 @@
           (choice.id !== "quiver" || this.arrowCount() > 0 || this.inventoryCount() < INVENTORY_CAPACITY) &&
           (choice.id !== "insight" || this.unknownCount() > 0) &&
           (choice.id !== "wick" || this.echoSlots() < 2);
-        return { ...choice, name: boon.name, text: echo ? `${echo.name}（${MONSTERS[choice.species].name}）を宿す。${echo.text}` : boon.text, available };
+        return { ...choice, name: boon.name, text: echo ? `${echo.name}（${MONSTERS[choice.species].name}）を宿す。${echo.text}${this.echoSlotFree() ? "" : "（枠が埋まっているので、足元に欠片を置き、入れ替えるか選べます）"}` : boon.text, available };
       }).concat(this.evolution() || []);
     }
     // The weapon evolution offer, shown at every shrine while the weapon can evolve at all.
@@ -1396,7 +1422,10 @@
       }
       if (option.id === "whet") p.equipment.weapon.bonus++;
       if (option.id === "temper") p.equipment.shield.bonus++;
-      if (option.id === "echo") this.absorbEcho(option.species);
+      if (option.id === "echo") {
+        if (this.echoSlotFree()) this.absorbEcho(option.species);
+        else if (!this.placeShard(option.species, p)) return false;
+      }
       if (option.id === "wick") p.echoSlots = 2;
       if (option.id === "evolve") {
         const weapon = p.equipment.weapon;

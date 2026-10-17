@@ -18,14 +18,20 @@ function replay(g) {
   const restored = DungeonEngine.restore(g.serialize()); assert(restored); assert.equal(restored.serialize(), g.serialize()); return restored;
 }
 const shard = (g, species) => { g.items.push({x:g.player.x + 1, y:g.player.y, kind:'echoShard', species, amount:1}); g.move(1, 0); };
-// One slot replaces; two slots fill then displace the older; same families use the stronger tier.
+// Free slots fill on contact; full lanterns offer a choice of which echo to give up; same families use the stronger tier.
 {
   const one = arena(); shard(one, 'mossSlime'); shard(one, 'ironBeetle');
-  assert.deepEqual(one.echoes().map(e => e.species), ['ironBeetle']);
+  assert.deepEqual(one.echoes().map(e => e.species), ['mossSlime'], 'A full lantern never replaces on its own');
+  assert.equal(one.echoOffer().species, 'ironBeetle');
   const two = arena(); two.player.echoSlots = 2;
   shard(two, 'mossSlime'); shard(two, 'ironBeetle'); assert.deepEqual(two.echoes().map(e => e.species), ['mossSlime', 'ironBeetle']);
-  shard(two, 'caveBat'); assert.deepEqual(two.echoes().map(e => e.species), ['ironBeetle', 'caveBat'], 'The older echo leaves');
-  assert(two.log.some(l => l.text.includes('苔の灯影は消えた'))); replay(two);
+  shard(two, 'caveBat'); assert.equal(two.site(), 'echo');
+  assert(two.replaceEcho(1)); assert.deepEqual(two.echoes().map(e => e.species), ['mossSlime', 'caveBat'], 'Rine picks which echo leaves');
+  assert(two.log.some(l => l.text.includes('殻の灯影を手放し'))); replay(two);
+  // A shrine echo with full slots becomes a shard underfoot to choose from.
+  const shrine = arena(); shrine.player.echo = 'mossSlime'; shrine.shrine = {x:10, y:10, used:false, choices:[{id:'echo', species:'stoneGolem'}, {id:'vigor'}, {id:'rest'}]};
+  assert(shrine.chooseBoon(0)); assert.equal(shrine.player.echo, 'mossSlime'); assert.equal(shrine.site(), 'echo');
+  assert(shrine.replaceEcho(0)); assert.equal(shrine.player.echo, 'stoneGolem');
   const pair = arena(); Object.assign(pair.player, {echoSlots:2, echo:'ironBeetle', echo2:'cobaltBeetle'});
   assert.equal(pair.echoFor('shell').tier, 1); assert.equal(pair.defense(), arena().defense() + 4, 'Same family does not stack');
   assert.match(pair.echoInfo().label, /殻の灯影.*殻の灯影/);
@@ -98,4 +104,4 @@ const shard = (g, species) => { g.items.push({x:g.player.x + 1, y:g.player.y, ki
   const kills = JSON.parse(g.serialize()); kills.state.player.equipment.weapon.kills = -1; assert.equal(DungeonEngine.restore(JSON.stringify(kills)), null);
   const purified = JSON.parse(g.serialize()); purified.state.player.equipment.weapon.purified = 'yes'; assert.equal(DungeonEngine.restore(JSON.stringify(purified)), null);
 }
-console.log('PASS: two echo slots fill then rotate, four resonances apply, weapons evolve at shrines after 12 kills with the matching echo, the wick boon opens a slot, bane gear is always cursed with costs until purified, and saves validate it all.');
+console.log('PASS: two echo slots fill, full lanterns let Rine choose what to give up, four resonances apply, weapons evolve at shrines after 12 kills with the matching echo, the wick boon opens a slot, bane gear is always cursed with costs until purified, and saves validate it all.');

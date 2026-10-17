@@ -148,7 +148,8 @@ function createPlaytestPolicy({ W, H, DIRS, MONSTERS, EQUIPMENT, equipmentKind, 
       if (costs[k] !== cost) continue;
       const frontier = DIRS.some(([dx, dy]) => inside(node.x + dx, node.y + dy) && o.tiles[key(node.x + dx, node.y + dy)] === null);
       const item = o.items.find(item => item.x === node.x && item.y === node.y);
-      const useful = item && (o.inventoryCount < INVENTORY_CAPACITY || item.kind === 'gold' || (item.kind === 'arrow' && bagIndex('arrow') >= 0));
+      // Echo shards are a player choice, so the policy neither seeks nor avoids them.
+      const useful = item && item.kind !== 'echoShard' && (o.inventoryCount < INVENTORY_CAPACITY || item.kind === 'gold' || (item.kind === 'arrow' && bagIndex('arrow') >= 0));
       const stairs = (o.floor < o.maxFloor || memory.guardianDefeated) && o.stairs?.x === node.x && o.stairs?.y === node.y;
       const enemy = o.enemies.some(e => e.x === node.x && e.y === node.y);
       if (enemy || useful || stairs || frontier) {

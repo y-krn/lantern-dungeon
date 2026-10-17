@@ -12,7 +12,8 @@ function quiet(seed=42,dungeon='depths'){
   assert.equal(game.itemName(first),'銅の剣（未鑑定）');
   assert(!game.itemDescription(first).includes('補正 5'));
   assert.equal(game.use(2,99),false);assert.equal(game.turn,0);assert.equal(p.bag.length,3);
-  assert(!game.identification.known.includes('identify'));
+  assert.deepEqual(game.identification.known,['identify'],'Only the appraisal talisman starts known in the depths');
+  assert.equal(game.itemName('identify'),'真名の灯札');
   assert(game.use(2,0));assert.equal(game.turn,1);assert.equal(p.bag.length,2);
   assert(first.identified);assert(!second.identified);assert(game.identification.known.includes('identify'));
   const before=game.attackPower();assert(game.equip(0));assert.equal(game.turn,2);
@@ -43,14 +44,14 @@ function quiet(seed=42,dungeon='depths'){
   assert.equal(new Set(scrolls.map(kind=>game.itemName(kind))).size,4);
   assert(!game.itemDescription('map').includes('地形'));assert(!game.itemName('map').includes('地図'));
   const original=game.itemName('map');assert(game.nameScroll(0,'地図？'));assert.equal(game.turn,0);
-  assert(game.itemName('map').includes('地図？'));assert.equal(game.identification.known.length,0);
+  assert(game.itemName('map').includes('地図？'));assert.deepEqual(game.identification.known,['identify']);
   const saved=game.serialize(),restored=DungeonEngine.restore(saved);assert(restored);assert.equal(restored.serialize(),saved);
   assert.equal(restored.itemName('map'),game.itemName('map'));
   assert(game.use(3,1));assert.equal(p.bag.length,3);assert.equal(game.itemName(p.bag[0]),'道しるべの灯札');
   assert.equal(game.itemName(p.bag[1]),'道しるべの灯札');assert(game.itemName('scroll').includes('未識別'));
   game.floor=2;game.generateFloor();assert.equal(game.itemName('map'),'道しるべの灯札');
   assert.equal(game.identification.appearances.map,original.replace('（未識別）',''));
-  const again=new DungeonEngine(42,'depths',true);assert.equal(again.identification.known.length,0);
+  const again=new DungeonEngine(42,'depths',true);assert.deepEqual(again.identification.known,['identify']);
   assert.deepEqual(again.identification.names,{});assert.equal(again.itemName('map'),original);
   const appearances=new Set(Array.from({length:10},(_,i)=>JSON.stringify(new DungeonEngine(i+1,'depths',true).identification.appearances)));
   assert(appearances.size>1);assert.deepEqual(new DungeonEngine(42).identification.known,scrolls);
