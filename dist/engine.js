@@ -4,6 +4,7 @@
     W,
     H,
     INVENTORY_CAPACITY,
+    STACK_SIZE,
     DIRS,
     ITEMS,
     EQUIPMENT,
@@ -21,6 +22,8 @@
     ITEM_ORDER,
     WEAPON_SHAPES,
     THROWN_ITEMS,
+    INFUSIONS,
+    INFUSION_SHOTS,
     SURFACES,
     ECHO_SOURCES,
     echoOfSpecies,
@@ -264,6 +267,12 @@
           arrows.count++;
           return;
         }
+        // Arrows form one bundle; other consumables stack up to STACK_SIZE per slot.
+        const stack = typeof item === "string" && kind !== "arrow" && entries.find((e) => e.kind === kind && e.count < STACK_SIZE);
+        if (stack) {
+          stack.count++;
+          return;
+        }
         const entry = { kind, index, count: 1 };
         entries.push(entry);
         if (kind === "arrow") arrows = entry;
@@ -374,6 +383,64 @@
       );
       this.finishTurn();
       return true;
+    }
+    canInfuse(index) {
+      const kind = itemKind(this.targetItem(index));
+      // An unidentified talisman cannot be infused, so the option never reveals what it is.
+      return (
+        this.status === "playing" &&
+        Object.hasOwn(INFUSIONS, kind) &&
+        this.arrowCount() > 0 &&
+        (!SCROLLS.includes(kind) || this.identification.known.includes(kind))
+      );
+    }
+    infuse(index) {
+      if ((index !== "ground" && !Number.isInteger(index)) || !this.canInfuse(index)) return false;
+      const kind = itemKind(this.targetItem(index)),
+        infusion = INFUSIONS[kind];
+      if (index === "ground") this.items.splice(this.items.indexOf(this.groundItem()), 1);
+      else this.player.bag.splice(index, 1);
+      this.player.infusion = { kind: infusion.id, shots: INFUSION_SHOTS };
+      this.say(`木の矢に${infusion.name}を移した。次の${INFUSION_SHOTS}本：${infusion.text}`, "good");
+      this.effect("heal", this.player.x, this.player.y, infusion.name);
+      this.finishTurn();
+      return true;
+    }
+    infusionInfo() {
+      const infusion = this.player.infusion;
+      if (!infusion) return null;
+      const data = Object.values(INFUSIONS).find((v) => v.id === infusion.kind);
+      return { ...data, shots: infusion.shots };
+    }
+    // Applies the lantern's charge where an arrow struck or came to rest.
+    infusedImpact(x, y, enemy) {
+      const p = this.player,
+        infusion = p.infusion;
+      if (!infusion) return;
+      if (infusion.kind === "thunder" && enemy) {
+        const water = this.conduct([enemy]);
+        if (!water.size) {
+          if (enemy.hp > 0) this.hit(enemy, 6, "magic");
+        } else {
+          this.say("雷の矢が水たまりを伝った！", "danger");
+          for (const e of this.enemies)
+            if (e.hp > 0 && water.has(this.key(e.x, e.y))) this.hit(e, 12, "magic");
+          if (water.has(this.key(p.x, p.y))) {
+            p.hp -= 12;
+            this.say("水たまりにいたリネも感電した！ 12ダメージ。", "danger");
+            this.effect("damage", p.x, p.y, 12);
+          }
+        }
+      }
+      if (infusion.kind === "fire") this.ignite(x, y);
+      if (infusion.kind === "smoke")
+        for (let fy = y - 1; fy <= y + 1; fy++)
+          for (let fx = x - 1; fx <= x + 1; fx++)
+            if (this.tile(fx, fy) && this.surfaceAt(fx, fy)?.type !== "fire") this.setSurface(fx, fy, "fog", 5);
+      if (--infusion.shots <= 0) {
+        delete p.infusion;
+        this.say("矢に移した灯りが尽きた。");
+      }
     }
     shoot() {
       if (this.player.ammo !== "arrow") return false;
@@ -782,7 +849,10 @@
         p.gold += item.amount;
         this.say(`${item.amount}Gを拾った。`, "good");
       } else {
-        const stacks = item.kind === "arrow" && this.arrowCount() > 0;
+        const stacks =
+          item.kind === "arrow"
+            ? this.arrowCount() > 0
+            : !isEquipment(item) && this.inventoryEntries().some((e) => e.kind === item.kind && e.count < STACK_SIZE);
         if (this.inventoryCount() >= INVENTORY_CAPACITY && !stacks) {
           this.say(
             `持ち物がいっぱい。${this.itemName(item)}は足元に残った。`,
@@ -928,11 +998,16 @@
           const e = this.enemyAt(x, y);
           if (e) {
             this.hit(e, 12, "arrow");
+            this.infusedImpact(x, y, e);
             hit = true;
             break;
           }
         }
-        if (!hit) this.say("木の矢を放った。敵には当たらなかった。");
+        if (!hit) {
+          this.say("木の矢を放った。敵には当たらなかった。");
+          // An arrow loosed straight into a wall never leaves Rine's cell; keep the charge.
+          if (x !== p.x || y !== p.y) this.infusedImpact(x, y, null);
+        }
         this.effect("arrow", x, y, 0, undefined,
           !hit ? this.attackVisual(p, { x, y }, "arrow") : undefined);
       }

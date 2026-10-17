@@ -5,7 +5,7 @@ function arena(kind, amount = 1) {
   const game = new DungeonEngine(42), p = game.player;
   const room = game.roomAt(p.x, p.y);
   p.x = room.cx; p.y = room.cy; p.facing = [1, 0];
-  p.bag = Array(18).fill('bread'); p.hp = 1; p.hunger = 20;
+  p.bag = Array.from({length:18},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})); p.hp = 1; p.hunger = 20;
   game.enemies = []; game.traps = []; game.monsterHouse = null;
   game.items = [{kind, amount, x: p.x, y: p.y}];
   game.reveal();
@@ -42,7 +42,7 @@ for (const kind of ['bread', 'potion', 'scroll', 'map', 'identify', 'uncurse', '
 // A floor arrow stack loses exactly one arrow and preserves equipped bag ammo.
 {
   const game = arena('arrow', 27), p = game.player;
-  p.bag = [...Array(17).fill('bread'), 'arrow', 'arrow']; p.ammo = 'arrow';
+  p.bag = [...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})), 'arrow', 'arrow']; p.ammo = 'arrow';
   const before = [...p.bag];
   assert(game.useGround()); assert.equal(game.items[0].amount, 26);
   assert.equal(game.items.filter(item => item.kind === 'arrow').reduce((sum, item) => sum + item.amount, 0), 27);
@@ -158,7 +158,7 @@ for (const occupied of ['potion', 'stairs']) {
 // Recovered arrows can join an inventory stack even at full capacity.
 {
   const game = shootingArena(), p = game.player;
-  p.bag = [...Array(17).fill('bread'), 'arrow', 'arrow'];
+  p.bag = [...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})), 'arrow', 'arrow'];
   assert.equal(game.inventoryCount(), 20); assert(game.shoot());
   for (let i = 0; i < 3; i++) assert(game.move(1, 0));
   assert.equal(game.arrowCount(), 2); assert.equal(game.inventoryCount(), 20);
@@ -257,7 +257,7 @@ for(const kind of ['weapon','shield']) {
 {
   const game=arena('weapon'),p=game.player;
   game.items=[{...p.equipment.weapon,x:p.x,y:p.y,amount:1,identified:false}];
-  p.equipment.weapon=null;p.weapon=0;p.bag=Array(19).fill('bread');
+  p.equipment.weapon=null;p.weapon=0;p.bag=Array.from({length:19},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true}));
   assert.equal(game.inventoryCount(),20);assert.equal(game.equip('ground'),false);
   assert.equal(game.turn,0);assert(!game.groundItem().identified);
   p.bag.pop();assert(game.equip('ground'));assert.equal(game.turn,1);assert.equal(game.inventoryCount(),20);

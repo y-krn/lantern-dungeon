@@ -2,7 +2,9 @@
   "use strict";
   const W = 44,
     H = 30,
-    INVENTORY_CAPACITY = 20;
+    INVENTORY_CAPACITY = 20,
+    // Identical consumables share one inventory slot up to this many.
+    STACK_SIZE = 3;
   const DIRS = [
     [0, -1],
     [1, -1],
@@ -80,6 +82,13 @@
     smokeBall: { name: "煙玉", icon: "☁", description: "足元の周囲5×5に霧を広げます。霧の中を狙った敵の射撃・強打は空振りし、霧の中のリネは遠くから狙われません。5ターンで晴れます。" },
   });
   const THROWN_ITEMS = ["waterSkin", "oilFlask", "emberStone", "blastNut"];
+  // Spending one of these lends its power to the next five arrows.
+  const INFUSIONS = {
+    scroll: { id: "thunder", name: "雷の灯", text: "命中した敵とつながった水たまりに12ダメージ。水たまりがなければ命中した敵に追加6ダメージ。" },
+    emberStone: { id: "fire", name: "火の灯", text: "命中した場所に火を放つ。" },
+    smokeBall: { id: "smoke", name: "霧の灯", text: "命中した場所の周囲3×3に霧を広げる。" },
+  };
+  const INFUSION_SHOTS = 5;
   const TERRAIN_ITEMS = [...THROWN_ITEMS, "smokeBall"];
   const SURFACES = {
     water: { name: "水たまり" },
@@ -787,6 +796,7 @@
     W,
     H,
     INVENTORY_CAPACITY,
+    STACK_SIZE,
     DIRS,
     ITEMS,
     EQUIPMENT,
@@ -809,6 +819,8 @@
     ITEM_ORDER,
     WEAPON_SHAPES,
     THROWN_ITEMS,
+    INFUSIONS,
+    INFUSION_SHOTS,
     TERRAIN_ITEMS,
     SURFACES,
     ECHOES,

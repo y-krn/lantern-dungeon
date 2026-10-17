@@ -66,7 +66,7 @@ function quiet(seed=42,dungeon='depths'){
 }
 // Equipped items occupy the same 20 slots; swaps and unequips preserve the count.
 {
-  const game=quiet(),p=game.player,item=gear();p.bag=[...Array(17).fill('bread'),item];
+  const game=quiet(),p=game.player,item=gear();p.bag=[...Array.from({length:17},()=>({kind:'shield',rank:0,bonus:0,cursed:false,identified:true})),item];
   assert.equal(game.inventoryCount(),20);assert(game.equip(17));assert.equal(game.inventoryCount(),20);
   assert.equal(p.bag[17].rank,0);assert(game.unequip('weapon'));assert.equal(game.inventoryCount(),20);
   assert.equal(p.bag.length,19);assert(game.equip(18));assert.equal(game.inventoryCount(),20);

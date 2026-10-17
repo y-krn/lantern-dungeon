@@ -18,6 +18,8 @@
     monsterStats,
     ECHO_SOURCES,
     SURFACES,
+    INFUSIONS,
+    INFUSION_SHOTS,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -240,6 +242,15 @@
         !counter(p.echoPity, 9) ||
         (p.lastStrike != null && (!Number.isInteger(p.lastStrike) || p.lastStrike > s.turn)) ||
         s.items.some((i) => i?.kind === "echoShard" && !Object.hasOwn(ECHO_SOURCES, i.species))
+      )
+        return null;
+      const infusion = s.player.infusion;
+      if (
+        infusion != null &&
+        (!Object.values(INFUSIONS).some((v) => v.id === infusion.kind) ||
+          !Number.isInteger(infusion.shots) ||
+          infusion.shots < 1 ||
+          infusion.shots > INFUSION_SHOTS)
       )
         return null;
       // Terrain; saves from before terrain have none.

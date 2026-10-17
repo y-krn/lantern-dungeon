@@ -46,7 +46,7 @@
     function itemLabel(item, count = 1) {
       const engine = getEngine();
       if (item.kind === "gold") return `${item.amount}G`;
-      return engine.itemName(item) + (itemKind(item) === "arrow" ? ` × ${typeof item === "object" ? item.amount || 1 : count}` : "");
+      return engine.itemName(item) + (itemKind(item) === "arrow" ? ` × ${typeof item === "object" ? item.amount || 1 : count}` : count > 1 ? ` × ${count}` : "");
     }
     function useLabel(item) {
       const engine = getEngine();
@@ -116,6 +116,7 @@
             if (action === "appraise") return engine.use(engine.player.bag.indexOf("identify"), "ground");
             if (action === "drop" || action === "exchange") return engine.drop(index, action === "exchange");
             if (action === "equip-arrow") return engine.equipArrow();
+            if (action === "infuse") return engine.infuse(index);
             if (action === "unequip") return engine.unequip(button.dataset.index);
             return false;
           }, true);
@@ -152,12 +153,13 @@
         const item = p.bag[index], equipped = kind === "arrow" && p.ammo === "arrow";
         const primary = kind === "arrow" ? actionButton("equip-arrow", equipped ? "外す" : "装備する", index)
           : actionButton("use", isEquipment(item) ? "装備する" : useLabel(item), index);
-        const naming = SCROLLS.includes(kind) && isUnknown(item) ? actionButton("name", "名前を付ける", index) : "";
+        const naming = (SCROLLS.includes(kind) && isUnknown(item) ? actionButton("name", "名前を付ける", index) : "") +
+          (engine.canInfuse(index) ? actionButton("infuse", "矢に灯す", index) : "");
         return bagRow(item, primary + naming + actionButton("drop", "置く", index, !!ground || engine.onStairs()) +
           (ground && ITEMS[ground.kind] && !engine.onStairs() ? actionButton("exchange", "足元と交換", index) : ""), count, equipped ? "装備中" : "");
       }).join("");
       const groundCard = ground ? bagRow(ground, groundButtons(), 1, "足元", true) : "";
-      openModal("bag", `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong></div><p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本${engine.echoInfo ? `<br><strong>${escapeHTML(engine.echoInfo().label)}</strong>　${escapeHTML(engine.echoInfo().text)}` : ""}</p><div class="bag-list" role="region" aria-label="足元と持ち物" tabindex="0">${groundCard}${equippedCards}${bagCards}${!equippedCards && !bagCards ? '<p class="item-note">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備・予備装備・道具は1個につき1枠。矢は1束で1枠です。足元の品は枠に含みません。</p><p>足元の品は持たずに使えます。矢の使用は1本、置く・交換は束ごと。階段や品がある場所には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`);
+      openModal("bag", `<div class="modal-inner bag-modal">${modalHeader("旅の持ち物")}<div class="bag-overview"><strong>${engine.inventoryCount()} / ${INVENTORY_CAPACITY} 枠</strong></div><p class="bag-stats">Lv.${p.level} · 経験値 ${p.exp} / ${p.nextExp} · ${p.gold}G<br>攻撃力 ${engine.attackPower()} · 防御力 ${engine.defense()} · 矢 ${engine.arrowCount()}本${engine.echoInfo ? `<br><strong>${escapeHTML(engine.echoInfo().label)}</strong>　${escapeHTML(engine.echoInfo().text)}` : ""}</p><div class="bag-list" role="region" aria-label="足元と持ち物" tabindex="0">${groundCard}${equippedCards}${bagCards}${!equippedCards && !bagCards ? '<p class="item-note">持ち物はありません。</p>' : ""}</div><details class="bag-rules"><summary>持ち物のルール</summary><div tabindex="0"><p>装備・予備装備は1個につき1枠。同じ種類の道具は3個まで1枠にまとまり、矢は1束で1枠です。足元の品は枠に含みません。</p><p>足元の品は持たずに使えます。矢の使用は1本、置く・交換は束ごと。階段や品がある場所には置けません。</p></div></details><button class="secondary-button" data-close>冒険に戻る</button></div>`);
       const rows = $("modal-content").querySelectorAll(".bag-entry");
       if (selected !== null) rows.forEach((row) => {
         if (row.querySelector(`[data-index="${selected}"]`)) {
