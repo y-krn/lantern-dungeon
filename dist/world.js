@@ -13,6 +13,7 @@
     EQUIPMENT,
     SCROLLS,
     TERRAIN_ITEMS,
+    TRAPS,
     BOONS,
     SHOP_PRICES,
     ECHO_SOURCES,
@@ -280,7 +281,13 @@
       i++
     ) {
       const pos = emptySpot(ordinaryRooms, true);
-      if (pos) game.traps.push({ ...pos, found: false });
+      if (!pos) continue;
+      // Pits are never dug on the last floor; fire and oil wait until floor 3.
+      const kinds = Object.entries(TRAPS).filter(([type, t]) => (t.minFloor || 1) <= game.floor && (type !== "pit" || game.floor < game.maxFloor()));
+      let roll = game.int(1, kinds.reduce((sum, [, t]) => sum + t.weight, 0)),
+        type = kinds[0][0];
+      for (const [kind, t] of kinds) if ((roll -= t.weight) <= 0) { type = kind; break; }
+      game.traps.push({ ...pos, type, found: false });
     }
     // Shrines every third floor (fifth in the depths) and stalls every fourth, never on the last floor.
     const last = game.floor === game.maxFloor();

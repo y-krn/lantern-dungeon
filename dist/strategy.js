@@ -187,12 +187,7 @@
     strategyLanding(actor) {
       const visible = !!this.visible[this.key(actor.x, actor.y)];
       const trap = this.traps.find(v => same(v, actor));
-      if (trap) {
-        if (actor === this.player || visible) trap.found = true;
-        const damage = this.int(2, 5);
-        if (actor === this.player) { actor.hp -= damage; this.say(`足元にトゲの罠！ ${damage}ダメージ。`, "danger"); this.effect("damage", actor.x, actor.y, damage); }
-        else this.hit(actor, damage, "magic");
-      }
+      if (trap) this.springTrap(trap, actor);
       const vine = this.strategy.vines.find(v => same(v, actor));
       if (vine && actor.hp > 0) {
         this.strategy.vines.splice(this.strategy.vines.indexOf(vine), 1);

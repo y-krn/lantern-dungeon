@@ -21,6 +21,7 @@ require('./tests/check-terrain.cjs');
 require('./tests/check-quiver.cjs');
 require('./tests/check-sites.cjs');
 require('./tests/check-lantern.cjs');
+require('./tests/check-traps.cjs');
 require('./tests/check-ground.cjs');
 require('./tests/check-engine.cjs');
 require('./tests/check-pwa.cjs');
