@@ -23,7 +23,9 @@
       labels = [],
       frame = 0,
       playerTween = null,
+      playerSettle = null,
       walkDistance = 0,
+      enemyMotion = new Map(),
       attacks = [],
       pendingEffects = [],
       busyUntil = 0;
@@ -259,17 +261,29 @@
       const p = engine.player;
       let drawX = p.x,
         drawY = p.y,
-        walkFrame = -1;
+        walkFrame = -1,
+        stride = 1;
+      const heroType = heroSprite(p.facing), count = walkFrameCount(heroType);
+      // Each step runs passing pose -> contact -> passing pose, so rest is close to the standing pose.
+      const gaitFrame = distance => Math.floor((distance + .5) * count / walkCycleDistance(heroType)) % count;
       if (playerTween) {
         const t = Math.max(0, Math.min(1, (now - playerTween.born) / 160));
         drawX = playerTween.from.x + (playerTween.to.x - playerTween.from.x) * t;
         drawY = playerTween.from.y + (playerTween.to.y - playerTween.from.y) * t;
         walkDistance = playerTween.start + playerTween.distance * t;
-        if (t === 1) playerTween = null;
-        else {
-          const type = heroSprite(p.facing), count = walkFrameCount(type);
-          walkFrame = Math.floor(walkDistance * count / walkCycleDistance(type)) % count;
+        if (t === 1) {
+          playerTween = null;
+          walkDistance = Math.round(walkDistance);
+          playerSettle = { born: now, frame: gaitFrame(walkDistance) };
+        } else {
+          walkFrame = gaitFrame(walkDistance);
+          stride = Math.min(1, (walkDistance - playerTween.rest) / .35);
         }
+      }
+      if (playerSettle) {
+        const t = (now - playerSettle.born) / 110;
+        if (t >= 1) playerSettle = null;
+        else if (!playerTween) { walkFrame = playerSettle.frame; stride = 1 - t; }
       }
       // Project the same interpolated position for the hero and camera, including at map edges.
       const cols = canvas.width / tile,
@@ -364,34 +378,43 @@
         if (target.type && target.visible && target.id !== "player" && !live)
           entities.push({ ...target, isPlayer: false, defeated: target.hp <= 0 });
       }
+      for (const e of entities) if (!e.defeated) enemyPosition(e, now);
+      for (const [id, motion] of enemyMotion) if (motion.seen !== frame) enemyMotion.delete(id);
       entities.push({ id: "player", x: drawX, y: drawY, isPlayer: true, type: "hero" });
       entities.sort((a, b) => a.y - b.y);
       for (const e of entities) {
         const px = e.x * tile + offsetX,
           py = e.y * tile + offsetY,
           s = tile / 16;
+        const style = e.isPlayer ? null : motionStyle(e.type), hop = e.hop || 0;
         ctx.fillStyle = "#06151466";
         ctx.beginPath();
         ctx.ellipse(
           px + tile / 2,
           py + tile * 0.85,
-          tile * 0.33,
-          tile * 0.13,
+          tile * 0.33 * (1 - hop * .25),
+          tile * 0.13 * (1 - hop * .25),
           0,
           0,
           Math.PI * 2,
         );
         ctx.fill();
-        let bob =
-          ["bat", "moth"].includes(e.type) && !reduced
-            ? Math.sin(now / 230 + e.id) * s * 1.2
-            : 0;
+        let bob = reduced || !style ? 0 : Math.sin(now / style.float + e.id) * s * style.bob;
+        bob -= hop * tile * (style?.hop || 0);
+        // Idle breathing, stretched while airborne; anchored at the feet so nothing slides.
+        let scaleX = 1, scaleY = 1;
+        if (!reduced) {
+          const breath = Math.sin(now / (e.isPlayer ? 620 : style.breathe) + (e.isPlayer ? 0 : e.id * 1.7));
+          const amount = e.isPlayer ? (walkFrame === -1 ? .012 : 0) : style.squash;
+          scaleY = 1 + breath * amount + hop * amount * 2;
+          scaleX = 1 - breath * amount * .6 - hop * amount;
+        }
         if (
           !e.isPlayer &&
           MONSTERS[e.species]?.trait === "mimic" &&
           !e.revealed
         )
-          drawItem({ kind: "gold", x: e.x }, px, py, now);
+          drawItem({ kind: "gold", x: Math.round(e.x) }, px, py, now);
         else {
           let pushX = 0, pushY = 0, opacity = 1, lean = 0;
           for (const attack of attacks) {
@@ -415,6 +438,7 @@
           ctx.save();
           ctx.translate(px + tile / 2 + pushX * tile, py + tile * .8 + pushY * tile);
           ctx.rotate(lean);
+          ctx.scale(scaleX, scaleY);
           sprite(
             ctx,
             e.isPlayer ? heroSprite(p.facing) : e.type,
@@ -425,6 +449,7 @@
             e.isPlayer && p.facing[0] < 0,
             e.species,
             e.isPlayer ? walkFrame : null,
+            e.isPlayer ? stride : 1,
           );
           ctx.restore();
         }
@@ -593,6 +618,38 @@
       drawMinimap();
       requestAnimationFrame(render);
     }
+    const motionStyles = {
+      slime: { hop: .14, squash: .05, breathe: 420 },
+      bat: { hop: 0, squash: 0, bob: 1.2, float: 230 },
+      moth: { hop: 0, squash: 0, bob: 1.2, float: 230 },
+      ghost: { hop: 0, squash: .015, bob: 1, float: 520, breathe: 700 },
+      golem: { hop: .03, squash: .012, breathe: 900 },
+      guardian: { hop: .04, squash: .015, breathe: 800 },
+    };
+    function motionStyle(type) {
+      return { hop: .07, squash: .025, bob: 0, float: 1, breathe: 560, ...motionStyles[type] };
+    }
+    // Enemies glide between cells instead of teleporting; new arrivals and warps still snap.
+    function enemyPosition(e, now) {
+      let motion = enemyMotion.get(e.id);
+      if (!motion || motion.seen !== frame - 1 || reduced)
+        motion = { from: { x: e.x, y: e.y }, to: { x: e.x, y: e.y }, born: -Infinity };
+      let t = Math.min(1, (now - motion.born) / 170);
+      const eased = t * t * (3 - 2 * t);
+      let x = motion.from.x + (motion.to.x - motion.from.x) * eased,
+        y = motion.from.y + (motion.to.y - motion.from.y) * eased;
+      if (e.x !== motion.to.x || e.y !== motion.to.y) {
+        const near = Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= 2;
+        motion = { from: near ? { x, y } : { x: e.x, y: e.y }, to: { x: e.x, y: e.y }, born: now };
+        t = near ? 0 : 1;
+      }
+      motion.seen = frame;
+      enemyMotion.set(e.id, motion);
+      if (t < 1) {
+        e.x = x; e.y = y;
+        e.hop = Math.sin(Math.PI * t);
+      }
+    }
     function drawMinimap() {
       const engine = getEngine();
       mini.fillStyle = "#131c20";
@@ -700,7 +757,9 @@
     function reset(position) {
       camera = { x: position?.x ?? 0, y: position?.y ?? 0 };
       playerTween = null;
+      playerSettle = null;
       walkDistance = 0;
+      enemyMotion.clear();
       attacks = [];
       pendingEffects = [];
       busyUntil = 0;
@@ -721,8 +780,13 @@
         walkDistance = playerTween.start + playerTween.distance * t;
       }
       const { x, y } = getEngine().player;
-      const distance = Math.hypot(x - origin.x, y - origin.y);
-      if (distance) playerTween = { from: origin, to: { x, y }, born, start: walkDistance, distance };
+      // One cell is one step on every axis, so diagonal steps also come to rest on a passing pose.
+      const distance = Math.max(Math.abs(x - origin.x), Math.abs(y - origin.y));
+      // Ease the legs in from rest; continuing input keeps the full stride.
+      const settling = playerSettle ? Math.max(0, 1 - (born - playerSettle.born) / 110) : 0;
+      const rest = playerTween ? playerTween.rest : walkDistance - settling * .35;
+      if (distance) playerTween = { from: origin, to: { x, y }, born, start: walkDistance, distance, rest };
+      playerSettle = null;
     }
     function directionAt(event) {
       const engine = getEngine(),

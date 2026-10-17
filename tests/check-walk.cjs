@@ -23,12 +23,12 @@ function scene(reduced = false, position = [22,15]) {
     requestAnimationFrame:callback => frames.push(callback),
     createSpriteRenderer:() => ({ready:Promise.resolve(true), itemsReady:Promise.resolve(true), walkReady:Promise.resolve(true),
       sprite:(...args) => sprites.push(args), paintedSprite:(...args) => {markers.push(args); return true;},
-      heroSprite:() => 'heroRight', walkFrameCount:() => 6, walkCycleDistance:() => 2, hasAtlas:() => true}),
+      heroSprite:() => 'heroRight', walkFrameCount:() => 12, walkCycleDistance:() => 2, hasAtlas:() => true}),
   });
   vm.runInContext(fs.readFileSync(require.resolve('../dist/renderer.js'), 'utf8'), env);
   const renderer = env.createDungeonRenderer({canvas, minimap:canvas, viewport:canvas, getEngine:() => game, reduced});
   renderer.resize(); renderer.start();
-  return {game, renderer, canvas,
+  return {game, renderer, canvas, sprites, positions,
     move(at, dx = 1, dy = 0) {now = at; const from = {x:game.player.x,y:game.player.y}; game.move(dx,dy); renderer.movePlayer(from,now);},
     draw(at) {
       now = at; sprites.length = positions.length = markers.length = 0;
@@ -37,7 +37,7 @@ function scene(reduced = false, position = [22,15]) {
       assert.equal(game.serialize(), saved, 'Walking must not change game state, RNG, turns or saves');
       const hero = sprites.find(call => call[1] === 'heroRight');
       const marker = markers.find(call => call[1] === 'gold');
-      return {stride:hero[8], screen:positions.at(-1),
+      return {stride:hero[8], blend:hero[9], screen:positions.at(-1),
         x:landmark.x + (positions.at(-1)[0] - 48 - (marker[2] - 12)) / 96};
     },
   };
@@ -52,19 +52,27 @@ assert.notEqual(first.stride, second.stride, 'The foot pose must actually change
 normal.move(1090);
 assert.equal(normal.draw(1090).x, second.x, 'Repeated input cannot snap the hero back to a tile');
 assert.notEqual(normal.draw(1130).stride, second.stride, 'Footfall progress continues through repeated input');
-const stopped = normal.draw(1250);
-assert.equal(stopped.stride, -1); assert.equal(stopped.x, 24, 'Stopping settles on the actual destination');
-normal.move(1300); normal.game.attack(); normal.renderer.playEffects(normal.game.effects);
-assert.equal(normal.draw(1350).stride, -1, 'An attack takes priority over walking feet');
-normal.renderer.reset(); assert.equal(normal.draw(1400).stride, -1, 'Floor/restart reset cancels the walk');
+const arrived = normal.draw(1250);
+assert.equal(arrived.x, 24, 'Stopping settles on the actual destination');
+assert.equal(arrived.stride, 3, 'Arrival rests on the passing pose instead of a wide contact stance');
+assert(normal.draw(1300).blend < arrived.blend, 'The legs blend into the standing pose instead of snapping');
+const stopped = normal.draw(1370);
+assert.equal(stopped.stride, -1); assert.equal(stopped.x, 24);
+normal.move(1400); normal.game.attack(); normal.renderer.playEffects(normal.game.effects);
+assert.equal(normal.draw(1450).stride, -1, 'An attack takes priority over walking feet');
+normal.renderer.reset(); assert.equal(normal.draw(1500).stride, -1, 'Floor/restart reset cancels the walk');
 const reduced = scene(true); reduced.move(1000);
 assert.equal(reduced.draw(1000).stride, -1); assert.equal(reduced.draw(1000).x, 23);
 assert.equal(reduced.renderer.remaining(), 0, 'Reduced motion has neither travel animation nor an input wait');
 const single = scene(); single.move(1000);
-assert.deepEqual([1005,1060,1115].map(at => single.draw(at).stride), [0,1,2]);
-single.draw(1160); single.move(1200);
-assert.deepEqual([1205,1260,1315].map(at => single.draw(at).stride), [3,4,5],
+const starts = [1005,1060,1115].map(at => single.draw(at));
+assert.deepEqual(starts.map(draw => draw.stride), [3,5,7], 'A step passes through contact between two passing poses');
+assert(starts[0].blend < 1 && starts[2].blend === 1, 'The legs ease in from the standing pose');
+single.draw(1160); single.draw(1400); single.move(1400);
+assert.deepEqual([1405,1460,1515].map(at => single.draw(at).stride), [9,11,1],
   'The second step must use the opposite supporting leg, including after a pause');
+const diagonal = scene(); diagonal.move(1000, 1, 1);
+assert.equal(diagonal.draw(1160).stride, 9, 'A diagonal cell is one full step, ending on the passing pose');
 // Shared camera projection must remain stable at different refresh rates and across direction changes.
 for (const interval of [1000/30, 1000/60, 1000/120]) {
   const tracked = scene(); tracked.draw(1000);
@@ -93,4 +101,24 @@ for (const [position, direction] of [[[3,3],[-1,-1]], [[DungeonData.W-4,DungeonD
     }
   }
 }
+// Enemies glide between cells with a hop, and snap when they first appear or warp far away.
+const watched = scene();
+const foe = {id:7, type:'slime', species:'mossSlime', x:25, y:15, hp:5, maxHp:5};
+watched.game.enemies = [foe];
+function foeAt(at) {
+  watched.draw(at);
+  const call = watched.sprites.find(args => args[1] === 'slime');
+  return {screen:watched.positions[watched.sprites.indexOf(call)], lift:call[3]};
+}
+const resting = foeAt(1000);
+foe.x = 26; foeAt(1016);
+const gliding = foeAt(1100);
+assert(gliding.screen[0] > resting.screen[0] && gliding.screen[0] < resting.screen[0] + 96, 'Enemy steps interpolate between cells');
+assert(gliding.lift < resting.lift - 96 * .05, 'Enemy steps hop instead of sliding flat');
+assert.equal(foeAt(1300).screen[0], resting.screen[0] + 96, 'Enemy steps end exactly on the destination cell');
+foe.x = 20; assert.equal(foeAt(1316).screen[0], resting.screen[0] - 5 * 96, 'Warps snap instead of streaking across the room');
+const still = scene(true); still.game.enemies = [{...foe, x:25}]; still.draw(1000);
+still.game.enemies[0].x = 26; still.draw(1016);
+assert.equal(still.positions[still.sprites.findIndex(args => args[1] === 'slime')][0] - still.positions.at(-1)[0], 96 * 4,
+  'Reduced motion moves enemies without animation');
 console.log('PASS: walking poses, continuous input, stopping/attack/reset, stable 30/60/120Hz camera, map edges, reduced motion and game/save isolation.');

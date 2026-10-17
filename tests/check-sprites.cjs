@@ -21,7 +21,7 @@ function load(commonJS) {
       assert.equal(tag, 'canvas');
       const texture = {draws: [], getContext() {
         const stack = []; let filter = 'none';
-        return {save() {stack.push(filter);}, restore() {filter = stack.pop();}, translate() {}, rotate() {},
+        return {save() {stack.push(filter);}, restore() {filter = stack.pop();}, translate() {}, rotate() {}, scale() {},
           set filter(value) { filter = texture.filter = value; }, drawImage(image, x, y, w, h, ...destination) {
           assert(x >= 0 && y >= 0 && x + w <= image.naturalWidth && y + h <= image.naturalHeight);
           texture.frame = [image.source, x, y, w, h];
@@ -80,7 +80,7 @@ function load(commonJS) {
     });
     assert.equal(new Set(directions).size, 8, 'Loaded art keeps eight distinct hero views');
     for (const direction of data.DIRS) {
-      const poses = [-1,0,2,5].map(frame => {
+      const poses = [-1,0,4,10].map(frame => {
         calls.length = 0;
         art.sprite(context, art.heroSprite(direction), 0, 0, 3, 1, direction[0]<0, null, frame);
         const image = calls.at(-1), texture = image[1];
@@ -88,9 +88,12 @@ function load(commonJS) {
           mirrored:calls.some(call => call[0] === 'scale')};
       });
       for (const pose of poses) {
-        assert.deepEqual(pose.body, poses[0].body, 'Idle and walking must preserve the exact same head, torso and lantern');
+        assert.deepEqual(pose.body.frame, poses[0].body.frame, 'Idle and walking must preserve the exact same head, torso and lantern');
+        assert.deepEqual(pose.body.destination.slice(2), poses[0].body.destination.slice(2), 'The torso keeps its size while walking');
+        const [dx, dy] = [0,1].map(i => pose.body.destination[i] - poses[0].body.destination[i]);
+        assert(Math.abs(dx) <= 6 && dy >= 0 && dy <= 10, 'The torso only dips and sways slightly with the gait');
         assert.deepEqual(pose.bounds, poses[0].bounds, 'Idle and walking share scale and ground anchor');
-        assert.deepEqual([pose.width,pose.height], [338,484]);
+        assert.deepEqual([pose.width,pose.height], [169,242]);
         assert.equal(pose.mirrored, direction[0]<0, 'Idle and walking use the same mirrored direction');
       }
     }
@@ -155,9 +158,19 @@ function load(commonJS) {
         assert.equal(calls.some(call => call[0] === 'scale'), direction[0] < 0, 'Left walking mirrors the corresponding right view');
       }
     }
-    assert.equal(strides.size, 30, 'Five canonical views have six poses each, mirrored for the other three directions');
+    assert.equal(strides.size, 60, 'Five canonical views have twelve poses each, mirrored for the other three directions');
+    const bodies = [0,3].map(frame => {
+      art.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, frame);
+      return calls.at(-1)[1].draws.at(-1).destination[1];
+    });
+    assert(bodies[0] > bodies[1], 'The torso is lower on contact than while the legs pass');
+    art.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, 3, .5);
+    const blended = calls.at(-1)[1];
+    art.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, 3, .55);
+    assert.equal(calls.at(-1)[1], blended, 'Start/stop blends are quantized and cached');
+    assert(!strides.has(blended), 'A blended pose differs from the full stride');
     const feet = [];
-    for (let frame = 0; frame < 6; frame++) {
+    for (let frame = 0; frame < 12; frame++) {
       art.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, frame);
       const draws = calls.at(-1)[1].draws;
       const boots = draws.filter(draw => draw.frame[1] === 1285);
@@ -168,17 +181,19 @@ function load(commonJS) {
       assert(draws.at(-1).frame[1] === 203, 'The body covers both hip joints');
     }
     assert(feet[0][1][0] > feet[0][0][0], 'Near boot leads on the first contact');
-    assert(feet[3][1][0] < feet[3][0][0], 'Far boot leads on the opposite contact');
-    for (const frame of [1,2]) {
+    assert(feet[6][1][0] < feet[6][0][0], 'Far boot leads on the opposite contact');
+    for (const frame of [1,2,3,4,5]) {
       assert.equal(feet[frame][1][1], feet[0][1][1], 'Near sole stays grounded during support');
-      assert(feet[frame][0][1] < feet[frame][1][1] - feet[frame][1][3]*.2, 'Far foot lifts during its forward swing');
-      assert.equal(feet[frame+3][0][1], feet[3][0][1], 'Far sole stays grounded on the next step');
-      assert(feet[frame+3][1][1] < feet[frame+3][0][1] - feet[frame+3][0][3]*.2, 'Near foot lifts on the next step');
+      assert.equal(feet[frame+6][0][1], feet[6][0][1], 'Far sole stays grounded on the next step');
     }
-    assert(feet[1][1][0] > feet[2][1][0] && feet[4][0][0] > feet[5][0][0],
+    for (const frame of [2,3,4]) {
+      assert(feet[frame][0][1] < feet[frame][1][1] - feet[frame][1][3]*.2, 'Far foot lifts during its forward swing');
+      assert(feet[frame+6][1][1] < feet[frame+6][0][1] - feet[frame+6][0][3]*.2, 'Near foot lifts on the next step');
+    }
+    assert(feet[2][1][0] > feet[4][1][0] && feet[8][0][0] > feet[10][0][0],
       'Each supporting foot travels backward, instead of sliding forward with the torso');
     for (const type of ['hero', 'heroDownRight', 'heroUpRight', 'heroUp']) {
-      const contacts = [0,3].map(frame => {
+      const contacts = [0,6].map(frame => {
         art.sprite(context, type, 0, 0, 3, 1, false, null, frame);
         return calls.at(-1)[1].draws.filter(draw => draw.frame[1] === 381 || draw.frame[1] === 961);
       });
@@ -191,7 +206,7 @@ function load(commonJS) {
     const sideFailed = factory(), fallbackImages = images.slice(-5);
     for (let i = 0; i < 5; i++) settle(fallbackImages[i], i !== 3);
     assert.equal(await sideFailed.sideWalkReady, false);
-    for (let frame = 0; frame < 6; frame++) {
+    for (let frame = 0; frame < 12; frame++) {
       sideFailed.sprite(context, 'heroRight', 0, 0, 3, 1, false, null, frame);
       assert.equal(calls.at(-1)[1].frame[0], 'art/hero-walk.png', 'A failed side sheet must not make the final two footfalls disappear');
     }
