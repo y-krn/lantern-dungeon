@@ -52,7 +52,7 @@
       const engine = getEngine();
       const kind = itemKind(item);
       if (kind === "identify" && engine.identification.known.includes(kind)) return "鑑定する";
-      return kind === "bread" || (engine.strategyTrial && kind === "bait") ? "食べる" : kind === "arrow" ? "1本放つ" : SCROLLS.includes(kind) || (engine.strategyTrial && kind.endsWith("Talisman")) ? "かざす" : "使う";
+      return kind === "bread" || (engine.strategyTrial && kind === "bait") ? "食べる" : kind === "arrow" ? "1本放つ" : DungeonData.THROWN_ITEMS.includes(kind) ? "投げる" : SCROLLS.includes(kind) || (engine.strategyTrial && kind.endsWith("Talisman")) ? "かざす" : "使う";
     }
     function isUnknown(item) {
       const engine = getEngine();

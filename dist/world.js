@@ -11,6 +11,7 @@
     EQUIPMENT_NAMES,
     EQUIPMENT_KEYS,
     SCROLLS,
+    TERRAIN_ITEMS,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -24,6 +25,7 @@
     game.items = [];
     game.traps = [];
     game.monsterHouse = null;
+    game.surfaces = [];
     const cells = Array.from({ length: 9 }, (_, i) => i);
     for (let i = cells.length - 1; i > 0; i--) {
       const j = game.int(0, i);
@@ -272,6 +274,25 @@
     ) {
       const pos = emptySpot(ordinaryRooms, true);
       if (pos) game.traps.push({ ...pos, found: false });
+    }
+    // Water and grass patches give each floor terrain to use; oil stays rare.
+    addItem(TERRAIN_ITEMS[game.int(0, TERRAIN_ITEMS.length - 1)]);
+    for (const room of otherRooms) {
+      const roll = game.random(),
+        type = roll < 0.25 ? "water" : roll < 0.45 ? "grass" : roll < 0.5 && game.floor >= 3 ? "oil" : null;
+      if (!type) continue;
+      const cx = game.int(room.x, room.x + room.w - 1),
+        cy = game.int(room.y, room.y + room.h - 1),
+        radius = game.int(1, 2);
+      for (let y = cy - radius; y <= cy + radius; y++)
+        for (let x = cx - radius; x <= cx + radius; x++)
+          if (
+            game.tile(x, y) &&
+            game.roomAt(x, y) === room &&
+            !(x === game.stairs.x && y === game.stairs.y) &&
+            Math.abs(x - cx) + Math.abs(y - cy) <= radius + 1
+          )
+            game.surfaces.push({ x, y, type });
     }
     if (guardianSpot) {
       const species = hard ? "abyssGuardian" : "starGuardian";

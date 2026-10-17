@@ -71,6 +71,23 @@
     icon: "✦",
     description: "倒した魔物の残り火。踏むとランタンに宿り、今の灯影と入れ替わります。",
   };
+  // Terrain tools: thrown in the facing direction (up to 4 cells) or used on the spot.
+  Object.assign(ITEMS, {
+    waterSkin: { name: "水袋", icon: "◍", description: "向いている方向へ投げ、落ちた周囲3×3を水たまりにします。火を消し、雷光は水たまりを伝わります。" },
+    oilFlask: { name: "油瓶", icon: "◉", description: "向いている方向へ投げ、落ちた周囲3×3を油だまりにします。火が付くと燃え広がります。" },
+    emberStone: { name: "火種", icon: "✺", description: "向いている方向へ投げ、落ちたマスに火を放ちます。そこにいる敵に10ダメージ。油と草むらは燃え広がります。" },
+    blastNut: { name: "爆ぜ実", icon: "✹", description: "向いている方向へ投げ、落ちた周囲3×3に15ダメージ。リネも巻き込まれます。油と草むらに火が付きます。" },
+    smokeBall: { name: "煙玉", icon: "☁", description: "足元の周囲5×5に霧を広げます。霧の中を狙った敵の射撃・強打は空振りし、霧の中のリネは遠くから狙われません。5ターンで晴れます。" },
+  });
+  const THROWN_ITEMS = ["waterSkin", "oilFlask", "emberStone", "blastNut"];
+  const TERRAIN_ITEMS = [...THROWN_ITEMS, "smokeBall"];
+  const SURFACES = {
+    water: { name: "水たまり" },
+    oil: { name: "油だまり" },
+    grass: { name: "草むら" },
+    fog: { name: "霧" },
+    fire: { name: "炎" },
+  };
   // Weapons whose direction input does more than strike the adjacent cell.
   const WEAPON_SHAPES = ["lampSpear", "sweepAxe", "hookSickle", "pushMaul"];
   // Lantern echoes: each monster family lends its own trait to Rine's lantern.
@@ -791,6 +808,9 @@
     validEquipment,
     ITEM_ORDER,
     WEAPON_SHAPES,
+    THROWN_ITEMS,
+    TERRAIN_ITEMS,
+    SURFACES,
     ECHOES,
     ECHO_SOURCES,
     echoOfSpecies,

@@ -17,6 +17,7 @@
     monsterTier,
     monsterStats,
     ECHO_SOURCES,
+    SURFACES,
   } =
     typeof module !== "undefined" && module.exports
       ? require("./data.js")
@@ -239,6 +240,24 @@
         !counter(p.echoPity, 9) ||
         (p.lastStrike != null && (!Number.isInteger(p.lastStrike) || p.lastStrike > s.turn)) ||
         s.items.some((i) => i?.kind === "echoShard" && !Object.hasOwn(ECHO_SOURCES, i.species))
+      )
+        return null;
+      // Terrain; saves from before terrain have none.
+      game.surfaces ??= [];
+      const timed = { fire: 3, fog: 5 };
+      if (
+        !Array.isArray(game.surfaces) ||
+        game.surfaces.some(
+          (v) =>
+            !v ||
+            !Object.hasOwn(SURFACES, v.type) ||
+            !Number.isInteger(v.x) ||
+            !Number.isInteger(v.y) ||
+            (timed[v.type]
+              ? !Number.isInteger(v.remaining) || v.remaining < 1 || v.remaining > timed[v.type]
+              : v.remaining != null),
+        ) ||
+        new Set(game.surfaces.map((v) => game.key(v.x, v.y))).size !== game.surfaces.length
       )
         return null;
       game.player.ammo = game.arrowCount() ? (game.player.ammo ?? null) : null;

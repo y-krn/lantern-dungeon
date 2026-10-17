@@ -17,6 +17,7 @@ require('./tests/check-traits.cjs');
 require('./tests/check-identification.cjs');
 require('./tests/check-equipment.cjs');
 require('./tests/check-arsenal.cjs');
+require('./tests/check-terrain.cjs');
 require('./tests/check-ground.cjs');
 require('./tests/check-engine.cjs');
 require('./tests/check-pwa.cjs');
